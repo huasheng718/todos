@@ -301,6 +301,7 @@ private enum AppTheme {
 
 struct ContentView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var aiSettings: AISettingsStore
     @AppStorage(AppSkin.storageKey) private var selectedSkinRawValue = AppSkin.ocean.rawValue
     @State private var scope: TodoScope = .all
     @State private var searchText = ""
@@ -311,6 +312,9 @@ struct ContentView: View {
     @State private var newNotes = ""
     @State private var newIsWeekly = false
     @State private var isQuickCaptureExpanded = false
+    @State private var isCreatingTodo = false
+    @State private var aiStatusMessage: String?
+    @State private var isAISettingsPresented = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @FocusState private var focusedField: FocusField?
 
@@ -387,7 +391,10 @@ struct ContentView: View {
                 isExpanded: $isQuickCaptureExpanded,
                 focusedField: $focusedField,
                 onCreate: createTodo,
-                onClear: cancelCreate
+                onClear: cancelCreate,
+                isCreating: isCreatingTodo,
+                aiStatusMessage: aiStatusMessage,
+                isAIEnabled: aiSettings.configuration.canUse
             )
             .padding(.horizontal, 28)
             .padding(.bottom, 8)
@@ -432,6 +439,11 @@ struct ContentView: View {
 
             VStack(alignment: .trailing, spacing: 10) {
                 HStack(spacing: 8) {
+                    AISettingsButton(
+                        isEnabled: aiSettings.configuration.canUse,
+                        action: { isAISettingsPresented = true }
+                    )
+
                     SkinPickerButton(selection: $selectedSkinRawValue)
 
                     Button {
@@ -460,6 +472,10 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(AppTheme.mutedInk)
             }
+        }
+        .sheet(isPresented: $isAISettingsPresented) {
+            AISettingsSheet()
+                .environmentObject(aiSettings)
         }
     }
 
@@ -565,6 +581,7 @@ struct ContentView: View {
     }
 
     private func createTodo() {
+        guard !isCreatingTodo else { return }
         let parsedInput = TodoQuickInputParser.parse(
             title: newTitle,
             notes: newNotes,
@@ -574,6 +591,47 @@ struct ContentView: View {
             isWeekly: newIsWeekly,
             calendar: calendar
         )
+        guard !parsedInput.title.isEmpty else {
+            focusedField = .newTitle
+            return
+        }
+
+        let rawTitle = newTitle
+        let rawNotes = newNotes
+        let aiConfiguration = aiSettings.configuration
+
+        if aiConfiguration.canUse {
+            isCreatingTodo = true
+            aiStatusMessage = "AI 正在解析快记..."
+            Task {
+                do {
+                    let aiParsedInput = try await AIClient.shared.parseQuickInput(
+                        rawTitle: rawTitle,
+                        rawNotes: rawNotes,
+                        fallback: parsedInput,
+                        configuration: aiConfiguration,
+                        calendar: calendar
+                    )
+                    await MainActor.run {
+                        finishCreateTodo(with: aiParsedInput)
+                        aiStatusMessage = nil
+                        isCreatingTodo = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        finishCreateTodo(with: parsedInput)
+                        aiStatusMessage = "AI 解析失败，已用本地规则记录"
+                        isCreatingTodo = false
+                    }
+                }
+            }
+            return
+        }
+
+        finishCreateTodo(with: parsedInput)
+    }
+
+    private func finishCreateTodo(with parsedInput: ParsedTodoInput) {
         guard !parsedInput.title.isEmpty else {
             focusedField = .newTitle
             return
@@ -642,12 +700,14 @@ struct ContentView: View {
     }
 
     private func cancelCreate() {
+        guard !isCreatingTodo else { return }
         newTitle = ""
         newPriority = .medium
         newProgress = .pending
         newDate = Date()
         newNotes = ""
         newIsWeekly = false
+        aiStatusMessage = nil
         withAnimation(AppMotion.smooth) {
             isQuickCaptureExpanded = false
         }
@@ -736,6 +796,175 @@ struct SkinPickerButton: View {
         }
         .menuStyle(.borderlessButton)
         .help("切换皮肤")
+    }
+}
+
+struct AISettingsButton: View {
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .bold))
+                Text("AI")
+                    .font(.caption.weight(.semibold))
+                Circle()
+                    .fill(isEnabled ? Color(red: 0.18, green: 0.70, blue: 0.40) : AppTheme.mutedInk.opacity(0.45))
+                    .frame(width: 6, height: 6)
+            }
+            .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.mutedInk)
+            .frame(width: 64, height: 30)
+            .background(isEnabled ? AppTheme.accentSoft : Color.white.opacity(0.58), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isEnabled ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
+            )
+            .interactionHitArea(34)
+        }
+        .buttonStyle(.tactilePlain)
+        .help("AI 设置")
+    }
+}
+
+struct AISettingsSheet: View {
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("AI 设置")
+                        .font(.system(size: 22, weight: .semibold))
+                    Text("通过 CC Switch 本地代理增强快记解析、每日建议和备注摘要。")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .interactionHitArea()
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .help("关闭")
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $aiSettings.configuration.isEnabled) {
+                    Label("启用 AI 能力", systemImage: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .toggleStyle(.switch)
+
+                LabeledContent("供应商") {
+                    Picker("供应商", selection: $aiSettings.configuration.provider) {
+                        ForEach(AIProvider.allCases) { provider in
+                            Text(provider.title).tag(provider)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 260)
+                    .onChange(of: aiSettings.configuration.provider) { _, _ in
+                        aiSettings.resetForSelectedProvider()
+                    }
+                }
+
+                LabeledContent("本地代理 URL") {
+                    TextField("http://127.0.0.1:15721/v1", text: $aiSettings.configuration.baseURL)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .frame(width: 330)
+                }
+
+                LabeledContent("模型") {
+                    TextField("gpt-4o-mini", text: $aiSettings.configuration.model)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .frame(width: 330)
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task {
+                            await aiSettings.testConnection()
+                        }
+                    } label: {
+                        Label(aiSettings.isTestingConnection ? "测试中" : "测试连接", systemImage: "network")
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 96, height: 30)
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(.white)
+                    .background(aiSettings.configuration.hasEndpoint ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                    .interactionHitArea()
+                    .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint)
+
+                    if aiSettings.isTestingConnection {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    if let message = aiSettings.connectionMessage {
+                        Text(message)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(aiSettings.connectionSucceeded ? Color(red: 0.14, green: 0.58, blue: 0.34) : TodoPriority.high.displayColor)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(16)
+            .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.border)
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                AIUsageRow(icon: "command", title: "快记解析", detail: "提交时自动拆出时间、优先级、状态、备注和固定周期。")
+                AIUsageRow(icon: "sun.max", title: "每日建议", detail: "在今日推进页按当前未完成事项生成 1-3 条推进建议。")
+                AIUsageRow(icon: "text.alignleft", title: "备注摘要", detail: "长备注可一键压缩成适合扫读的一句话。")
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(22)
+        .frame(width: 560, height: 430)
+        .background(AppTheme.workSurface)
+        .foregroundStyle(AppTheme.ink)
+    }
+}
+
+struct AIUsageRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 22, height: 22)
+                .background(AppTheme.accentSoft, in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
@@ -1288,6 +1517,8 @@ struct ListToolbar: View {
 }
 
 struct TodoListView: View {
+    @EnvironmentObject private var aiSettings: AISettingsStore
+
     let todos: [TodoItem]
     let scope: TodoScope
     let allTodosViewMode: AllTodosViewMode
@@ -1295,6 +1526,10 @@ struct TodoListView: View {
     let onProgressChange: (TodoItem, TodoProgress) -> Void
     let onToggle: (TodoItem) -> Void
     let onDelete: (TodoItem) -> Void
+
+    @State private var dailySuggestion: String?
+    @State private var dailySuggestionError: String?
+    @State private var isGeneratingDailySuggestion = false
 
     var body: some View {
         ScrollView {
@@ -1333,6 +1568,15 @@ struct TodoListView: View {
 
     private var dashboardList: some View {
         LazyVStack(spacing: 6) {
+            if aiSettings.configuration.canUse {
+                DailySuggestionCard(
+                    suggestion: dailySuggestion,
+                    error: dailySuggestionError,
+                    isLoading: isGeneratingDailySuggestion,
+                    onGenerate: generateDailySuggestion
+                )
+            }
+
             DashboardSummaryStrip(groups: dashboardGroups)
 
             ForEach(dashboardGroups) { group in
@@ -1351,6 +1595,35 @@ struct TodoListView: View {
 
             if dashboardGroups.allSatisfy({ $0.todos.isEmpty }) {
                 EmptyTodoHint(isAllScope: false)
+            }
+        }
+    }
+
+    private func generateDailySuggestion() {
+        guard aiSettings.configuration.canUse, !isGeneratingDailySuggestion else { return }
+        isGeneratingDailySuggestion = true
+        dailySuggestionError = nil
+        let configuration = aiSettings.configuration
+        let sourceTodos = todos
+        Task {
+            do {
+                let suggestion = try await AIClient.shared.dailySuggestion(
+                    todos: sourceTodos,
+                    configuration: configuration
+                )
+                await MainActor.run {
+                    withAnimation(AppMotion.reveal) {
+                        dailySuggestion = suggestion
+                        isGeneratingDailySuggestion = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation(AppMotion.reveal) {
+                        dailySuggestionError = error.localizedDescription
+                        isGeneratingDailySuggestion = false
+                    }
+                }
             }
         }
     }
@@ -1909,6 +2182,81 @@ struct DashboardSummaryStrip: View {
     }
 }
 
+struct DailySuggestionCard: View {
+    let suggestion: String?
+    let error: String?
+    let isLoading: Bool
+    let onGenerate: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+
+                Text("AI 每日建议")
+                    .font(.system(size: 12, weight: .semibold))
+
+                Spacer()
+
+                Button(action: onGenerate) {
+                    Label(isLoading ? "生成中" : "生成建议", systemImage: "wand.and.stars")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 94, height: 28)
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.accent)
+                .background(AppTheme.accentSoft, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(AppTheme.accent.opacity(0.20))
+                )
+                .interactionHitArea()
+                .disabled(isLoading)
+            }
+
+            if isLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在读取当前待办并生成推进顺序")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
+                .transition(.opacity)
+            } else if let error {
+                Text("生成失败：\(error)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(TodoPriority.high.displayColor)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            } else if let suggestion, !suggestion.isEmpty {
+                Text(suggestion)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                Text("用当前未完成事项生成今天的推进顺序。")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+        }
+        .padding(12)
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(AppTheme.accent.opacity(0.18))
+        )
+        .shadow(color: AppTheme.rowShadow, radius: 8, x: 0, y: 4)
+        .animation(AppMotion.reveal, value: suggestion)
+        .animation(AppMotion.reveal, value: error)
+        .animation(AppMotion.reveal, value: isLoading)
+    }
+}
+
 struct WorkSection<Content: View>: View {
     let group: WorkSectionGroup
     let row: (TodoItem) -> Content
@@ -2008,6 +2356,9 @@ struct QuickCaptureBar: View {
     var focusedField: FocusState<FocusField?>.Binding
     let onCreate: () -> Void
     let onClear: () -> Void
+    let isCreating: Bool
+    let aiStatusMessage: String?
+    let isAIEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: isExpanded ? 9 : 5) {
@@ -2051,20 +2402,20 @@ struct QuickCaptureBar: View {
                 .help(isExpanded ? "收起记录字段" : "展开记录字段")
 
                 Button(action: onCreate) {
-                    Label("记录", systemImage: "arrow.down.to.line.compact")
+                    Label(isCreating ? "解析" : "记录", systemImage: isCreating ? "sparkles" : "arrow.down.to.line.compact")
                         .font(.caption.weight(.semibold))
                         .frame(width: 68, height: 28)
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(canCreate ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                .background(canCreate && !isCreating ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(canCreate ? Color.white.opacity(0.52) : Color.black.opacity(0.05))
+                        .stroke(canCreate && !isCreating ? Color.white.opacity(0.52) : Color.black.opacity(0.05))
                 )
-                .shadow(color: canCreate ? AppTheme.accent.opacity(0.20) : .clear, radius: 10, x: 0, y: 6)
+                .shadow(color: canCreate && !isCreating ? AppTheme.accent.opacity(0.20) : .clear, radius: 10, x: 0, y: 6)
                 .interactionHitArea()
-                .disabled(!canCreate)
+                .disabled(!canCreate || isCreating)
                 .help("记录新的待办")
 
                 if isExpanded || hasDraft {
@@ -2075,6 +2426,7 @@ struct QuickCaptureBar: View {
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(AppTheme.mutedInk)
                     .help("清空记录")
+                    .disabled(isCreating)
                 }
             }
 
@@ -2088,6 +2440,32 @@ struct QuickCaptureBar: View {
                     isWeekly: parsedPreview.isWeekly
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.985, anchor: .top)))
+            }
+
+            if let aiStatusMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: aiStatusMessage.contains("失败") ? "exclamationmark.triangle" : "sparkles")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(aiStatusMessage)
+                        .font(.system(size: 11, weight: .semibold))
+                    if isCreating {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+                }
+                .foregroundStyle(aiStatusMessage.contains("失败") ? TodoPriority.high.displayColor : AppTheme.accent)
+                .padding(.leading, 32)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else if isAIEnabled && hasDraft {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("提交时使用 AI 解析")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.accent)
+                .padding(.leading, 32)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if isExpanded {
@@ -2127,6 +2505,8 @@ struct QuickCaptureBar: View {
         .shadow(color: AppTheme.rowShadow, radius: hasDraft ? 14 : 8, x: 0, y: hasDraft ? 7 : 4)
         .animation(AppMotion.reveal, value: isExpanded)
         .animation(AppMotion.capture, value: hasDraft)
+        .animation(AppMotion.capture, value: isCreating)
+        .animation(AppMotion.capture, value: aiStatusMessage)
     }
 
     private var canCreate: Bool {
@@ -2400,7 +2780,7 @@ struct EditableTodoRow: View {
                 }
                 .padding(.trailing, 2)
             } else if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                NotesReadOnlyRow(notes: notes, isDone: todo.isDone)
+                NotesReadOnlyRow(title: title, notes: notes, isDone: todo.isDone)
             }
         }
         .padding(14)
@@ -3102,10 +3482,18 @@ private extension TodoPriority {
 }
 
 struct NotesReadOnlyRow: View {
+    @EnvironmentObject private var aiSettings: AISettingsStore
+
+    let title: String
     let notes: String
     let isDone: Bool
 
-    init(notes: String, isDone: Bool = false) {
+    @State private var summary: String?
+    @State private var summaryError: String?
+    @State private var isSummarizing = false
+
+    init(title: String = "", notes: String, isDone: Bool = false) {
+        self.title = title
         self.notes = notes
         self.isDone = isDone
     }
@@ -3119,28 +3507,107 @@ struct NotesReadOnlyRow: View {
                 .padding(.top, 8)
                 .frame(width: 58, alignment: .leading)
 
-            Text(displayText)
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.mutedInk)
-                .strikethrough(isDone, color: AppTheme.mutedInk)
-                .lineLimit(8)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 7)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(AppTheme.border)
-                )
+            VStack(alignment: .leading, spacing: 7) {
+                Text(displayText)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .strikethrough(isDone, color: AppTheme.mutedInk)
+                    .lineLimit(8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            Color.clear
-                .frame(width: todoActionColumnWidth)
+                if let summary, !summary.isEmpty {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.accent)
+                            .padding(.top, 2)
+                        Text(summary)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppTheme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                if let summaryError {
+                    Text("摘要失败：\(summaryError)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(TodoPriority.high.displayColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AppTheme.border)
+            )
+
+            VStack(spacing: 6) {
+                if aiSettings.configuration.canUse {
+                    Button(action: summarizeNotes) {
+                        Label(isSummarizing ? "摘要中" : "摘要", systemImage: "sparkles")
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 74, height: 28)
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(AppTheme.accent)
+                    .background(AppTheme.accentSoft, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(AppTheme.accent.opacity(0.18))
+                    )
+                    .interactionHitArea()
+                    .disabled(isSummarizing)
+
+                    if isSummarizing {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+                }
+            }
+            .frame(width: todoActionColumnWidth, alignment: .topTrailing)
         }
+        .animation(AppMotion.reveal, value: summary)
+        .animation(AppMotion.reveal, value: summaryError)
+        .animation(AppMotion.reveal, value: isSummarizing)
     }
 
     private var displayText: String {
         notes.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func summarizeNotes() {
+        guard aiSettings.configuration.canUse, !isSummarizing else { return }
+        isSummarizing = true
+        summaryError = nil
+        let configuration = aiSettings.configuration
+        let sourceTitle = title
+        let sourceNotes = displayText
+        Task {
+            do {
+                let value = try await AIClient.shared.summarizeNotes(
+                    title: sourceTitle,
+                    notes: sourceNotes,
+                    configuration: configuration
+                )
+                await MainActor.run {
+                    summary = value
+                    isSummarizing = false
+                }
+            } catch {
+                await MainActor.run {
+                    summaryError = error.localizedDescription
+                    isSummarizing = false
+                }
+            }
+        }
     }
 }
 

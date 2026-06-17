@@ -3,11 +3,13 @@ import SwiftUI
 @main
 struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
+    @StateObject private var aiSettings = AISettingsStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(aiSettings)
                 .frame(minWidth: 1100, idealWidth: 1280, minHeight: 760, idealHeight: 860)
                 .task {
                     store.load()
