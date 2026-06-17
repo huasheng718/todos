@@ -357,6 +357,7 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
         )
+        .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(AppTheme.ink)
         .id(selectedSkinRawValue)
         .onAppear {
@@ -378,10 +379,15 @@ struct ContentView: View {
 
     private var taskColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            pageHeader
-                .padding(.horizontal, 28)
-                .padding(.top, 14)
-                .padding(.bottom, 8)
+            if shouldShowPageContext {
+                pageHeader
+                    .padding(.horizontal, 28)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+            } else {
+                Spacer()
+                    .frame(height: 16)
+            }
 
             if let error = store.lastError {
                 Text(error)
@@ -455,6 +461,15 @@ struct ContentView: View {
         .sheet(isPresented: $isAISettingsPresented) {
             AISettingsSheet()
                 .environmentObject(aiSettings)
+        }
+    }
+
+    private var shouldShowPageContext: Bool {
+        switch scope {
+        case .all:
+            return false
+        case .dashboard, .waiting, .weekly, .day:
+            return true
         }
     }
 
@@ -898,14 +913,14 @@ struct AppTopBar: View {
                 .frame(width: 22, height: 22)
                 .help("更多")
         }
-        .frame(minWidth: 210, alignment: .leading)
+        .frame(minWidth: 180, alignment: .leading)
     }
 
     private var topBarStatus: some View {
         HStack(spacing: 7) {
             Image(systemName: "list.bullet.rectangle")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.mutedInk)
 
             Text(statusText)
                 .font(.system(size: 12, weight: .semibold))
