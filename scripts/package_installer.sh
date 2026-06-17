@@ -9,6 +9,7 @@ INFO_PLIST="$ROOT_DIR/Info.plist"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST")"
 PKG_PATH="$ROOT_DIR/build/蚁序-${VERSION}.pkg"
+ASCII_PKG_PATH="$ROOT_DIR/build/AntOrder-${VERSION}.pkg"
 
 cd "$ROOT_DIR"
 
@@ -16,7 +17,7 @@ cd "$ROOT_DIR"
 xattr -cr "$APP_DIR"
 
 rm -rf "$PKG_ROOT"
-rm -f "$PKG_PATH"
+rm -f "$PKG_PATH" "$ASCII_PKG_PATH"
 mkdir -p "$PKG_ROOT/Applications"
 
 export COPYFILE_DISABLE=1
@@ -32,4 +33,10 @@ pkgbuild \
   --ownership recommended \
   "$PKG_PATH"
 
+cp "$PKG_PATH" "$ASCII_PKG_PATH"
+"$ROOT_DIR/scripts/update_release_manifest.sh" \
+  "https://github.com/huasheng718/todos/releases/download/v${VERSION}/AntOrder-${VERSION}.pkg" \
+  "蚁序 ${VERSION} 更新。"
+
 echo "$PKG_PATH"
+echo "$ASCII_PKG_PATH"

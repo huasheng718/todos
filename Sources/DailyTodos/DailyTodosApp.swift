@@ -4,16 +4,19 @@ import SwiftUI
 struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
     @StateObject private var aiSettings = AISettingsStore()
+    @StateObject private var updateController = UpdateController()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(aiSettings)
+                .environmentObject(updateController)
                 .frame(minWidth: 1100, idealWidth: 1280, minHeight: 760, idealHeight: 860)
                 .background(WindowChromeConfigurator())
                 .task {
                     store.load()
+                    updateController.checkForUpdatesIfNeeded()
                 }
         }
         .defaultSize(width: 1280, height: 860)
@@ -24,6 +27,12 @@ struct DailyTodosApp: App {
                     NotificationCenter.default.post(name: .newTodoRequested, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: .command)
+            }
+
+            CommandGroup(after: .appInfo) {
+                Button("检查更新...") {
+                    updateController.checkForUpdates()
+                }
             }
         }
     }

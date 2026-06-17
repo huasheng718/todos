@@ -1,0 +1,6 @@
+{
+  "version": "1.1.0",
+  "build": 2,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.0/AntOrder-1.1.0.pkg",
+  "releaseNotes": "新增版本号展示、自动检查更新、应用设置页；更新检查失败时改为设置页内联反馈，不再遮挡设置页面。"
+}

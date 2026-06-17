@@ -336,6 +336,7 @@ private enum AppTheme {
 struct ContentView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var updateController: UpdateController
     @AppStorage(AppSkin.storageKey) private var selectedSkinRawValue = AppSkin.ocean.rawValue
     @State private var scope: TodoScope = .all
     @State private var searchText = ""
@@ -351,6 +352,7 @@ struct ContentView: View {
     @State private var quickCaptureAITrace: AITrace?
     @State private var quickCaptureAIResultSummary: String?
     @State private var isAISettingsPresented = false
+    @State private var isAppSettingsPresented = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @FocusState private var focusedField: FocusField?
 
@@ -358,7 +360,10 @@ struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(scope: $scope)
+            SidebarView(
+                scope: $scope,
+                onOpenSettings: { isAppSettingsPresented = true }
+            )
                 .frame(
                     minWidth: sidebarColumnWidth,
                     idealWidth: sidebarColumnWidth,
@@ -371,9 +376,7 @@ struct ContentView: View {
                     title: dayTitle,
                     subtitle: daySubtitle,
                     isAIEnabled: aiSettings.canUseAI,
-                    selectedSkinRawValue: $selectedSkinRawValue,
-                    onOpenAISettings: { isAISettingsPresented = true },
-                    onNewTodo: focusQuickCapture
+                    onOpenAISettings: { isAISettingsPresented = true }
                 )
                 .frame(height: 48)
 
@@ -418,6 +421,10 @@ struct ContentView: View {
         .sheet(isPresented: $isAISettingsPresented) {
             AISettingsSheet()
                 .environmentObject(aiSettings)
+        }
+        .sheet(isPresented: $isAppSettingsPresented) {
+            AppSettingsSheet(selectedSkinRawValue: $selectedSkinRawValue)
+                .environmentObject(updateController)
         }
     }
 
@@ -843,9 +850,7 @@ struct AppTopBar: View {
     let title: String
     let subtitle: String
     let isAIEnabled: Bool
-    @Binding var selectedSkinRawValue: String
     let onOpenAISettings: () -> Void
-    let onNewTodo: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -865,23 +870,6 @@ struct AppTopBar: View {
 
             HStack(spacing: 8) {
                 AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
-                SkinPickerButton(selection: $selectedSkinRawValue)
-
-                Button(action: onNewTodo) {
-                    Label("快记", systemImage: "plus")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 72, height: 30)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(AppTheme.accentWarm, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.52))
-                )
-                .shadow(color: AppTheme.accentWarm.opacity(0.20), radius: 10, x: 0, y: 5)
-                .interactionHitArea()
-                .help("记录新的待办")
             }
             .padding(.trailing, 16)
         }
@@ -920,6 +908,194 @@ struct AISettingsButton: View {
         }
         .buttonStyle(.tactilePlain)
         .help("AI 设置")
+    }
+}
+
+struct AppSettingsSheet: View {
+    @EnvironmentObject private var updateController: UpdateController
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedSkinRawValue: String
+
+    private var selectedSkin: AppSkin {
+        AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("应用设置")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                    Text("外观、版本与更新")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
+
+                Spacer()
+
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .interactionHitArea()
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .help("关闭")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
+            VStack(alignment: .leading, spacing: 14) {
+                settingsSection(title: "外观", icon: "paintpalette.fill") {
+                    VStack(spacing: 7) {
+                        ForEach(AppSkin.allCases) { skin in
+                            Button {
+                                withAnimation(AppMotion.smooth) {
+                                    activeAppSkin = skin
+                                    selectedSkinRawValue = skin.rawValue
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: skin.icon)
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(skin == selectedSkin ? AppTheme.accent : AppTheme.mutedInk)
+                                        .frame(width: 20)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(skin.title)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(AppTheme.ink)
+                                        Text(skin.shortTitle)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundStyle(AppTheme.mutedInk)
+                                    }
+
+                                    Spacer()
+
+                                    if skin == selectedSkin {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(AppTheme.accent)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(skin == selectedSkin ? AppTheme.accentSoft : Color.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(skin == selectedSkin ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.tactilePlain)
+                        }
+                    }
+                }
+
+                settingsSection(title: "更新", icon: "arrow.triangle.2.circlepath") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .center, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack(spacing: 7) {
+                                    Circle()
+                                        .fill(updateStatusColor)
+                                        .frame(width: 7, height: 7)
+                                    Text(AppVersion.displayText)
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(AppTheme.ink)
+                                }
+
+                                Text(updateStatusText)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(updateController.isChecking ? AppTheme.ink : AppTheme.mutedInk)
+                                    .lineLimit(2)
+
+                                if let lastCheckedAt = updateController.lastCheckedAt {
+                                    Text("上次检查 \(lastCheckedAt.formatted(date: .omitted, time: .shortened))")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(AppTheme.mutedInk.opacity(0.72))
+                                }
+                            }
+
+                            Spacer()
+
+                            Button {
+                                updateController.checkForUpdates()
+                            } label: {
+                                Label(updateController.isChecking ? "检查中" : "检查更新", systemImage: updateController.isChecking ? "clock.arrow.circlepath" : "arrow.down.circle")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .frame(width: 104, height: 32)
+                            }
+                            .buttonStyle(.tactilePlain)
+                            .foregroundStyle(.white)
+                            .background(updateController.isChecking ? AppTheme.mutedInk.opacity(0.45) : AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .disabled(updateController.isChecking)
+                            .help("检查更新")
+                        }
+                    }
+                }
+            }
+            .padding(20)
+        }
+        .frame(width: 460)
+        .background(AppTheme.workSurface)
+    }
+
+    private var updateStatusText: String {
+        if updateController.isChecking {
+            return "正在连接更新服务器..."
+        }
+        return updateController.statusMessage ?? "每天自动检查一次，也可以手动检查。"
+    }
+
+    private var updateStatusColor: Color {
+        if updateController.isChecking {
+            return AppTheme.accentWarm
+        }
+        if updateController.availableUpdate != nil {
+            return AppTheme.accent
+        }
+        if let message = updateController.statusMessage, message.contains("失败") || message.contains("没有发布") || message.contains("无效") {
+            return TodoPriority.medium.displayColor
+        }
+        return Color(red: 0.18, green: 0.62, blue: 0.38)
+    }
+
+    private func settingsSection<Content: View>(
+        title: String,
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 16)
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+            }
+
+            content()
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.48), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.border.opacity(0.78))
+        )
     }
 }
 
@@ -1341,6 +1517,7 @@ struct AppLogoImage: View {
 struct SidebarView: View {
     @EnvironmentObject private var store: TodoStore
     @Binding var scope: TodoScope
+    let onOpenSettings: () -> Void
     @State private var calendarMonth = Date()
 
     private let calendar = Calendar.current
@@ -1464,9 +1641,21 @@ struct SidebarView: View {
                 Text("个人推进秩序")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
+                Text(AppVersion.displayText)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk.opacity(0.76))
             }
 
             Spacer(minLength: 0)
+
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12, weight: .semibold))
+                    .interactionHitArea()
+            }
+            .buttonStyle(.tactilePlain)
+            .foregroundStyle(AppTheme.mutedInk)
+            .help("应用设置")
         }
         .padding(.horizontal, 17)
         .padding(.vertical, 12)
@@ -2510,6 +2699,7 @@ struct TodoBoardCard: View {
     let onDelete: () -> Void
 
     @State private var isEditing = false
+    @State private var isHovered = false
 
     var body: some View {
         if isEditing {
@@ -2521,73 +2711,79 @@ struct TodoBoardCard: View {
             )
             .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
         } else {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: hasNotes ? .top : .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .center, spacing: 8) {
+                    PriorityOutlineTag(priority: todo.priority, isCompact: true)
+                        .fixedSize()
+
+                    if isOverdue {
+                        Text("逾期")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(TodoPriority.high.displayColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(TodoPriority.high.displayColor.opacity(0.10), in: Capsule())
+                    }
+
+                    Spacer(minLength: 6)
+
+                    ProgressMenuTag(progress: todo.progress, onSelect: onProgressChange)
+
+                    Button {
+                        withAnimation(AppMotion.quick) {
+                            isEditing = true
+                        }
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12, weight: .semibold))
+                            .interactionHitArea()
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .help("编辑")
+                }
+
+                HStack(alignment: .top, spacing: 9) {
                     Button(action: onToggle) {
                         ZStack {
                             Circle()
                                 .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : Color.white.opacity(0.72))
                                 .overlay(
                                     Circle()
-                                        .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.32) : AppTheme.hairline, lineWidth: 1)
+                                        .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.38) : AppTheme.hairline, lineWidth: 1)
                                 )
                                 .frame(width: 22, height: 22)
                             Image(systemName: todo.isDone ? "checkmark" : "circle")
                                 .font(.system(size: 10, weight: .bold))
                         }
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
+                        .interactionHitArea()
                     }
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(todo.isDone ? TodoProgress.done.displayColor : AppTheme.mutedInk)
                     .help(todo.isDone ? "标记为待处理" : "标记为完成")
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            PriorityOutlineTag(priority: todo.priority, isCompact: true)
-                                .fixedSize()
-
-                            Text(titleText)
-                                .font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))
-                                .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
-                                .strikethrough(todo.isDone, color: AppTheme.mutedInk)
-                                .lineLimit(3)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                    VStack(alignment: .leading, spacing: hasNotes ? 7 : 0) {
+                        Text(titleText)
+                            .font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))
+                            .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
+                            .strikethrough(todo.isDone, color: AppTheme.mutedInk)
+                            .lineLimit(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                         if hasNotes {
                             Text(todo.trimmedNotes)
-                                .font(.system(size: 12))
-                                .foregroundStyle(AppTheme.mutedInk)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(todo.isDone ? AppTheme.mutedInk.opacity(0.82) : AppTheme.mutedInk)
                                 .strikethrough(todo.isDone, color: AppTheme.mutedInk)
-                                .lineLimit(4)
+                                .lineLimit(5)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 1)
                         }
                     }
-                    .padding(.top, hasNotes ? 2 : 0)
+                    .padding(.top, hasNotes ? 1 : 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                    HStack(spacing: 5) {
-                        ProgressMenuTag(progress: todo.progress, onSelect: onProgressChange)
-
-                        Button {
-                            withAnimation(AppMotion.quick) {
-                                isEditing = true
-                            }
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .semibold))
-                                .frame(width: 30, height: 30)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.tactilePlain)
-                        .foregroundStyle(AppTheme.mutedInk)
-                        .help("编辑")
-                    }
-                    .padding(.top, hasNotes ? 0 : -1)
-                    .fixedSize()
                 }
 
                 HStack(spacing: 8) {
@@ -2601,16 +2797,31 @@ struct TodoBoardCard: View {
                             .foregroundStyle(AppTheme.mutedInk)
                             .lineLimit(1)
                     }
-                    Spacer()
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 41)
+            }
+            .padding(.vertical, 11)
+            .padding(.leading, 13)
+            .padding(.trailing, 11)
+            .background(cardBackgroundColor, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 999, style: .continuous)
+                    .fill(priorityRailColor)
+                    .frame(width: 3)
+                    .padding(.vertical, 13)
+                    .padding(.leading, 5)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(cardBorderColor, lineWidth: isHovered ? 1.25 : 1)
+            )
+            .shadow(color: isHovered ? AppTheme.rowShadow.opacity(0.95) : AppTheme.rowShadow.opacity(0.62), radius: isHovered ? 10 : 6, x: 0, y: isHovered ? 5 : 3)
+            .onHover { hovered in
+                withAnimation(AppMotion.hover) {
+                    isHovered = hovered
                 }
             }
-            .padding(12)
-            .background(AppTheme.rowTint(priority: todo.priority, isOverdue: isOverdue), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(isOverdue ? TodoPriority.high.displayColor.opacity(0.22) : AppTheme.border)
-            )
-            .shadow(color: AppTheme.rowShadow, radius: 8, x: 0, y: 4)
             .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
         }
     }
@@ -2641,6 +2852,24 @@ struct TodoBoardCard: View {
 
     private var boardDateColor: Color {
         isOverdue ? TodoPriority.high.displayColor : AppTheme.mutedInk
+    }
+
+    private var cardBackgroundColor: Color {
+        AppTheme.rowTint(priority: todo.priority, isOverdue: isOverdue)
+    }
+
+    private var cardBorderColor: Color {
+        if isOverdue {
+            return TodoPriority.high.displayColor.opacity(isHovered ? 0.42 : 0.26)
+        }
+        return isHovered ? todo.priority.displayColor.opacity(0.36) : AppTheme.border
+    }
+
+    private var priorityRailColor: Color {
+        if todo.isDone {
+            return TodoProgress.done.displayColor.opacity(0.48)
+        }
+        return isOverdue ? TodoPriority.high.displayColor : todo.priority.displayColor.opacity(0.78)
     }
 }
 
