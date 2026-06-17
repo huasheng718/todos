@@ -1637,7 +1637,8 @@ struct TodoMatrixQuadrant: View {
                             onToggle: { onToggle(todo) },
                             onProgressChange: { progress in onProgressChange(todo, progress) },
                             onUpdate: { draft in onUpdate(todo, draft) },
-                            onDelete: { onDelete(todo) }
+                            onDelete: { onDelete(todo) },
+                            editStyle: .compact
                         )
                         .transition(AppMotion.rowTransition)
                     }
@@ -2477,29 +2478,50 @@ struct EditableTodoRow: View {
     }
 }
 
+enum TodoFlowRowEditStyle {
+    case full
+    case compact
+}
+
 struct TodoFlowRow: View {
     let todo: TodoItem
     let onToggle: () -> Void
     let onProgressChange: (TodoProgress) -> Void
     let onUpdate: (TodoDraft) -> Void
     let onDelete: () -> Void
+    var editStyle: TodoFlowRowEditStyle = .full
 
     @State private var isEditing = false
 
     var body: some View {
         if isEditing {
-            EditableTodoRow(
-                todo: todo,
-                onToggle: onToggle,
-                onUpdate: onUpdate,
-                onDelete: onDelete,
-                startsEditing: true,
-                onExitEditing: {
-                    isEditing = false
-                }
-            )
-            .id("\(todo.id)-editing")
-            .transition(.opacity.combined(with: .scale(scale: 0.988, anchor: .top)))
+            switch editStyle {
+            case .full:
+                EditableTodoRow(
+                    todo: todo,
+                    onToggle: onToggle,
+                    onUpdate: onUpdate,
+                    onDelete: onDelete,
+                    startsEditing: true,
+                    onExitEditing: {
+                        isEditing = false
+                    }
+                )
+                .id("\(todo.id)-editing")
+                .transition(.opacity.combined(with: .scale(scale: 0.988, anchor: .top)))
+
+            case .compact:
+                TodoBoardEditCard(
+                    todo: todo,
+                    onUpdate: onUpdate,
+                    onDelete: onDelete,
+                    onExitEditing: {
+                        isEditing = false
+                    }
+                )
+                .id("\(todo.id)-compact-editing")
+                .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
+            }
         } else {
             HStack(alignment: hasNotes ? .top : .center, spacing: 8) {
                 Button(action: onToggle) {
