@@ -10,6 +10,7 @@ final class UpdateController: ObservableObject {
 
     private let lastAutoCheckKey = "dailyTodos.update.lastAutoCheck"
     private let autoCheckInterval: TimeInterval = 24 * 60 * 60
+    private let minimumVisibleCheckDuration: TimeInterval = 0.35
 
     func checkForUpdates() {
         runUpdateCheck(isManual: true)
@@ -24,9 +25,8 @@ final class UpdateController: ObservableObject {
         guard !isChecking else { return }
 
         isChecking = true
-        if isManual {
-            statusMessage = "正在检查更新..."
-        }
+        statusMessage = nil
+        let startedAt = Date()
 
         Task {
             do {
@@ -43,9 +43,13 @@ final class UpdateController: ObservableObject {
                 }
             } catch {
                 availableUpdate = nil
-                statusMessage = isManual ? readableStatus(for: error) : nil
+                    statusMessage = isManual ? readableStatus(for: error) : nil
             }
 
+            let elapsed = Date().timeIntervalSince(startedAt)
+            if elapsed < minimumVisibleCheckDuration {
+                try? await Task.sleep(for: .seconds(minimumVisibleCheckDuration - elapsed))
+            }
             lastCheckedAt = Date()
             if !isManual {
                 UserDefaults.standard.set(Date(), forKey: lastAutoCheckKey)
@@ -165,9 +169,12 @@ private enum UpdateError: LocalizedError {
             return "缺少更新地址配置"
         case .invalidResponse(let statusCode):
             if statusCode == 404 {
-                return "还没有发布更新信息，当前版本可继续使用。"
+                return "暂未找到远程版本信息，当前版本可继续使用。"
             }
-            return "更新服务器没有返回有效数据"
+            if let statusCode {
+                return "更新服务暂不可用（HTTP \(statusCode)）。"
+            }
+            return "更新服务暂不可用。"
         }
     }
 }

@@ -1038,8 +1038,12 @@ struct AppSettingsSheet: View {
                                     .frame(width: 104, height: 32)
                             }
                             .buttonStyle(.tactilePlain)
-                            .foregroundStyle(.white)
-                            .background(updateController.isChecking ? AppTheme.mutedInk.opacity(0.45) : AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .foregroundStyle(updateController.isChecking ? AppTheme.accent : .white)
+                            .background(updateController.isChecking ? AppTheme.accentSoft : AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : Color.white.opacity(0.26))
+                            )
                             .disabled(updateController.isChecking)
                             .help("检查更新")
                         }
@@ -1054,7 +1058,7 @@ struct AppSettingsSheet: View {
 
     private var updateStatusText: String {
         if updateController.isChecking {
-            return "正在连接更新服务器..."
+            return "正在检查远程版本..."
         }
         return updateController.statusMessage ?? "每天自动检查一次，也可以手动检查。"
     }
