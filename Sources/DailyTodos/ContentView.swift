@@ -5,7 +5,7 @@ private let progressColumnWidth: CGFloat = 104
 private let priorityColumnWidth: CGFloat = 78
 private let followUpColumnWidth: CGFloat = 154
 private let todoActionColumnWidth: CGFloat = 128
-private let compactHitTargetSize: CGFloat = 32
+private let compactHitTargetSize: CGFloat = 38
 private let sidebarColumnWidth: CGFloat = 236
 
 private enum AppMotion {
@@ -26,8 +26,7 @@ private enum AppMotion {
                 .combined(with: .move(edge: .top))
                 .combined(with: .scale(scale: 0.985, anchor: .top)),
             removal: .opacity
-                .combined(with: .move(edge: .trailing))
-                .combined(with: .scale(scale: 0.985, anchor: .center))
+                .combined(with: .scale(scale: 0.982, anchor: .center))
         )
     }
 
@@ -40,11 +39,36 @@ private enum AppMotion {
 }
 
 private struct TactilePlainButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .contentShape(Rectangle())
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(buttonFill(isPressed: configuration.isPressed))
+            }
             .scaleEffect(configuration.isPressed ? 0.965 : 1)
-            .opacity(configuration.isPressed ? 0.76 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.78 : 1) : 0.46)
             .animation(AppMotion.press, value: configuration.isPressed)
+            .animation(AppMotion.hover, value: isHovered)
+            .onHover { hovered in
+                isHovered = hovered
+            }
+    }
+
+    private func buttonFill(isPressed: Bool) -> Color {
+        guard isEnabled else {
+            return Color.clear
+        }
+        if isPressed {
+            return AppTheme.accentSoft.opacity(0.82)
+        }
+        if isHovered {
+            return Color.white.opacity(0.50)
+        }
+        return Color.clear
     }
 }
 
@@ -139,28 +163,28 @@ private enum AppTheme {
 
     static var workSurface: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.965, green: 0.982, blue: 1.0)
-        case .aurora: Color(red: 0.985, green: 0.980, blue: 1.0)
-        case .board: Color(red: 0.990, green: 0.988, blue: 0.982)
-        case .leafcutter: Color(red: 0.985, green: 0.972, blue: 0.930)
+        case .ocean: Color(red: 0.972, green: 0.985, blue: 0.995)
+        case .aurora: Color(red: 0.987, green: 0.984, blue: 0.996)
+        case .board: Color(red: 0.984, green: 0.984, blue: 0.978)
+        case .leafcutter: Color(red: 0.982, green: 0.968, blue: 0.928)
         }
     }
 
     static var sidebar: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.945, green: 0.970, blue: 1.0)
-        case .aurora: Color(red: 0.972, green: 0.942, blue: 1.0)
-        case .board: Color(red: 0.955, green: 0.948, blue: 0.975)
-        case .leafcutter: Color(red: 0.955, green: 0.934, blue: 0.850)
+        case .ocean: Color(red: 0.918, green: 0.950, blue: 0.982)
+        case .aurora: Color(red: 0.952, green: 0.928, blue: 0.985)
+        case .board: Color(red: 0.935, green: 0.932, blue: 0.952)
+        case .leafcutter: Color(red: 0.938, green: 0.910, blue: 0.805)
         }
     }
 
     static var sidebarSelected: Color {
         switch AppSkin.current {
-        case .ocean: accent.opacity(0.12)
-        case .aurora: accent.opacity(0.14)
-        case .board: accent.opacity(0.08)
-        case .leafcutter: accent.opacity(0.13)
+        case .ocean: Color.white.opacity(0.58)
+        case .aurora: Color.white.opacity(0.56)
+        case .board: Color.white.opacity(0.52)
+        case .leafcutter: Color.white.opacity(0.48)
         }
     }
 
@@ -184,9 +208,9 @@ private enum AppTheme {
 
     static var panel: Color {
         switch AppSkin.current {
-        case .ocean, .aurora: Color.white.opacity(0.98)
-        case .board: Color.white.opacity(0.96)
-        case .leafcutter: Color(red: 1.0, green: 0.985, blue: 0.948).opacity(0.98)
+        case .ocean, .aurora: Color.white.opacity(0.94)
+        case .board: Color.white.opacity(0.92)
+        case .leafcutter: Color(red: 1.0, green: 0.986, blue: 0.946).opacity(0.94)
         }
     }
 
@@ -248,10 +272,10 @@ private enum AppTheme {
 
     static var accent: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.275, green: 0.400, blue: 0.945)
-        case .aurora: Color(red: 0.385, green: 0.350, blue: 0.920)
-        case .board: Color(red: 0.060, green: 0.058, blue: 0.062)
-        case .leafcutter: Color(red: 0.720, green: 0.170, blue: 0.100)
+        case .ocean: Color(red: 0.050, green: 0.520, blue: 0.490)
+        case .aurora: Color(red: 0.430, green: 0.300, blue: 0.850)
+        case .board: Color(red: 0.075, green: 0.070, blue: 0.080)
+        case .leafcutter: Color(red: 0.705, green: 0.210, blue: 0.090)
         }
     }
 
@@ -283,19 +307,28 @@ private enum AppTheme {
 
     static var shadow: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.270, green: 0.430, blue: 0.700).opacity(0.14)
-        case .aurora: Color(red: 0.500, green: 0.360, blue: 0.720).opacity(0.14)
-        case .board: Color.black.opacity(0.12)
-        case .leafcutter: Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.15)
+        case .ocean: Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.12)
+        case .aurora: Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.12)
+        case .board: Color.black.opacity(0.10)
+        case .leafcutter: Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.13)
         }
     }
 
     static var rowShadow: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.270, green: 0.430, blue: 0.700).opacity(0.08)
-        case .aurora: Color(red: 0.500, green: 0.360, blue: 0.720).opacity(0.08)
-        case .board: Color.black.opacity(0.06)
-        case .leafcutter: Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.08)
+        case .ocean: Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.07)
+        case .aurora: Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.07)
+        case .board: Color.black.opacity(0.05)
+        case .leafcutter: Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.07)
+        }
+    }
+
+    static var accentWarm: Color {
+        switch AppSkin.current {
+        case .ocean: Color(red: 0.918, green: 0.345, blue: 0.047)
+        case .aurora: Color(red: 0.905, green: 0.300, blue: 0.520)
+        case .board: Color(red: 0.790, green: 0.310, blue: 0.130)
+        case .leafcutter: Color(red: 0.920, green: 0.395, blue: 0.085)
         }
     }
 }
@@ -316,6 +349,7 @@ struct ContentView: View {
     @State private var isCreatingTodo = false
     @State private var aiStatusMessage: String?
     @State private var quickCaptureAITrace: AITrace?
+    @State private var quickCaptureAIResultSummary: String?
     @State private var isAISettingsPresented = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @FocusState private var focusedField: FocusField?
@@ -323,38 +357,47 @@ struct ContentView: View {
     private let calendar = Calendar.current
 
     var body: some View {
-        VStack(spacing: 0) {
-            AppTopBar(
-                isAIEnabled: aiSettings.canUseAI,
-                selectedSkinRawValue: $selectedSkinRawValue,
-                onOpenAISettings: { isAISettingsPresented = true },
-                onNewTodo: focusQuickCapture
-            )
-            .frame(height: 48)
+        HStack(spacing: 0) {
+            SidebarView(scope: $scope)
+                .frame(
+                    minWidth: sidebarColumnWidth,
+                    idealWidth: sidebarColumnWidth,
+                    maxWidth: sidebarColumnWidth,
+                    maxHeight: .infinity
+                )
 
-            Divider()
-                .overlay(AppTheme.hairline)
-
-            HStack(spacing: 0) {
-                SidebarView(scope: $scope)
-                    .frame(width: sidebarColumnWidth)
+            VStack(spacing: 0) {
+                AppTopBar(
+                    title: dayTitle,
+                    subtitle: daySubtitle,
+                    isAIEnabled: aiSettings.canUseAI,
+                    selectedSkinRawValue: $selectedSkinRawValue,
+                    onOpenAISettings: { isAISettingsPresented = true },
+                    onNewTodo: focusQuickCapture
+                )
+                .frame(height: 48)
 
                 Divider()
                     .overlay(AppTheme.hairline)
 
                 taskColumn
-                    .frame(minWidth: 700)
+                    .frame(minWidth: 700, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                AppTheme.workSurface
+                    .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
             }
         }
-        .background(
-            LinearGradient(
-                colors: AppTheme.canvasGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-        )
+        .background(AppTheme.sidebar.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(AppTheme.hairline)
+                .frame(width: 1)
+                .offset(x: sidebarColumnWidth)
+                .ignoresSafeArea(.container, edges: .vertical)
+        }
         .foregroundStyle(AppTheme.ink)
         .id(selectedSkinRawValue)
         .onAppear {
@@ -372,19 +415,16 @@ struct ContentView: View {
             isQuickCaptureExpanded = true
             focusedField = .newTitle
         }
+        .sheet(isPresented: $isAISettingsPresented) {
+            AISettingsSheet()
+                .environmentObject(aiSettings)
+        }
     }
 
     private var taskColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if shouldShowPageContext {
-                pageHeader
-                    .padding(.horizontal, 28)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
-            } else {
-                Spacer()
-                    .frame(height: 16)
-            }
+            Spacer()
+                .frame(height: 16)
 
             if let error = store.lastError {
                 Text(error)
@@ -408,6 +448,7 @@ struct ContentView: View {
                 isCreating: isCreatingTodo,
                 aiStatusMessage: aiStatusMessage,
                 aiTrace: quickCaptureAITrace,
+                aiResultSummary: quickCaptureAIResultSummary,
                 isAIEnabled: aiSettings.canUseAI
             )
             .padding(.horizontal, 28)
@@ -437,37 +478,6 @@ struct ContentView: View {
             .animation(AppMotion.smooth, value: allTodosViewMode)
         }
         .background(AppTheme.workSurface)
-    }
-
-    private var pageHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(daySubtitle)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppTheme.mutedInk)
-                .lineLimit(1)
-
-            Spacer()
-
-            Text(summaryText)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.50), in: Capsule())
-        }
-        .sheet(isPresented: $isAISettingsPresented) {
-            AISettingsSheet()
-                .environmentObject(aiSettings)
-        }
-    }
-
-    private var shouldShowPageContext: Bool {
-        switch scope {
-        case .all:
-            return false
-        case .dashboard, .waiting, .weekly, .day:
-            return true
-        }
     }
 
     private var filteredTodos: [TodoItem] {
@@ -514,31 +524,13 @@ struct ContentView: View {
         case .dashboard:
             return dashboardSubtitle
         case .all:
-            let pending = store.todos.filter { !$0.isDone }.count
-            return "\(store.todos.count) 个事项，\(pending) 个未完成"
+            return "完整任务池，按当前视图阅读"
         case .waiting:
             return "所有需要别人反馈或推进的事项"
         case .weekly:
             return "每周重复出现的管理动作"
         case .day(let selectedDate):
             return selectedDate.formatted(.dateTime.year().month().day().weekday(.wide))
-        }
-    }
-
-    private var summaryText: String {
-        switch scope {
-        case .dashboard:
-            return "\(overdueTodos.count) 逾期 / \(todayActiveTodos.count) 今日 / \(waitingTodos.count) 等待"
-        case .all:
-            let completed = store.todos.filter(\.isDone).count
-            let pending = store.todos.count - completed
-            return "\(pending) 未完成 / \(completed) 已完成"
-        case .day(let date):
-            return "\(store.pendingCount(on: date)) 未完成 / \(store.completedCount(on: date)) 已完成"
-        case .waiting:
-            return "\(waitingTodos.count) 等待反馈"
-        case .weekly:
-            return "\(weeklyTodos.count) 个固定事项"
         }
     }
 
@@ -607,6 +599,7 @@ struct ContentView: View {
                     )
                     await MainActor.run {
                         quickCaptureAITrace = aiResult.trace
+                        quickCaptureAIResultSummary = aiResultSummary(from: parsedInput, to: aiResult.input)
                         finishCreateTodo(with: aiResult.input)
                         aiStatusMessage = nil
                         isCreatingTodo = false
@@ -616,6 +609,7 @@ struct ContentView: View {
                         finishCreateTodo(with: parsedInput)
                         aiStatusMessage = "AI 解析失败，已用本地规则记录"
                         quickCaptureAITrace = nil
+                        quickCaptureAIResultSummary = nil
                         isCreatingTodo = false
                     }
                 }
@@ -711,9 +705,43 @@ struct ContentView: View {
         newIsWeekly = false
         aiStatusMessage = nil
         quickCaptureAITrace = nil
+        quickCaptureAIResultSummary = nil
         withAnimation(AppMotion.smooth) {
             isQuickCaptureExpanded = false
         }
+    }
+
+    private func aiResultSummary(from local: ParsedTodoInput, to ai: ParsedTodoInput) -> String {
+        var changes: [String] = []
+        if local.priority != ai.priority {
+            changes.append("优先级 \(ai.priority.label)")
+        }
+        if local.progress != ai.progress {
+            changes.append("状态 \(ai.progress.shortLabel)")
+        }
+        if !calendar.isDate(local.date, equalTo: ai.date, toGranularity: .minute) {
+            changes.append("时间 \(compactDateTime(ai.date))")
+        }
+        if local.isWeekly != ai.isWeekly {
+            changes.append(ai.isWeekly ? "固定每周" : "非固定")
+        }
+        if local.notes != ai.notes, !ai.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            changes.append("备注已识别")
+        }
+        if changes.isEmpty {
+            return "AI 已校验，采用本地解析结果"
+        }
+        return "AI 已修正：" + changes.joined(separator: " / ")
+    }
+
+    private func compactDateTime(_ date: Date) -> String {
+        let timeText = timeSuffix(for: date, calendar: calendar)
+        if calendar.isDateInToday(date) { return "今天\(timeText)" }
+        if calendar.isDateInTomorrow(date) { return "明天\(timeText)" }
+        if calendar.isDateInYesterday(date) { return "昨天\(timeText)" }
+        let month = calendar.component(.month, from: date)
+        let day = calendar.component(.day, from: date)
+        return "\(month)/\(day)\(timeText)"
     }
 }
 
@@ -739,6 +767,15 @@ enum AllTodosViewMode: String, CaseIterable, Identifiable {
         case .grouped: "分组"
         case .board: "看板"
         case .matrix: "四象限"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .compact: "text.alignleft"
+        case .grouped: "calendar"
+        case .board: "rectangle.3.group"
+        case .matrix: "square.grid.2x2"
         }
     }
 }
@@ -795,7 +832,7 @@ struct SkinPickerButton: View {
                 Capsule()
                     .stroke(AppTheme.accent.opacity(0.22))
             )
-            .interactionHitArea(34)
+            .interactionHitArea()
         }
         .menuStyle(.borderlessButton)
         .help("切换皮肤")
@@ -803,15 +840,26 @@ struct SkinPickerButton: View {
 }
 
 struct AppTopBar: View {
+    let title: String
+    let subtitle: String
     let isAIEnabled: Bool
     @Binding var selectedSkinRawValue: String
     let onOpenAISettings: () -> Void
     let onNewTodo: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            systemWindowControlsSpace
-                .padding(.leading, 16)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
 
             Spacer(minLength: 24)
 
@@ -826,34 +874,23 @@ struct AppTopBar: View {
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(AppTheme.accent, in: Capsule())
+                .background(AppTheme.accentWarm, in: Capsule())
                 .overlay(
                     Capsule()
                         .stroke(Color.white.opacity(0.52))
                 )
-                .shadow(color: AppTheme.accent.opacity(0.18), radius: 10, x: 0, y: 5)
-                .interactionHitArea(34)
+                .shadow(color: AppTheme.accentWarm.opacity(0.20), radius: 10, x: 0, y: 5)
+                .interactionHitArea()
                 .help("记录新的待办")
             }
             .padding(.trailing, 16)
         }
+        .padding(.leading, 20)
         .background(topBarBackground)
     }
 
-    private var systemWindowControlsSpace: some View {
-        Color.clear
-            .frame(width: 76, height: 22)
-    }
-
     private var topBarBackground: some View {
-        LinearGradient(
-            colors: [
-                AppTheme.panel.opacity(0.86),
-                AppTheme.workSurface.opacity(0.92)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        Color.clear
     }
 }
 
@@ -879,7 +916,7 @@ struct AISettingsButton: View {
                 Capsule()
                     .stroke(isEnabled ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
             )
-            .interactionHitArea(34)
+            .interactionHitArea()
         }
         .buttonStyle(.tactilePlain)
         .help("AI 设置")
@@ -923,7 +960,7 @@ struct AISettingsSheet: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("AI 设置")
                     .font(.system(size: 25, weight: .semibold))
-                Text("DeepSeek 负责智能解析、推进建议和备注摘要；密钥只保存在本机 Keychain。")
+                Text("DeepSeek 负责智能解析、推进建议和备注摘要；密钥只保存在本机私有配置文件。")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.mutedInk)
                     .lineLimit(2)
@@ -962,8 +999,14 @@ struct AISettingsSheet: View {
                 }
 
                 LabeledContent("模型") {
-                    DeepSeekModelPicker(model: $aiSettings.configuration.model)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 5) {
+                        DeepSeekModelPicker(model: $aiSettings.configuration.model)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(currentModelSubtitle)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.mutedInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 LabeledContent("API Key") {
@@ -980,6 +1023,10 @@ struct AISettingsSheet: View {
                 }
 
                 securityNote
+
+                if let trace = aiSettings.lastTrace {
+                    AITraceDisclosure(trace: trace, isExpanded: .constant(true))
+                }
             }
             .labeledContentStyle(AISettingsLabeledContentStyle())
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1080,13 +1127,17 @@ struct AISettingsSheet: View {
     }
 
     private var securityNote: some View {
-        Label("API Key 通过 macOS Keychain 保存，不写入源码、配置文件或 Git 仓库。", systemImage: "lock.shield")
+        Label("API Key 保存到本机用户目录的私有文件，权限 600，不写入源码或 Git 仓库；这不是 Keychain 加密。", systemImage: "lock.shield")
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(AppTheme.mutedInk)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(AppTheme.accentSoft.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var currentModelSubtitle: String {
+        DeepSeekModel(rawValue: aiSettings.configuration.model)?.subtitle ?? "自定义模型名，请确认该模型兼容 Chat Completions。"
     }
 
     private var connectionControls: some View {
@@ -1295,89 +1346,24 @@ struct SidebarView: View {
     private let calendar = Calendar.current
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 10) {
-                AppLogoImage()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("蚁序")
-                        .font(.system(size: 18, weight: .bold))
-                    Text("个人推进秩序")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 15) {
+                    navigationGroup
+                    quickDateGroup
+                    miniCalendarGroup
                 }
+                .padding(.horizontal, 17)
+                .padding(.top, 48)
+                .padding(.bottom, 14)
             }
+            .scrollIndicators(.hidden)
 
-            VStack(alignment: .leading, spacing: 6) {
-                DateButton(
-                    title: "今日推进",
-                    subtitle: "\(dashboardCount) 个需关注",
-                    count: overdueCount,
-                    isSelected: scope == .dashboard
-                ) {
-                    scope = .dashboard
-                }
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.7))
 
-                DateButton(
-                    title: "等待反馈",
-                    subtitle: "需要别人推进",
-                    count: waitingCount,
-                    isSelected: scope == .waiting
-                ) {
-                    scope = .waiting
-                }
-
-                DateButton(
-                    title: "本周固定",
-                    subtitle: "重复管理动作",
-                    count: weeklyCount,
-                    isSelected: scope == .weekly
-                ) {
-                    scope = .weekly
-                }
-
-                DateButton(
-                    title: "全部待办",
-                    subtitle: "\(store.todos.count) 个事项",
-                    count: activeCount,
-                    isSelected: scope == .all
-                ) {
-                    scope = .all
-                }
-
-                Text("快速日期")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                    .padding(.top, 8)
-
-                QuickDateStrip(
-                    dates: quickDates,
-                    selectedDate: selectedDate,
-                    pendingCount: { store.pendingCount(on: $0) },
-                    onSelect: { date in
-                        calendarMonth = date
-                        scope = .day(date)
-                    }
-                )
-            }
-
-            TodoMiniCalendar(
-                visibleMonth: $calendarMonth,
-                datesWithTodos: store.datesWithTodos(),
-                selectedDate: selectedDate,
-                todoCount: { store.todos(on: $0).count },
-                pendingCount: { store.pendingCount(on: $0) },
-                onSelect: { date in
-                    calendarMonth = date
-                    scope = .day(date)
-                }
-            )
-
-            Spacer()
+            brandFooter
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 32)
-        .padding(.bottom, 20)
         .background(AppTheme.sidebar)
         .foregroundStyle(AppTheme.ink)
         .onAppear {
@@ -1390,6 +1376,100 @@ struct SidebarView: View {
                 calendarMonth = newValue
             }
         }
+    }
+
+    private var navigationGroup: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            DateButton(
+                title: "今日推进",
+                subtitle: "风险优先，推进今天",
+                systemImage: "target",
+                count: dashboardCount,
+                alertCount: overdueCount,
+                isSelected: scope == .dashboard
+            ) {
+                scope = .dashboard
+            }
+
+            DateButton(
+                title: "等待反馈",
+                subtitle: "需要别人推进",
+                systemImage: "person.2.fill",
+                count: waitingCount,
+                isSelected: scope == .waiting
+            ) {
+                scope = .waiting
+            }
+
+            DateButton(
+                title: "本周固定",
+                subtitle: "重复管理动作",
+                systemImage: "repeat",
+                count: weeklyCount,
+                isSelected: scope == .weekly
+            ) {
+                scope = .weekly
+            }
+
+            DateButton(
+                title: "全部待办",
+                subtitle: "完整任务池",
+                systemImage: "tray.full.fill",
+                count: activeCount,
+                isSelected: scope == .all
+            ) {
+                scope = .all
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var quickDateGroup: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            SidebarSectionLabel("快速日期")
+
+            QuickDateStrip(
+                dates: quickDates,
+                selectedDate: selectedDate,
+                pendingCount: { store.pendingCount(on: $0) },
+                onSelect: { date in
+                    calendarMonth = date
+                    scope = .day(date)
+                }
+            )
+        }
+    }
+
+    private var miniCalendarGroup: some View {
+        TodoMiniCalendar(
+            visibleMonth: $calendarMonth,
+            datesWithTodos: store.datesWithTodos(),
+            selectedDate: selectedDate,
+            todoCount: { store.todos(on: $0).count },
+            pendingCount: { store.pendingCount(on: $0) },
+            onSelect: { date in
+                calendarMonth = date
+                scope = .day(date)
+            }
+        )
+    }
+
+    private var brandFooter: some View {
+        HStack(spacing: 10) {
+            AppLogoImage()
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("蚁序")
+                    .font(.system(size: 17, weight: .bold))
+                Text("个人推进秩序")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 17)
+        .padding(.vertical, 12)
     }
 
     private var activeCount: Int {
@@ -1436,16 +1516,29 @@ struct SidebarView: View {
 struct DateButton: View {
     let title: String
     let subtitle: String
+    let systemImage: String
     let count: Int
+    var alertCount: Int = 0
     let isSelected: Bool
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(isSelected ? AppTheme.accentWarm : Color.clear)
+                    .frame(width: 3, height: 30)
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .frame(width: 18)
+
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 11))
@@ -1455,22 +1548,74 @@ struct DateButton: View {
 
                 Spacer()
 
-                Text("\(count)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(isSelected ? .white : AppTheme.accent)
-                    .frame(minWidth: 24, minHeight: 20)
-                    .background(isSelected ? AppTheme.accent : AppTheme.accent.opacity(0.10), in: Capsule())
+                if count > 0 || alertCount > 0 {
+                    Text(countText)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(isSelected ? .white : countColor)
+                        .frame(minWidth: 24, minHeight: 20)
+                        .background(isSelected ? countColor : countColor.opacity(0.11), in: Capsule())
+                        .help(countHelp)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? AppTheme.sidebarSelected : Color.white.opacity(0.56), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.28) : AppTheme.hairline)
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : Color.white.opacity(isHovered ? 0.36 : 0.0))
             )
         }
         .buttonStyle(.tactilePlain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onHover { hovered in
+            isHovered = hovered
+        }
+        .animation(AppMotion.hover, value: isHovered)
         .animation(AppMotion.smooth, value: isSelected)
+    }
+
+    private var navBackground: Color {
+        if isSelected {
+            return AppTheme.sidebarSelected
+        }
+        if isHovered {
+            return Color.white.opacity(0.28)
+        }
+        return Color.clear
+    }
+
+    private var countText: String {
+        if alertCount > 0 {
+            return "\(alertCount)"
+        }
+        return "\(count)"
+    }
+
+    private var countColor: Color {
+        alertCount > 0 ? TodoPriority.high.displayColor : AppTheme.accent
+    }
+
+    private var countHelp: String {
+        alertCount > 0 ? "逾期未完成" : "未完成事项"
+    }
+}
+
+struct SidebarSectionLabel: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(AppTheme.mutedInk)
+            .textCase(.none)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -1480,11 +1625,11 @@ struct QuickDateStrip: View {
     let pendingCount: (Date) -> Int
     let onSelect: (Date) -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     private let calendar = Calendar.current
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 5) {
+        LazyVGrid(columns: columns, spacing: 4) {
             ForEach(dates, id: \.self) { date in
                 QuickDateCell(
                     date: date,
@@ -1550,39 +1695,15 @@ struct TodoMiniCalendar: View {
     let onSelect: (Date) -> Void
 
     private let calendar = Calendar.current
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
     private let weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("有记录的日期")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                SidebarSectionLabel("有记录")
                 Spacer()
-                Text(monthTitle)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                Button {
-                    shiftMonth(-1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 9, weight: .bold))
-                        .interactionHitArea()
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
-                .help("上个月")
-                Button {
-                    shiftMonth(1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .interactionHitArea()
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
-                .help("下个月")
+                monthStepper
             }
 
             LazyVGrid(columns: columns, spacing: 5) {
@@ -1606,21 +1727,62 @@ struct TodoMiniCalendar: View {
                         )
                     } else {
                         Color.clear
-                            .frame(height: 28)
+                            .frame(height: 30)
                     }
                 }
             }
-            .padding(8)
-            .background(Color.white.opacity(0.48), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.44), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .stroke(AppTheme.hairline)
             )
         }
     }
 
+    private var monthStepper: some View {
+        HStack(spacing: 3) {
+            Button {
+                shiftMonth(-1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 8, weight: .bold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.tactilePlain)
+            .help("上个月")
+
+            Text(monthTitle)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .monospacedDigit()
+                .frame(minWidth: 64)
+
+            Button {
+                shiftMonth(1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.tactilePlain)
+            .help("下个月")
+        }
+        .foregroundStyle(AppTheme.mutedInk)
+        .padding(.horizontal, 3)
+        .padding(.vertical, 2)
+        .background(Color.white.opacity(0.38), in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.hairline.opacity(0.78))
+        )
+    }
+
     private var monthTitle: String {
-        visibleMonth.formatted(.dateTime.year().month(.wide))
+        visibleMonth.formatted(.dateTime.year().month(.abbreviated))
     }
 
     private func shiftMonth(_ value: Int) {
@@ -1673,30 +1835,25 @@ struct MiniCalendarDayCell: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 2) {
-                Text("\(calendar.component(.day, from: date))")
-                    .font(.system(size: 11, weight: isToday || isSelected ? .bold : .semibold))
-                    .monospacedDigit()
-                HStack(spacing: 2) {
-                    Circle()
-                        .fill(totalCount > 0 ? markerColor : Color.clear)
-                        .frame(width: 4, height: 4)
-                    if pendingCount > 0 {
-                        Text("\(pendingCount)")
-                            .font(.system(size: 8, weight: .bold))
-                            .monospacedDigit()
-                    }
-                }
-                .frame(height: 8)
-            }
-            .foregroundStyle(foreground)
-            .frame(maxWidth: .infinity, minHeight: 28)
-            .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
+            ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(stroke)
-            )
-            .interactionHitArea()
+                    .fill(background)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(stroke)
+                    )
+                    .frame(width: 24, height: 30)
+
+                VStack(spacing: 2) {
+                    Text("\(calendar.component(.day, from: date))")
+                        .font(.system(size: 12, weight: isToday || isSelected ? .bold : .semibold))
+                        .monospacedDigit()
+                    markerStrip
+                }
+                .foregroundStyle(foreground)
+            }
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
         .disabled(!isInCurrentMonth)
@@ -1710,6 +1867,26 @@ struct MiniCalendarDayCell: View {
         pendingCount > 0 ? AppTheme.accent : TodoProgress.done.displayColor
     }
 
+    @ViewBuilder
+    private var markerStrip: some View {
+        if totalCount > 0 {
+            HStack(spacing: 2) {
+                Circle()
+                    .fill(isSelected ? Color.white : markerColor)
+                    .frame(width: 4, height: 4)
+                if pendingCount > 0 && pendingCount != totalCount {
+                    Circle()
+                        .fill(isSelected ? Color.white.opacity(0.72) : AppTheme.accentWarm.opacity(0.82))
+                        .frame(width: 4, height: 4)
+                }
+            }
+            .frame(height: 5)
+        } else {
+            Color.clear
+                .frame(height: 5)
+        }
+    }
+
     private var foreground: Color {
         if isSelected { return .white }
         if !isInCurrentMonth { return AppTheme.mutedInk.opacity(0.45) }
@@ -1719,8 +1896,8 @@ struct MiniCalendarDayCell: View {
 
     private var background: Color {
         if isSelected { return AppTheme.accent }
-        if isToday { return AppTheme.accentSoft }
-        return Color.white.opacity(totalCount > 0 ? 0.70 : 0.0)
+        if isToday { return AppTheme.accentSoft.opacity(0.92) }
+        return Color.white.opacity(totalCount > 0 ? 0.60 : 0.0)
     }
 
     private var stroke: Color {
@@ -1732,17 +1909,22 @@ struct MiniCalendarDayCell: View {
 
 struct SearchField: View {
     @Binding var text: String
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(AppTheme.mutedInk)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(text.isEmpty ? AppTheme.mutedInk : AppTheme.accent)
             TextField("搜索标题或备注", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
+                .foregroundStyle(AppTheme.ink)
             if !text.isEmpty {
                 Button {
-                    text = ""
+                    withAnimation(AppMotion.quick) {
+                        text = ""
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .interactionHitArea()
@@ -1752,12 +1934,18 @@ struct SearchField: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(isHovered ? 0.82 : 0.62), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(AppTheme.border)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(text.isEmpty ? AppTheme.hairline.opacity(0.75) : AppTheme.accent.opacity(0.22))
         )
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
+        .animation(AppMotion.quick, value: text.isEmpty)
     }
 }
 
@@ -1765,14 +1953,43 @@ struct AllTodosViewModePicker: View {
     @Binding var selection: AllTodosViewMode
 
     var body: some View {
-        Picker("全部待办视图", selection: $selection) {
+        HStack(spacing: 3) {
             ForEach(AllTodosViewMode.allCases) { mode in
-                Text(mode.label).tag(mode)
+                Button {
+                    withAnimation(AppMotion.modeSwitch) {
+                        selection = mode
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: mode.icon)
+                            .font(.system(size: 10, weight: .bold))
+                        Text(mode.label)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(selection == mode ? .white : AppTheme.mutedInk)
+                    .frame(height: 30)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(selection == mode ? AppTheme.accent : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(selection == mode ? Color.white.opacity(0.24) : Color.clear, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.tactilePlain)
+                .help("\(mode.label)视图")
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(width: 304)
+        .padding(3)
+        .frame(width: 318)
+        .background(Color.white.opacity(0.58), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.82))
+        )
     }
 }
 
@@ -1793,13 +2010,13 @@ struct ListToolbar: View {
                 AllTodosViewModePicker(selection: $allTodosViewMode)
             }
         }
-        .padding(6)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(5)
+        .background(Color.white.opacity(0.44), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(AppTheme.border)
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.85))
         )
-        .shadow(color: AppTheme.rowShadow, radius: 12, x: 0, y: 6)
+        .shadow(color: AppTheme.rowShadow.opacity(0.72), radius: 9, x: 0, y: 5)
     }
 }
 
@@ -1852,7 +2069,6 @@ struct TodoListView: View {
         }
         .animation(AppMotion.modeSwitch, value: scope)
         .animation(AppMotion.modeSwitch, value: allTodosViewMode)
-        .animation(AppMotion.list, value: todos)
     }
 
     private var dashboardList: some View {
@@ -1958,22 +2174,20 @@ struct TodoListView: View {
                 }
             }
         }
-        .animation(AppMotion.list, value: todos)
     }
 
     private var groupedList: some View {
-        LazyVStack(spacing: 8) {
-            TodoTableHeader()
-
+        LazyVStack(spacing: 6) {
             if todos.isEmpty {
                 EmptyTodoHint(isAllScope: scope == .all)
             } else if scope == .all {
                 ForEach(groupedTodos) { group in
                     TodoDateGroupHeader(date: group.date, count: group.todos.count)
                     ForEach(group.todos) { todo in
-                        EditableTodoRow(
+                        TodoFlowRow(
                             todo: todo,
                             onToggle: { onToggle(todo) },
+                            onProgressChange: { progress in onProgressChange(todo, progress) },
                             onUpdate: { draft in onUpdate(todo, draft) },
                             onDelete: { onDelete(todo) }
                         )
@@ -1982,9 +2196,10 @@ struct TodoListView: View {
                 }
             } else {
                 ForEach(todos) { todo in
-                    EditableTodoRow(
+                    TodoFlowRow(
                         todo: todo,
                         onToggle: { onToggle(todo) },
+                        onProgressChange: { progress in onProgressChange(todo, progress) },
                         onUpdate: { draft in onUpdate(todo, draft) },
                         onDelete: { onDelete(todo) }
                     )
@@ -1992,7 +2207,6 @@ struct TodoListView: View {
                 }
             }
         }
-        .animation(AppMotion.list, value: todos)
     }
 
     private var boardList: some View {
@@ -2028,7 +2242,6 @@ struct TodoListView: View {
                 .transition(AppMotion.rowTransition)
             }
         }
-        .animation(AppMotion.list, value: todos)
     }
 
     private var dashboardGroups: [WorkSectionGroup] {
@@ -2286,7 +2499,6 @@ struct TodoBoardColumn: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(progress.displayColor.opacity(0.16))
         )
-        .animation(AppMotion.list, value: todos)
     }
 }
 
@@ -2309,49 +2521,73 @@ struct TodoBoardCard: View {
             )
             .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
         } else {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: hasNotes ? .top : .center, spacing: 8) {
                     Button(action: onToggle) {
-                        Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 14, weight: .semibold))
-                            .interactionHitArea()
+                        ZStack {
+                            Circle()
+                                .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : Color.white.opacity(0.72))
+                                .overlay(
+                                    Circle()
+                                        .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.32) : AppTheme.hairline, lineWidth: 1)
+                                )
+                                .frame(width: 22, height: 22)
+                            Image(systemName: todo.isDone ? "checkmark" : "circle")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(todo.isDone ? TodoProgress.done.displayColor : AppTheme.mutedInk)
+                    .help(todo.isDone ? "标记为待处理" : "标记为完成")
 
-                    PriorityOutlineTag(priority: todo.priority)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            PriorityOutlineTag(priority: todo.priority, isCompact: true)
+                                .fixedSize()
 
-                    Spacer()
-
-                    ProgressMenuTag(progress: todo.progress, onSelect: onProgressChange)
-
-                    Button {
-                        withAnimation(AppMotion.quick) {
-                            isEditing = true
+                            Text(titleText)
+                                .font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))
+                                .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
+                                .strikethrough(todo.isDone, color: AppTheme.mutedInk)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .semibold))
-                            .interactionHitArea()
+
+                        if hasNotes {
+                            Text(todo.trimmedNotes)
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppTheme.mutedInk)
+                                .strikethrough(todo.isDone, color: AppTheme.mutedInk)
+                                .lineLimit(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(AppTheme.mutedInk)
-                }
+                    .padding(.top, hasNotes ? 2 : 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(todo.trimmedTitle.isEmpty ? "未命名待办" : todo.trimmedTitle)
-                    .font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))
-                    .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
-                    .strikethrough(todo.isDone, color: AppTheme.mutedInk)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 5) {
+                        ProgressMenuTag(progress: todo.progress, onSelect: onProgressChange)
 
-                if !todo.trimmedNotes.isEmpty {
-                    Text(todo.trimmedNotes)
-                        .font(.system(size: 12))
+                        Button {
+                            withAnimation(AppMotion.quick) {
+                                isEditing = true
+                            }
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(width: 30, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.tactilePlain)
                         .foregroundStyle(AppTheme.mutedInk)
-                        .strikethrough(todo.isDone, color: AppTheme.mutedInk)
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .help("编辑")
+                    }
+                    .padding(.top, hasNotes ? 0 : -1)
+                    .fixedSize()
                 }
 
                 HStack(spacing: 8) {
@@ -2375,7 +2611,6 @@ struct TodoBoardCard: View {
                     .stroke(isOverdue ? TodoPriority.high.displayColor.opacity(0.22) : AppTheme.border)
             )
             .shadow(color: AppTheme.rowShadow, radius: 8, x: 0, y: 4)
-            .animation(AppMotion.smooth, value: todo)
             .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
         }
     }
@@ -2387,6 +2622,14 @@ struct TodoBoardCard: View {
         if calendar.isDateInTomorrow(todo.date) { return "明天\(timeText)" }
         if calendar.isDateInYesterday(todo.date) { return "昨天\(timeText)" }
         return formatFullFollowUpDate(todo.date, calendar: calendar)
+    }
+
+    private var titleText: String {
+        todo.trimmedTitle.isEmpty ? "未命名待办" : todo.trimmedTitle
+    }
+
+    private var hasNotes: Bool {
+        !todo.trimmedNotes.isEmpty
     }
 
     private var isOverdue: Bool {
@@ -2704,20 +2947,21 @@ struct TodoDateGroupHeader: View {
     let count: Int
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppTheme.ink)
             Text(date.formatted(.dateTime.year().month().day().weekday(.wide)))
-                .font(.caption)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppTheme.mutedInk)
             Spacer()
             Text("\(count) 项")
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 8)
+        .padding(.top, 9)
+        .padding(.bottom, 1)
     }
 
     private var title: String {
@@ -2770,26 +3014,43 @@ struct QuickCaptureBar: View {
     let isCreating: Bool
     let aiStatusMessage: String?
     let aiTrace: AITrace?
+    let aiResultSummary: String?
     let isAIEnabled: Bool
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: isExpanded ? 9 : 5) {
             HStack(alignment: .center, spacing: 8) {
                 ZStack {
-                    Circle()
-                        .fill(AppTheme.accentSoft)
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.accent.opacity(0.16),
+                                    AppTheme.accentWarm.opacity(0.13)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(AppTheme.accent.opacity(0.16), lineWidth: 1)
+                        )
                     Image(systemName: "command")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(AppTheme.accent)
                 }
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 28)
 
                 TextField("快速记录：要推进什么？", text: $title)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
                     .focused(focusedField, equals: .newTitle)
                     .submitLabel(.done)
                     .onSubmit(submitQuickRecord)
+                    .disabled(isCreating)
                     .onTapGesture {
                         withAnimation(AppMotion.reveal) {
                             isExpanded = true
@@ -2798,6 +3059,7 @@ struct QuickCaptureBar: View {
                     .frame(minWidth: 190, maxWidth: .infinity, alignment: .leading)
 
                 Button {
+                    guard !isCreating else { return }
                     withAnimation(AppMotion.reveal) {
                         isExpanded.toggle()
                     }
@@ -2812,20 +3074,21 @@ struct QuickCaptureBar: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(AppTheme.mutedInk)
                 .help(isExpanded ? "收起记录字段" : "展开记录字段")
+                .disabled(isCreating)
 
                 Button(action: onCreate) {
                     Label(isCreating ? "解析" : "记录", systemImage: isCreating ? "sparkles" : "arrow.down.to.line.compact")
                         .font(.caption.weight(.semibold))
-                        .frame(width: 68, height: 28)
+                        .frame(width: 70, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(canCreate && !isCreating ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                .background(canCreate && !isCreating ? AppTheme.accentWarm : Color.black.opacity(0.28), in: Capsule())
                 .overlay(
                     Capsule()
                         .stroke(canCreate && !isCreating ? Color.white.opacity(0.52) : Color.black.opacity(0.05))
                 )
-                .shadow(color: canCreate && !isCreating ? AppTheme.accent.opacity(0.20) : .clear, radius: 10, x: 0, y: 6)
+                .shadow(color: canCreate && !isCreating ? AppTheme.accentWarm.opacity(0.20) : .clear, radius: 10, x: 0, y: 6)
                 .interactionHitArea()
                 .disabled(!canCreate || isCreating)
                 .help("记录新的待办")
@@ -2840,6 +3103,14 @@ struct QuickCaptureBar: View {
                     .help("清空记录")
                     .disabled(isCreating)
                 }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !isCreating else { return }
+                withAnimation(AppMotion.reveal) {
+                    isExpanded = true
+                }
+                focusedField.wrappedValue = .newTitle
             }
 
             if hasDraft {
@@ -2881,51 +3152,89 @@ struct QuickCaptureBar: View {
             }
 
             if let aiTrace {
-                AITraceCompactView(trace: aiTrace)
-                    .padding(.leading, 32)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                VStack(alignment: .leading, spacing: 4) {
+                    if let aiResultSummary {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.seal")
+                                .font(.system(size: 10, weight: .bold))
+                            Text(aiResultSummary)
+                                .font(.system(size: 11, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(AppTheme.accent)
+                    }
+                    AITraceCompactView(trace: aiTrace)
+                }
+                .padding(.leading, 32)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if isExpanded {
-                HStack(alignment: .center, spacing: 8) {
-                    PriorityPicker(priority: $priority)
-                        .frame(width: 78, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center, spacing: 8) {
+                        PriorityPicker(priority: $priority)
+                            .frame(width: 78, alignment: .leading)
+                            .disabled(isCreating)
 
-                    ProgressPicker(progress: $progress)
-                        .frame(width: 104, alignment: .leading)
+                        ProgressPicker(progress: $progress)
+                            .frame(width: 104, alignment: .leading)
+                            .disabled(isCreating)
 
-                    DatePicker("", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .frame(width: 150, alignment: .leading)
+                        DatePicker("", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                            .datePickerStyle(.compact)
+                            .labelsHidden()
+                            .frame(width: 150, alignment: .leading)
+                            .disabled(isCreating)
 
-                    Toggle(isOn: $isWeekly) {
-                        Label("每周固定", systemImage: "repeat")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppTheme.mutedInk)
+                        Toggle(isOn: $isWeekly) {
+                            Label("每周固定", systemImage: "repeat")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.mutedInk)
+                        }
+                        .toggleStyle(.checkbox)
+                        .help("完成后自动生成下周同一天")
+                        .disabled(isCreating)
+
+                        Spacer(minLength: 0)
                     }
-                    .toggleStyle(.checkbox)
-                    .help("完成后自动生成下周同一天")
 
                     CompactNotesField(text: $notes, onSubmit: submitQuickRecord)
                         .frame(maxWidth: .infinity)
+                        .disabled(isCreating)
                 }
+                .padding(.leading, 32)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppTheme.panel)
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(canCreate ? AppTheme.accentWarm : AppTheme.accent)
+                        .frame(width: 3)
+                        .opacity(canCreate || isExpanded ? 0.95 : 0.34)
+                        .padding(.vertical, 10)
+                }
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(isExpanded ? AppTheme.accent.opacity(0.22) : AppTheme.border)
+                .stroke(isExpanded || isHovered ? AppTheme.accent.opacity(0.24) : AppTheme.border.opacity(0.86))
         )
-        .shadow(color: AppTheme.rowShadow, radius: hasDraft ? 14 : 8, x: 0, y: hasDraft ? 7 : 4)
+        .shadow(color: AppTheme.rowShadow, radius: hasDraft || isHovered ? 14 : 8, x: 0, y: hasDraft || isHovered ? 7 : 4)
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
         .animation(AppMotion.reveal, value: isExpanded)
         .animation(AppMotion.capture, value: hasDraft)
         .animation(AppMotion.capture, value: isCreating)
         .animation(AppMotion.capture, value: aiStatusMessage)
         .animation(AppMotion.capture, value: aiTrace)
+        .animation(AppMotion.hover, value: isHovered)
     }
 
     private var canCreate: Bool {
@@ -3142,10 +3451,10 @@ struct EditableTodoRow: View {
                         }
                         .buttonStyle(.tactilePlain)
                         .foregroundStyle(.white)
-                        .background(canSubmit ? Color(red: 0.16, green: 0.50, blue: 0.34) : Color.black.opacity(0.28), in: Capsule())
+                        .background(canSubmit ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
                         .overlay(
                             Capsule()
-                                .stroke(canSubmit ? Color.white.opacity(0.22) : Color.black.opacity(0.05))
+                                .stroke(canSubmit ? Color.white.opacity(0.34) : Color.black.opacity(0.05))
                         )
                         .interactionHitArea()
                         .disabled(!canSubmit)
@@ -3203,7 +3512,7 @@ struct EditableTodoRow: View {
             }
         }
         .padding(14)
-        .background(AppTheme.rowTint(priority: priority, isOverdue: false), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppTheme.rowTint(priority: priority, isOverdue: isOverdue), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.border)
@@ -3221,11 +3530,17 @@ struct EditableTodoRow: View {
                 isEditing = true
             }
         }
-        .animation(AppMotion.smooth, value: todo)
     }
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var isOverdue: Bool {
+        let calendar = Calendar.current
+        return progress != .done
+            && progress != .waiting
+            && calendar.startOfDay(for: date) < calendar.startOfDay(for: Date())
     }
 
     private func submitEdit() {
@@ -3291,6 +3606,7 @@ struct TodoFlowRow: View {
     var editStyle: TodoFlowRowEditStyle = .full
 
     @State private var isEditing = false
+    @State private var isHovered = false
 
     var body: some View {
         if isEditing {
@@ -3326,20 +3642,26 @@ struct TodoFlowRow: View {
                 Button(action: onToggle) {
                     ZStack {
                         Circle()
-                            .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.14) : Color.white.opacity(0.70))
+                            .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : Color.white.opacity(isHovered ? 0.96 : 0.70))
+                            .overlay(
+                                Circle()
+                                    .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.32) : AppTheme.hairline, lineWidth: 1)
+                            )
                             .frame(width: 24, height: 24)
                         Image(systemName: todo.isDone ? "checkmark" : "circle")
-                            .font(.system(size: todo.isDone ? 11 : 12, weight: .bold))
+                            .font(.system(size: todo.isDone ? 11 : 11, weight: .bold))
                     }
-                    .interactionHitArea()
+                    .frame(width: 38, height: 34)
+                    .contentShape(Rectangle())
                 }
                 .help(todo.isDone ? "标记为待处理" : "标记为完成")
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(todo.isDone ? TodoProgress.done.displayColor : AppTheme.mutedInk)
+                .padding(.top, hasNotes ? 1 : 0)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        PriorityOutlineTag(priority: todo.priority)
+                        PriorityOutlineTag(priority: todo.priority, isCompact: true)
                             .fixedSize()
 
                         Text(titleText)
@@ -3380,8 +3702,8 @@ struct TodoFlowRow: View {
                         .monospacedDigit()
                         .foregroundStyle(dateColor)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                        .frame(width: 72, alignment: .leading)
+                        .minimumScaleFactor(0.82)
+                        .frame(width: 88, alignment: .leading)
 
                     Button {
                         withAnimation(AppMotion.reveal) {
@@ -3399,18 +3721,33 @@ struct TodoFlowRow: View {
                 .padding(.top, hasNotes ? -3 : 0)
                 .fixedSize()
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 8)
+            .padding(.vertical, hasNotes ? 7 : 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(rowBackground)
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(sideRailColor)
+                            .frame(width: 2.5)
+                            .opacity(sideRailOpacity)
+                            .padding(.vertical, 8)
+                    }
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(rowStroke)
             )
-            .shadow(color: AppTheme.rowShadow, radius: isOverdue ? 7 : 3, x: 0, y: isOverdue ? 4 : 2)
+            .shadow(color: (isOverdue || isHovered) ? AppTheme.rowShadow : .clear, radius: (isOverdue || isHovered) ? 7 : 0, x: 0, y: (isOverdue || isHovered) ? 3 : 0)
             .opacity(todo.isDone ? 0.72 : 1)
+            .onHover { hovered in
+                withAnimation(AppMotion.hover) {
+                    isHovered = hovered
+                }
+            }
             .animation(AppMotion.status, value: todo.progress)
             .animation(AppMotion.complete, value: todo.isDone)
-            .animation(AppMotion.smooth, value: todo)
+            .animation(AppMotion.hover, value: isHovered)
             .transition(.opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.992, anchor: .top)))
         }
     }
@@ -3451,14 +3788,40 @@ struct TodoFlowRow: View {
     }
 
     private var rowBackground: Color {
-        AppTheme.rowTint(priority: todo.priority, isOverdue: isOverdue)
+        if isOverdue {
+            return AppTheme.rowTint(priority: todo.priority, isOverdue: true)
+        }
+        if isHovered {
+            return AppTheme.panel.opacity(todo.isDone ? 0.68 : 0.96)
+        }
+        return AppTheme.panel.opacity(todo.isDone ? 0.58 : 0.82)
     }
 
     private var rowStroke: Color {
         if isOverdue {
             return TodoPriority.high.displayColor.opacity(0.22)
         }
-        return AppTheme.border
+        if isHovered {
+            return AppTheme.accent.opacity(0.18)
+        }
+        return AppTheme.hairline.opacity(todo.isDone ? 0.55 : 0.82)
+    }
+
+    private var sideRailColor: Color {
+        if isOverdue {
+            return TodoPriority.high.displayColor
+        }
+        return todo.priority.displayColor
+    }
+
+    private var sideRailOpacity: Double {
+        if todo.isDone {
+            return 0.18
+        }
+        if isOverdue || isHovered {
+            return 0.82
+        }
+        return todo.priority == .high ? 0.46 : 0.0
     }
 }
 
@@ -3563,10 +3926,10 @@ struct TodoBoardEditCard: View {
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(canSubmit ? Color(red: 0.16, green: 0.50, blue: 0.34) : Color.black.opacity(0.28), in: Capsule())
+                .background(canSubmit ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(canSubmit ? Color.white.opacity(0.22) : Color.black.opacity(0.05))
+                        .stroke(canSubmit ? Color.white.opacity(0.34) : Color.black.opacity(0.05))
                 )
                 .interactionHitArea()
                 .disabled(!canSubmit)
@@ -3637,18 +4000,45 @@ struct EmptyTodoHint: View {
     let isAllScope: Bool
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "checklist")
-                .font(.system(size: 34))
-                .foregroundStyle(AppTheme.mutedInk)
+        VStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AppTheme.accentSoft.opacity(0.95),
+                                AppTheme.accentWarm.opacity(0.11)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(AppTheme.accent.opacity(0.16), lineWidth: 1)
+                    )
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .rotationEffect(.degrees(-18))
+                    .offset(x: -3, y: -2)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(AppTheme.accentWarm)
+                    .offset(x: 13, y: 12)
+            }
+            .frame(width: 54, height: 54)
+
             Text(isAllScope ? "还没有任何待办" : "这一天还没有待办")
-                .font(.headline)
-            Text("在上方快速记录一条事项，然后点击记录。")
-                .font(.callout)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+
+            Text("顶部快记可直接写下一条推进。")
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppTheme.mutedInk)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 56)
     }
 }
 
@@ -3762,17 +4152,19 @@ struct ProgressBadge: View {
 
 struct PriorityOutlineTag: View {
     let priority: TodoPriority
+    var isCompact = false
 
     var body: some View {
         Text(priority.label)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: isCompact ? 10 : 11, weight: .bold))
             .foregroundStyle(priorityColor)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(priorityColor.opacity(0.12), in: Capsule())
+            .frame(minWidth: isCompact ? 22 : 0)
+            .padding(.horizontal, isCompact ? 4 : 6)
+            .padding(.vertical, isCompact ? 1 : 2)
+            .background(priorityColor.opacity(isCompact ? 0.08 : 0.12), in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(priorityColor.opacity(0.62), lineWidth: 1)
+                    .stroke(priorityColor.opacity(isCompact ? 0.82 : 0.62), lineWidth: 1)
             )
     }
 
@@ -3793,14 +4185,24 @@ struct ProgressMenuTag: View {
                 }
             }
         } label: {
-            Text(progress.shortLabel)
-                .font(.system(size: 11, weight: .semibold))
+            HStack(spacing: 3) {
+                Text(progress.shortLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .imageScale(.small)
+            }
             .foregroundStyle(progress.displayColor)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 2)
+            .frame(minWidth: 58, minHeight: 28)
             .background(progress.displayColor.opacity(0.08), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(progress.displayColor.opacity(0.18), lineWidth: 1)
+            )
+            .contentShape(Capsule())
             .interactionHitArea()
         }
+        .menuIndicator(.hidden)
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("切换推进状态")

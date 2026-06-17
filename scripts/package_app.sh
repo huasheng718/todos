@@ -12,7 +12,17 @@ ICON_SOURCE="$ROOT_DIR/Assets/AppIcon.png"
 
 cd "$ROOT_DIR"
 
-swift build -c release
+SWIFTPM_FLAGS=(
+  -c release
+  --disable-sandbox
+  --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk
+  --manifest-cache local
+  --cache-path "$ROOT_DIR/.build/swiftpm-cache"
+  --config-path "$ROOT_DIR/.build/swiftpm-config"
+  --security-path "$ROOT_DIR/.build/swiftpm-security"
+)
+
+CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/clang-module-cache" swift build "${SWIFTPM_FLAGS[@]}"
 
 rm -rf "$APP_DIR" "$ICONSET_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$ICONSET_DIR"
@@ -34,6 +44,7 @@ sips -s format png "$ICON_SOURCE" --out "$ICONSET_DIR/icon_128x128@2x.png" --res
 sips -s format png "$ICON_SOURCE" --out "$ICONSET_DIR/icon_256x256@2x.png" --resampleHeightWidth 512 512 >/dev/null
 sips -s format png "$ICON_SOURCE" --out "$ICONSET_DIR/icon_512x512@2x.png" --resampleHeightWidth 1024 1024 >/dev/null
 
-iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/AppIcon.icns"
+xattr -cr "$ICONSET_DIR"
+python3 "$ROOT_DIR/tools/make_icns.py" "$ICONSET_DIR" "$RESOURCES_DIR/AppIcon.icns"
 
 echo "$APP_DIR"

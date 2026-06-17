@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 enum AIProvider: String, CaseIterable, Codable, Identifiable {
     case deepSeek
@@ -129,6 +128,11 @@ struct AIParsedTodoResult: Equatable {
 final class AISettingsStore: ObservableObject {
     @Published var configuration: AIConfiguration {
         didSet {
+            if configuration != oldValue {
+                connectionMessage = nil
+                connectionSucceeded = false
+                lastTrace = nil
+            }
             save()
         }
     }
@@ -148,7 +152,7 @@ final class AISettingsStore: ObservableObject {
 
     init() {
         configuration = Self.loadConfiguration()
-        apiKey = (try? KeychainSecretStore.read(service: Self.keychainService, account: Self.keychainAccount)) ?? ""
+        apiKey = (try? LocalAISecretStore.readAPIKey()) ?? ""
     }
 
     func resetForSelectedProvider() {
@@ -191,9 +195,9 @@ final class AISettingsStore: ObservableObject {
     func saveAPIKey() throws {
         let cleaned = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleaned.isEmpty {
-            try KeychainSecretStore.delete(service: Self.keychainService, account: Self.keychainAccount)
+            try LocalAISecretStore.deleteAPIKey()
         } else {
-            try KeychainSecretStore.save(cleaned, service: Self.keychainService, account: Self.keychainAccount)
+            try LocalAISecretStore.saveAPIKey(cleaned)
         }
     }
 
@@ -218,88 +222,61 @@ final class AISettingsStore: ObservableObject {
         }
         return configuration
     }
-
-    private static let keychainService = "com.cuke-think.todos.deepseek"
-    private static let keychainAccount = "api-key"
 }
 
-enum KeychainSecretStore {
-    static func save(_ secret: String, service: String, account: String) throws {
-        let data = Data(secret.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        let attributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        ]
-
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if status == errSecSuccess {
-            return
-        }
-        if status == errSecItemNotFound {
-            var addQuery = query
-            addQuery[kSecValueData as String] = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-            guard addStatus == errSecSuccess else {
-                throw KeychainSecretStoreError.unhandled(status: addStatus)
-            }
-            return
-        }
-        throw KeychainSecretStoreError.unhandled(status: status)
+private enum LocalAISecretStore {
+    private struct Payload: Codable {
+        var deepSeekAPIKey: String
     }
 
-    static func read(service: String, account: String) throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound {
+    static func readAPIKey() throws -> String? {
+        let url = try secretsURL()
+        guard FileManager.default.fileExists(atPath: url.path) else {
             return nil
         }
-        guard status == errSecSuccess else {
-            throw KeychainSecretStoreError.unhandled(status: status)
-        }
-        guard let data = item as? Data else {
-            throw KeychainSecretStoreError.invalidData
-        }
-        return String(data: data, encoding: .utf8)
+        let data = try Data(contentsOf: url)
+        let payload = try JSONDecoder().decode(Payload.self, from: data)
+        return payload.deepSeekAPIKey
     }
 
-    static func delete(service: String, account: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
+    static func saveAPIKey(_ apiKey: String) throws {
+        let url = try secretsURL()
+        try ensureDirectoryExists(at: url.deletingLastPathComponent())
+        let payload = Payload(deepSeekAPIKey: apiKey)
+        let data = try JSONEncoder().encode(payload)
+        try data.write(to: url, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
 
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainSecretStoreError.unhandled(status: status)
+    static func deleteAPIKey() throws {
+        let url = try secretsURL()
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
         }
+    }
+
+    private static func secretsURL() throws -> URL {
+        guard let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            throw LocalAISecretStoreError.missingApplicationSupportDirectory
+        }
+        return baseURL
+            .appendingPathComponent("DailyTodos", isDirectory: true)
+            .appendingPathComponent("ai-secrets.json")
+    }
+
+    private static func ensureDirectoryExists(at url: URL) throws {
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
     }
 }
 
-private enum KeychainSecretStoreError: LocalizedError {
-    case invalidData
-    case unhandled(status: OSStatus)
+private enum LocalAISecretStoreError: LocalizedError {
+    case missingApplicationSupportDirectory
 
     var errorDescription: String? {
         switch self {
-        case .invalidData:
-            return "钥匙串中的密钥数据无法读取"
-        case .unhandled(let status):
-            return "钥匙串操作失败：\(status)"
+        case .missingApplicationSupportDirectory:
+            return "无法找到本机应用支持目录"
         }
     }
 }
