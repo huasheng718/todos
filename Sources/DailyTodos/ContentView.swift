@@ -835,7 +835,7 @@ struct AISettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("AI 设置")
@@ -859,95 +859,173 @@ struct AISettingsSheet: View {
                 .help("关闭")
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle(isOn: $aiSettings.configuration.isEnabled) {
-                    Label("启用 AI 能力", systemImage: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    settingsCard
+                    usageSection
                 }
-                .toggleStyle(.switch)
-
-                LabeledContent("供应商") {
-                    Text(aiSettings.configuration.provider.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink)
-                        .frame(width: 390, alignment: .leading)
-                }
-
-                LabeledContent("API 地址") {
-                    TextField("https://api.deepseek.com", text: $aiSettings.configuration.baseURL)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .frame(width: 390)
-                }
-
-                LabeledContent("模型") {
-                    TextField("deepseek-v4-flash", text: $aiSettings.configuration.model)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .frame(width: 390)
-                }
-
-                LabeledContent("API Key") {
-                    SecureField("sk-...", text: $aiSettings.apiKey)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .frame(width: 390)
-                }
-
-                Label("密钥通过 macOS Keychain 保存，不写入源码、配置文件或 Git 仓库。", systemImage: "lock.shield")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppTheme.mutedInk)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 8) {
-                    Button {
-                        Task {
-                            await aiSettings.testConnection()
-                        }
-                    } label: {
-                        Label(aiSettings.isTestingConnection ? "测试中" : "测试连接", systemImage: "network")
-                            .font(.caption.weight(.semibold))
-                            .frame(width: 96, height: 30)
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(.white)
-                    .background(aiSettings.configuration.hasEndpoint && aiSettings.hasAPIKey ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
-                    .interactionHitArea()
-                    .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint || !aiSettings.hasAPIKey)
-
-                    if aiSettings.isTestingConnection {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    if let message = aiSettings.connectionMessage {
-                        Text(message)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(aiSettings.connectionSucceeded ? Color(red: 0.14, green: 0.58, blue: 0.34) : TodoPriority.high.displayColor)
-                            .lineLimit(2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+                .padding(.vertical, 2)
             }
-            .padding(16)
-            .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(AppTheme.border)
-            )
-
-            VStack(alignment: .leading, spacing: 8) {
-                AIUsageRow(icon: "command", title: "快记解析", detail: "提交时自动拆出时间、优先级、状态、备注和固定周期。")
-                AIUsageRow(icon: "sun.max", title: "每日建议", detail: "在今日推进页按当前未完成事项生成 1-3 条推进建议。")
-                AIUsageRow(icon: "text.alignleft", title: "备注摘要", detail: "长备注可一键压缩成适合扫读的一句话。")
-            }
-
-            Spacer(minLength: 0)
+            .scrollIndicators(.visible)
         }
         .padding(22)
-        .frame(width: 620, height: 430)
+        .frame(width: 660, height: 560)
         .background(AppTheme.workSurface)
         .foregroundStyle(AppTheme.ink)
+    }
+
+    private var settingsCard: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Toggle(isOn: $aiSettings.configuration.isEnabled) {
+                Label("启用 AI 能力", systemImage: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .toggleStyle(.switch)
+
+            LabeledContent("供应商") {
+                Text(aiSettings.configuration.provider.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            LabeledContent("API 地址") {
+                TextField("https://api.deepseek.com", text: $aiSettings.configuration.baseURL)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .frame(maxWidth: .infinity)
+            }
+
+            LabeledContent("模型") {
+                DeepSeekModelPicker(model: $aiSettings.configuration.model)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            LabeledContent("API Key") {
+                SecureField("sk-...", text: $aiSettings.apiKey)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .frame(maxWidth: .infinity)
+            }
+
+            Label("密钥通过 macOS Keychain 保存，不写入源码、配置文件或 Git 仓库。", systemImage: "lock.shield")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+
+            connectionControls
+        }
+        .labeledContentStyle(AISettingsLabeledContentStyle())
+        .padding(16)
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.border)
+        )
+    }
+
+    private var connectionControls: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Button {
+                Task {
+                    await aiSettings.testConnection()
+                }
+            } label: {
+                Label(aiSettings.isTestingConnection ? "测试中" : "测试连接", systemImage: "network")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 96, height: 30)
+            }
+            .buttonStyle(.tactilePlain)
+            .foregroundStyle(.white)
+            .background(aiSettings.configuration.hasEndpoint && aiSettings.hasAPIKey ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+            .interactionHitArea()
+            .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint || !aiSettings.hasAPIKey)
+
+            if aiSettings.isTestingConnection {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            if let message = aiSettings.connectionMessage {
+                Text(message)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(aiSettings.connectionSucceeded ? Color(red: 0.14, green: 0.58, blue: 0.34) : TodoPriority.high.displayColor)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var usageSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AIUsageRow(icon: "command", title: "快记解析", detail: "提交时自动拆出时间、优先级、状态、备注和固定周期。")
+            AIUsageRow(icon: "sun.max", title: "每日建议", detail: "在今日推进页按当前未完成事项生成 1-3 条推进建议。")
+            AIUsageRow(icon: "text.alignleft", title: "备注摘要", detail: "长备注可一键压缩成适合扫读的一句话。")
+        }
+    }
+}
+
+private struct AISettingsLabeledContentStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            configuration.label
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.ink)
+                .frame(width: 72, alignment: .leading)
+            configuration.content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+struct DeepSeekModelPicker: View {
+    @Binding var model: String
+
+    private var currentModel: DeepSeekModel? {
+        DeepSeekModel(rawValue: model)
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(DeepSeekModel.allCases) { option in
+                Button {
+                    model = option.rawValue
+                } label: {
+                    VStack(alignment: .leading) {
+                        Text(option.title)
+                        Text(option.rawValue)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(currentModel?.title ?? "自定义模型")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink)
+                    Text(model.isEmpty ? AIProvider.deepSeek.defaultModel : model)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(AppTheme.border)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.tactilePlain)
+        .menuStyle(.borderlessButton)
+        .help(currentModel?.subtitle ?? "当前使用自定义模型名")
     }
 }
 

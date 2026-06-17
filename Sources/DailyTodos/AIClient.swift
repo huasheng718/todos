@@ -36,6 +36,27 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum DeepSeekModel: String, CaseIterable, Identifiable {
+    case flash = "deepseek-v4-flash"
+    case pro = "deepseek-v4-pro"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .flash: "DeepSeek V4 Flash"
+        case .pro: "DeepSeek V4 Pro"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .flash: "更快，适合快记解析和摘要"
+        case .pro: "能力更强，适合复杂建议"
+        }
+    }
+}
+
 struct AIConfiguration: Codable, Equatable {
     var isEnabled: Bool
     var provider: AIProvider
