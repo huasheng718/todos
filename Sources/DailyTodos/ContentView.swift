@@ -394,7 +394,7 @@ struct ContentView: View {
                 onClear: cancelCreate,
                 isCreating: isCreatingTodo,
                 aiStatusMessage: aiStatusMessage,
-                isAIEnabled: aiSettings.configuration.canUse
+                isAIEnabled: aiSettings.canUseAI
             )
             .padding(.horizontal, 28)
             .padding(.bottom, 8)
@@ -440,7 +440,7 @@ struct ContentView: View {
             VStack(alignment: .trailing, spacing: 10) {
                 HStack(spacing: 8) {
                     AISettingsButton(
-                        isEnabled: aiSettings.configuration.canUse,
+                        isEnabled: aiSettings.canUseAI,
                         action: { isAISettingsPresented = true }
                     )
 
@@ -599,8 +599,9 @@ struct ContentView: View {
         let rawTitle = newTitle
         let rawNotes = newNotes
         let aiConfiguration = aiSettings.configuration
+        let aiAPIKey = aiSettings.apiKey
 
-        if aiConfiguration.canUse {
+        if aiSettings.canUseAI {
             isCreatingTodo = true
             aiStatusMessage = "AI 正在解析快记..."
             Task {
@@ -610,6 +611,7 @@ struct ContentView: View {
                         rawNotes: rawNotes,
                         fallback: parsedInput,
                         configuration: aiConfiguration,
+                        apiKey: aiAPIKey,
                         calendar: calendar
                     )
                     await MainActor.run {
@@ -838,7 +840,7 @@ struct AISettingsSheet: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("AI 设置")
                         .font(.system(size: 22, weight: .semibold))
-                    Text("推荐走 CC Switch 的 Codex 本地路由，由 CC Switch 转发到当前选中的 gpt-外网。")
+                    Text("接入 DeepSeek，用于快记解析、每日建议和备注摘要。API Key 只保存在本机钥匙串。")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.mutedInk)
                 }
@@ -865,38 +867,37 @@ struct AISettingsSheet: View {
                 .toggleStyle(.switch)
 
                 LabeledContent("供应商") {
-                    Picker("AI 供应商", selection: $aiSettings.configuration.provider) {
-                        ForEach(AIProvider.allCases) { provider in
-                            Text(provider.title).tag(provider)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 390)
-                    .onChange(of: aiSettings.configuration.provider) { _, _ in
-                        aiSettings.resetForSelectedProvider()
-                    }
+                    Text(aiSettings.configuration.provider.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(width: 390, alignment: .leading)
                 }
 
-                LabeledContent("代理 URL") {
-                    TextField("http://127.0.0.1:15721/v1", text: $aiSettings.configuration.baseURL)
+                LabeledContent("API 地址") {
+                    TextField("https://api.deepseek.com", text: $aiSettings.configuration.baseURL)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .frame(width: 390)
                 }
 
                 LabeledContent("模型") {
-                    TextField("gpt-5.5", text: $aiSettings.configuration.model)
+                    TextField("deepseek-v4-flash", text: $aiSettings.configuration.model)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .frame(width: 390)
                 }
 
-                if aiSettings.configuration.provider == .ccSwitchCodexRoute {
-                    Label("请先在 CC Switch 的 Codex 分组中选中 gpt-外网，蚁序会请求本地路由。", systemImage: "info.circle")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.mutedInk)
-                        .fixedSize(horizontal: false, vertical: true)
+                LabeledContent("API Key") {
+                    SecureField("sk-...", text: $aiSettings.apiKey)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .frame(width: 390)
                 }
+
+                Label("密钥通过 macOS Keychain 保存，不写入源码、配置文件或 Git 仓库。", systemImage: "lock.shield")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
                     Button {
@@ -910,9 +911,9 @@ struct AISettingsSheet: View {
                     }
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(.white)
-                    .background(aiSettings.configuration.hasEndpoint ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                    .background(aiSettings.configuration.hasEndpoint && aiSettings.hasAPIKey ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
                     .interactionHitArea()
-                    .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint)
+                    .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint || !aiSettings.hasAPIKey)
 
                     if aiSettings.isTestingConnection {
                         ProgressView()
@@ -1575,7 +1576,7 @@ struct TodoListView: View {
 
     private var dashboardList: some View {
         LazyVStack(spacing: 6) {
-            if aiSettings.configuration.canUse {
+            if aiSettings.canUseAI {
                 DailySuggestionCard(
                     suggestion: dailySuggestion,
                     error: dailySuggestionError,
@@ -1607,16 +1608,18 @@ struct TodoListView: View {
     }
 
     private func generateDailySuggestion() {
-        guard aiSettings.configuration.canUse, !isGeneratingDailySuggestion else { return }
+        guard aiSettings.canUseAI, !isGeneratingDailySuggestion else { return }
         isGeneratingDailySuggestion = true
         dailySuggestionError = nil
         let configuration = aiSettings.configuration
+        let apiKey = aiSettings.apiKey
         let sourceTodos = todos
         Task {
             do {
                 let suggestion = try await AIClient.shared.dailySuggestion(
                     todos: sourceTodos,
-                    configuration: configuration
+                    configuration: configuration,
+                    apiKey: apiKey
                 )
                 await MainActor.run {
                     withAnimation(AppMotion.reveal) {
@@ -3557,7 +3560,7 @@ struct NotesReadOnlyRow: View {
             )
 
             VStack(spacing: 6) {
-                if aiSettings.configuration.canUse {
+                if aiSettings.canUseAI {
                     Button(action: summarizeNotes) {
                         Label(isSummarizing ? "摘要中" : "摘要", systemImage: "sparkles")
                             .font(.caption.weight(.semibold))
@@ -3591,10 +3594,11 @@ struct NotesReadOnlyRow: View {
     }
 
     private func summarizeNotes() {
-        guard aiSettings.configuration.canUse, !isSummarizing else { return }
+        guard aiSettings.canUseAI, !isSummarizing else { return }
         isSummarizing = true
         summaryError = nil
         let configuration = aiSettings.configuration
+        let apiKey = aiSettings.apiKey
         let sourceTitle = title
         let sourceNotes = displayText
         Task {
@@ -3602,7 +3606,8 @@ struct NotesReadOnlyRow: View {
                 let value = try await AIClient.shared.summarizeNotes(
                     title: sourceTitle,
                     notes: sourceNotes,
-                    configuration: configuration
+                    configuration: configuration,
+                    apiKey: apiKey
                 )
                 await MainActor.run {
                     summary = value

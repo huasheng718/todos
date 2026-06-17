@@ -1,9 +1,8 @@
 import Foundation
+import Security
 
 enum AIProvider: String, CaseIterable, Codable, Identifiable {
-    case ccSwitch
-    case ccSwitchCodexRoute
-    case openAICompatible
+    case deepSeek
 
     var id: String { rawValue }
 
@@ -11,34 +10,28 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
         switch value {
-        case "ccSwitchCodexGPTExternal":
-            self = .ccSwitchCodexRoute
+        case "deepSeek":
+            self = .deepSeek
         default:
-            self = AIProvider(rawValue: value) ?? .ccSwitch
+            self = .deepSeek
         }
     }
 
     var title: String {
         switch self {
-        case .ccSwitch: "CC Switch"
-        case .ccSwitchCodexRoute: "CC Switch / Codex 路由"
-        case .openAICompatible: "OpenAI 兼容"
+        case .deepSeek: "DeepSeek"
         }
     }
 
     var defaultBaseURL: String {
         switch self {
-        case .ccSwitch: "http://127.0.0.1:15721/v1"
-        case .ccSwitchCodexRoute: "http://127.0.0.1:15721/v1"
-        case .openAICompatible: "http://127.0.0.1:15721/v1"
+        case .deepSeek: "https://api.deepseek.com"
         }
     }
 
     var defaultModel: String {
         switch self {
-        case .ccSwitch: "gpt-5.5"
-        case .ccSwitchCodexRoute: "gpt-5.5"
-        case .openAICompatible: "gpt-4o-mini"
+        case .deepSeek: "deepseek-v4-flash"
         }
     }
 }
@@ -52,9 +45,9 @@ struct AIConfiguration: Codable, Equatable {
     static let storageKey = "dailyTodos.aiConfiguration"
     static let `default` = AIConfiguration(
         isEnabled: false,
-        provider: .ccSwitch,
-        baseURL: AIProvider.ccSwitch.defaultBaseURL,
-        model: AIProvider.ccSwitch.defaultModel
+        provider: .deepSeek,
+        baseURL: AIProvider.deepSeek.defaultBaseURL,
+        model: AIProvider.deepSeek.defaultModel
     )
 
     var cleanedBaseURL: String {
@@ -82,12 +75,22 @@ final class AISettingsStore: ObservableObject {
             save()
         }
     }
+    @Published var apiKey: String {
+        didSet {
+            if apiKey != oldValue {
+                connectionMessage = nil
+                connectionSucceeded = false
+                persistAPIKeyQuietly()
+            }
+        }
+    }
     @Published private(set) var isTestingConnection = false
     @Published private(set) var connectionMessage: String?
     @Published private(set) var connectionSucceeded = false
 
     init() {
         configuration = Self.loadConfiguration()
+        apiKey = (try? KeychainSecretStore.read(service: Self.keychainService, account: Self.keychainAccount)) ?? ""
     }
 
     func resetForSelectedProvider() {
@@ -103,9 +106,11 @@ final class AISettingsStore: ObservableObject {
         connectionSucceeded = false
         var currentConfiguration = configuration
         currentConfiguration.isEnabled = true
+        let currentAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         do {
-            let reply = try await AIClient.shared.testConnection(configuration: currentConfiguration)
+            try saveAPIKey()
+            let reply = try await AIClient.shared.testConnection(configuration: currentConfiguration, apiKey: currentAPIKey)
             connectionSucceeded = true
             connectionMessage = reply.isEmpty ? "连接成功" : "连接成功：\(reply)"
         } catch {
@@ -116,6 +121,27 @@ final class AISettingsStore: ObservableObject {
         isTestingConnection = false
     }
 
+    var hasAPIKey: Bool {
+        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var canUseAI: Bool {
+        configuration.canUse && hasAPIKey
+    }
+
+    func saveAPIKey() throws {
+        let cleaned = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty {
+            try KeychainSecretStore.delete(service: Self.keychainService, account: Self.keychainAccount)
+        } else {
+            try KeychainSecretStore.save(cleaned, service: Self.keychainService, account: Self.keychainAccount)
+        }
+    }
+
+    private func persistAPIKeyQuietly() {
+        try? saveAPIKey()
+    }
+
     private func save() {
         guard let data = try? JSONEncoder().encode(configuration) else { return }
         UserDefaults.standard.set(data, forKey: AIConfiguration.storageKey)
@@ -123,10 +149,99 @@ final class AISettingsStore: ObservableObject {
 
     private static func loadConfiguration() -> AIConfiguration {
         guard let data = UserDefaults.standard.data(forKey: AIConfiguration.storageKey),
-              let configuration = try? JSONDecoder().decode(AIConfiguration.self, from: data) else {
+              var configuration = try? JSONDecoder().decode(AIConfiguration.self, from: data) else {
             return .default
         }
+        if configuration.provider == .deepSeek,
+           configuration.baseURL.contains("127.0.0.1") || configuration.baseURL.contains("39.170.58.150") {
+            configuration.baseURL = AIProvider.deepSeek.defaultBaseURL
+            configuration.model = AIProvider.deepSeek.defaultModel
+        }
         return configuration
+    }
+
+    private static let keychainService = "com.cuke-think.todos.deepseek"
+    private static let keychainAccount = "api-key"
+}
+
+enum KeychainSecretStore {
+    static func save(_ secret: String, service: String, account: String) throws {
+        let data = Data(secret.utf8)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecSuccess {
+            return
+        }
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            guard addStatus == errSecSuccess else {
+                throw KeychainSecretStoreError.unhandled(status: addStatus)
+            }
+            return
+        }
+        throw KeychainSecretStoreError.unhandled(status: status)
+    }
+
+    static func read(service: String, account: String) throws -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess else {
+            throw KeychainSecretStoreError.unhandled(status: status)
+        }
+        guard let data = item as? Data else {
+            throw KeychainSecretStoreError.invalidData
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(service: String, account: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainSecretStoreError.unhandled(status: status)
+        }
+    }
+}
+
+private enum KeychainSecretStoreError: LocalizedError {
+    case invalidData
+    case unhandled(status: OSStatus)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidData:
+            return "钥匙串中的密钥数据无法读取"
+        case .unhandled(let status):
+            return "钥匙串操作失败：\(status)"
+        }
     }
 }
 
@@ -136,9 +251,10 @@ struct AIClient {
     private let jsonDecoder = JSONDecoder()
     private let jsonEncoder = JSONEncoder()
 
-    func testConnection(configuration: AIConfiguration) async throws -> String {
+    func testConnection(configuration: AIConfiguration, apiKey: String) async throws -> String {
         let content = try await complete(
             configuration: configuration,
+            apiKey: apiKey,
             systemPrompt: "你是连接测试服务。只回复 OK。",
             userPrompt: "ping",
             temperature: 0,
@@ -152,6 +268,7 @@ struct AIClient {
         rawNotes: String,
         fallback: ParsedTodoInput,
         configuration: AIConfiguration,
+        apiKey: String,
         now: Date = Date(),
         calendar: Calendar = .current
     ) async throws -> ParsedTodoInput {
@@ -177,6 +294,7 @@ struct AIClient {
 
         let content = try await complete(
             configuration: configuration,
+            apiKey: apiKey,
             systemPrompt: quickParseSystemPrompt,
             userPrompt: userPrompt,
             temperature: 0.1,
@@ -197,6 +315,7 @@ struct AIClient {
     func dailySuggestion(
         todos: [TodoItem],
         configuration: AIConfiguration,
+        apiKey: String,
         now: Date = Date(),
         calendar: Calendar = .current
     ) async throws -> String {
@@ -215,6 +334,7 @@ struct AIClient {
 
         let content = try await complete(
             configuration: configuration,
+            apiKey: apiKey,
             systemPrompt: dailySuggestionSystemPrompt,
             userPrompt:
                 """
@@ -231,10 +351,12 @@ struct AIClient {
     func summarizeNotes(
         title: String,
         notes: String,
-        configuration: AIConfiguration
+        configuration: AIConfiguration,
+        apiKey: String
     ) async throws -> String {
         let content = try await complete(
             configuration: configuration,
+            apiKey: apiKey,
             systemPrompt: notesSummarySystemPrompt,
             userPrompt:
                 """
@@ -250,6 +372,7 @@ struct AIClient {
 
     private func complete(
         configuration: AIConfiguration,
+        apiKey: String,
         systemPrompt: String,
         userPrompt: String,
         temperature: Double,
@@ -258,12 +381,16 @@ struct AIClient {
         guard configuration.canUse else {
             throw AIClientError.disabled
         }
+        let cleanedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedAPIKey.isEmpty else {
+            throw AIClientError.missingAPIKey
+        }
 
         let url = try chatCompletionsURL(from: configuration.cleanedBaseURL)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer ccswitch", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(cleanedAPIKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
 
         let body = ChatCompletionRequest(
@@ -302,7 +429,7 @@ struct AIClient {
             guard let url = URL(string: value) else { throw AIClientError.invalidURL }
             return url
         }
-        if value.hasSuffix("/v1") {
+        if value.hasSuffix("/v1") || value.hasSuffix("/beta") || value == "https://api.deepseek.com" {
             value += "/chat/completions"
         } else {
             value += "/v1/chat/completions"
@@ -486,6 +613,7 @@ private struct AIParsedTodoPayload: Decodable {
 
 private enum AIClientError: LocalizedError {
     case disabled
+    case missingAPIKey
     case invalidURL
     case invalidResponse
     case emptyResponse
@@ -496,6 +624,8 @@ private enum AIClientError: LocalizedError {
         switch self {
         case .disabled:
             return "AI 未启用或配置不完整"
+        case .missingAPIKey:
+            return "请先填写 DeepSeek API Key"
         case .invalidURL:
             return "代理 URL 无效"
         case .invalidResponse:
