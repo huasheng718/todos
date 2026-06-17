@@ -325,9 +325,6 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppTopBar(
-                title: dayTitle,
-                subtitle: topBarSubtitle,
-                statusText: summaryText,
                 isAIEnabled: aiSettings.canUseAI,
                 selectedSkinRawValue: $selectedSkinRawValue,
                 onOpenAISettings: { isAISettingsPresented = true },
@@ -470,21 +467,6 @@ struct ContentView: View {
             return false
         case .dashboard, .waiting, .weekly, .day:
             return true
-        }
-    }
-
-    private var topBarSubtitle: String {
-        switch scope {
-        case .dashboard:
-            return summaryText
-        case .all:
-            return "\(store.todos.count) 个事项"
-        case .waiting:
-            return "\(waitingTodos.count) 等待"
-        case .weekly:
-            return "\(weeklyTodos.count) 固定"
-        case .day(let date):
-            return date.formatted(.dateTime.month().day().weekday(.wide))
         }
     }
 
@@ -821,9 +803,6 @@ struct SkinPickerButton: View {
 }
 
 struct AppTopBar: View {
-    let title: String
-    let subtitle: String
-    let statusText: String
     let isAIEnabled: Bool
     @Binding var selectedSkinRawValue: String
     let onOpenAISettings: () -> Void
@@ -831,55 +810,31 @@ struct AppTopBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 14) {
-                systemWindowControlsSpace
-                topBarIcon("sidebar.left")
-                topBarIcon("chevron.left")
-                    .opacity(0.62)
-                topBarIcon("chevron.right")
-                    .opacity(0.36)
-            }
-            .frame(width: sidebarColumnWidth, alignment: .leading)
-            .padding(.leading, 16)
+            systemWindowControlsSpace
+                .padding(.leading, 16)
 
-            Divider()
-                .frame(height: 22)
-                .overlay(AppTheme.hairline.opacity(0.88))
+            Spacer(minLength: 24)
 
-            HStack(spacing: 14) {
-                titleCluster
+            HStack(spacing: 8) {
+                AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
+                SkinPickerButton(selection: $selectedSkinRawValue)
 
-                Spacer(minLength: 24)
-
-                HStack(spacing: 8) {
-                    topBarStatus
-
-                    Divider()
-                        .frame(height: 22)
-                        .overlay(AppTheme.hairline.opacity(0.72))
-                        .padding(.horizontal, 2)
-
-                    AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
-                    SkinPickerButton(selection: $selectedSkinRawValue)
-
-                    Button(action: onNewTodo) {
-                        Label("快记", systemImage: "plus")
-                            .font(.caption.weight(.semibold))
-                            .frame(width: 72, height: 30)
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(.white)
-                    .background(AppTheme.accent, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.52))
-                    )
-                    .shadow(color: AppTheme.accent.opacity(0.18), radius: 10, x: 0, y: 5)
-                    .interactionHitArea(34)
-                    .help("记录新的待办")
+                Button(action: onNewTodo) {
+                    Label("快记", systemImage: "plus")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 72, height: 30)
                 }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(.white)
+                .background(AppTheme.accent, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.52))
+                )
+                .shadow(color: AppTheme.accent.opacity(0.18), radius: 10, x: 0, y: 5)
+                .interactionHitArea(34)
+                .help("记录新的待办")
             }
-            .padding(.leading, 16)
             .padding(.trailing, 16)
         }
         .background(topBarBackground)
@@ -888,60 +843,6 @@ struct AppTopBar: View {
     private var systemWindowControlsSpace: some View {
         Color.clear
             .frame(width: 76, height: 22)
-    }
-
-    private var titleCluster: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.ink)
-                    .lineLimit(1)
-
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
-                        .lineLimit(1)
-                }
-            }
-            .layoutPriority(1)
-
-            Image(systemName: "ellipsis")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk.opacity(0.78))
-                .frame(width: 22, height: 22)
-                .help("更多")
-        }
-        .frame(minWidth: 180, alignment: .leading)
-    }
-
-    private var topBarStatus: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "list.bullet.rectangle")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-
-            Text(statusText)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.ink.opacity(0.78))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.52), in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(AppTheme.hairline.opacity(0.82))
-        )
-        .help("当前视图概览")
-    }
-
-    private func topBarIcon(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(AppTheme.mutedInk)
-            .frame(width: 18, height: 22)
     }
 
     private var topBarBackground: some View {
