@@ -23,6 +23,12 @@
 
 如果旧版本已有 `todos.json`，首次启动会自动导入到 SQLite。
 
+## 自动更新
+
+应用通过 `Info.plist` 中的 `YXUpdateManifestURL` 读取远程 `latest.json`。该地址和
+`downloadURL` 必须对未登录用户公开可访问；如果仓库是 GitHub Private，应用会收到
+404，无法获取新版本。发布时可使用公开仓库、GitHub Pages、对象存储或其他静态文件源。
+
 ## 开发运行
 
 ```bash

@@ -169,7 +169,7 @@ private enum UpdateError: LocalizedError {
             return "缺少更新地址配置"
         case .invalidResponse(let statusCode):
             if statusCode == 404 {
-                return "暂未找到远程版本信息，当前版本可继续使用。"
+                return "更新源不可访问；私有仓库需改为公开发布源。"
             }
             if let statusCode {
                 return "更新服务暂不可用（HTTP \(statusCode)）。"

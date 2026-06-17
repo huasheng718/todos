@@ -1,6 +1,6 @@
 {
-  "version": "1.1.2",
-  "build": 4,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.2/AntOrder-1.1.2.pkg",
-  "releaseNotes": "左侧有记录日历新增年份切换，并保留月份切换，跨年查看待办更方便。"
+  "version": "1.1.4",
+  "build": 6,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.4/AntOrder-1.1.4.pkg",
+  "releaseNotes": "更新安装包增加安装后自动重启：安装完成会关闭旧进程并打开新版本。"
 }

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/build/蚁序.app"
 PKG_ROOT="$ROOT_DIR/build/pkgroot"
+PKG_SCRIPTS="$ROOT_DIR/build/pkgscripts"
 INFO_PLIST="$ROOT_DIR/Info.plist"
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
@@ -16,17 +17,35 @@ cd "$ROOT_DIR"
 "$ROOT_DIR/scripts/package_app.sh" >/dev/null
 xattr -cr "$APP_DIR"
 
-rm -rf "$PKG_ROOT"
+rm -rf "$PKG_ROOT" "$PKG_SCRIPTS"
 rm -f "$PKG_PATH" "$ASCII_PKG_PATH"
-mkdir -p "$PKG_ROOT/Applications"
+mkdir -p "$PKG_ROOT/Applications" "$PKG_SCRIPTS"
 
 export COPYFILE_DISABLE=1
 ditto --norsrc --noextattr "$APP_DIR" "$PKG_ROOT/Applications/蚁序.app"
 find "$PKG_ROOT" -name '._*' -delete
 xattr -d -r com.apple.provenance "$PKG_ROOT" 2>/dev/null || true
 
+cat > "$PKG_SCRIPTS/postinstall" <<'SCRIPT'
+#!/bin/sh
+set -eu
+
+APP_PATH="/Applications/蚁序.app"
+
+/usr/bin/killall DailyTodos >/dev/null 2>&1 || true
+/bin/sleep 0.6
+
+if [ -d "$APP_PATH" ]; then
+  /usr/bin/open "$APP_PATH" >/dev/null 2>&1 || true
+fi
+
+exit 0
+SCRIPT
+chmod 755 "$PKG_SCRIPTS/postinstall"
+
 pkgbuild \
   --root "$PKG_ROOT" \
+  --scripts "$PKG_SCRIPTS" \
   --install-location "/" \
   --identifier "${BUNDLE_ID}.pkg" \
   --version "$VERSION" \
