@@ -1,0 +1,45 @@
+# 蚁序
+
+一款轻量 macOS 桌面待办应用，用来管理部门经理每天要推进的个人事项。
+
+## 功能
+
+- 默认进入「今日推进」工作台
+- 自动聚合逾期未完成、今天要推进、等待反馈、本周固定
+- 添加标题、优先级、推进状态、跟进日、备注
+- 支持待处理、推进中、等待他人、已完成状态
+- 支持每周固定事项，完成后自动生成下周同一天事项
+- 标记完成、编辑、删除
+- 搜索标题或备注
+- 本地 SQLite 持久化，不依赖网络服务
+
+数据默认保存在：
+
+```text
+~/Library/Application Support/DailyTodos/todos.sqlite
+```
+
+其中 `DailyTodos` 是为了兼容旧版本数据保留的内部目录名。
+
+如果旧版本已有 `todos.json`，首次启动会自动导入到 SQLite。
+
+## 开发运行
+
+```bash
+swift run
+```
+
+## 打包为 macOS App
+
+```bash
+chmod +x scripts/package_app.sh
+./scripts/package_app.sh
+```
+
+打包产物会生成在：
+
+```text
+build/蚁序.app
+```
+
+当前项目用 Swift Package + SwiftUI 实现，不需要联网安装依赖。若要获得完整 Xcode 工程体验，可以安装 Xcode 后用 Xcode 打开该目录或迁移为 `.xcodeproj`。
