@@ -314,6 +314,7 @@ struct ContentView: View {
     @State private var isQuickCaptureExpanded = false
     @State private var isCreatingTodo = false
     @State private var aiStatusMessage: String?
+    @State private var quickCaptureAITrace: AITrace?
     @State private var isAISettingsPresented = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @FocusState private var focusedField: FocusField?
@@ -394,6 +395,7 @@ struct ContentView: View {
                 onClear: cancelCreate,
                 isCreating: isCreatingTodo,
                 aiStatusMessage: aiStatusMessage,
+                aiTrace: quickCaptureAITrace,
                 isAIEnabled: aiSettings.canUseAI
             )
             .padding(.horizontal, 28)
@@ -606,7 +608,7 @@ struct ContentView: View {
             aiStatusMessage = "AI 正在解析快记..."
             Task {
                 do {
-                    let aiParsedInput = try await AIClient.shared.parseQuickInput(
+                    let aiResult = try await AIClient.shared.parseQuickInput(
                         rawTitle: rawTitle,
                         rawNotes: rawNotes,
                         fallback: parsedInput,
@@ -615,7 +617,8 @@ struct ContentView: View {
                         calendar: calendar
                     )
                     await MainActor.run {
-                        finishCreateTodo(with: aiParsedInput)
+                        quickCaptureAITrace = aiResult.trace
+                        finishCreateTodo(with: aiResult.input)
                         aiStatusMessage = nil
                         isCreatingTodo = false
                     }
@@ -623,6 +626,7 @@ struct ContentView: View {
                     await MainActor.run {
                         finishCreateTodo(with: parsedInput)
                         aiStatusMessage = "AI 解析失败，已用本地规则记录"
+                        quickCaptureAITrace = nil
                         isCreatingTodo = false
                     }
                 }
@@ -710,6 +714,7 @@ struct ContentView: View {
         newNotes = ""
         newIsWeekly = false
         aiStatusMessage = nil
+        quickCaptureAITrace = nil
         withAnimation(AppMotion.smooth) {
             isQuickCaptureExpanded = false
         }
@@ -1615,6 +1620,8 @@ struct TodoListView: View {
 
     @State private var dailySuggestion: String?
     @State private var dailySuggestionError: String?
+    @State private var dailySuggestionTrace: AITrace?
+    @State private var dailySuggestionStep: String?
     @State private var isGeneratingDailySuggestion = false
 
     var body: some View {
@@ -1658,6 +1665,8 @@ struct TodoListView: View {
                 DailySuggestionCard(
                     suggestion: dailySuggestion,
                     error: dailySuggestionError,
+                    trace: dailySuggestionTrace,
+                    step: dailySuggestionStep,
                     isLoading: isGeneratingDailySuggestion,
                     onGenerate: generateDailySuggestion
                 )
@@ -1689,19 +1698,26 @@ struct TodoListView: View {
         guard aiSettings.canUseAI, !isGeneratingDailySuggestion else { return }
         isGeneratingDailySuggestion = true
         dailySuggestionError = nil
+        dailySuggestionTrace = nil
+        dailySuggestionStep = "正在整理未完成事项"
         let configuration = aiSettings.configuration
         let apiKey = aiSettings.apiKey
         let sourceTodos = todos
         Task {
             do {
-                let suggestion = try await AIClient.shared.dailySuggestion(
+                await MainActor.run {
+                    dailySuggestionStep = "正在请求 DeepSeek"
+                }
+                let result = try await AIClient.shared.dailySuggestion(
                     todos: sourceTodos,
                     configuration: configuration,
                     apiKey: apiKey
                 )
                 await MainActor.run {
                     withAnimation(AppMotion.reveal) {
-                        dailySuggestion = suggestion
+                        dailySuggestion = result.content
+                        dailySuggestionTrace = result.trace
+                        dailySuggestionStep = "已收到模型返回"
                         isGeneratingDailySuggestion = false
                     }
                 }
@@ -1709,6 +1725,7 @@ struct TodoListView: View {
                 await MainActor.run {
                     withAnimation(AppMotion.reveal) {
                         dailySuggestionError = error.localizedDescription
+                        dailySuggestionStep = "请求失败，未更新建议"
                         isGeneratingDailySuggestion = false
                     }
                 }
@@ -2273,11 +2290,15 @@ struct DashboardSummaryStrip: View {
 struct DailySuggestionCard: View {
     let suggestion: String?
     let error: String?
+    let trace: AITrace?
+    let step: String?
     let isLoading: Bool
     let onGenerate: () -> Void
 
+    @State private var showsTrace = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 12, weight: .bold))
@@ -2302,6 +2323,22 @@ struct DailySuggestionCard: View {
                 )
                 .interactionHitArea()
                 .disabled(isLoading)
+            }
+
+            if let step {
+                HStack(spacing: 6) {
+                    Image(systemName: isLoading ? "arrow.triangle.2.circlepath" : (error == nil ? "checkmark.circle" : "exclamationmark.triangle"))
+                        .font(.system(size: 10, weight: .bold))
+                    Text(step)
+                        .font(.system(size: 11, weight: .semibold))
+                    Spacer()
+                    if let trace {
+                        Text("\(trace.model) · \(trace.durationText)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+                .foregroundStyle(error == nil ? AppTheme.mutedInk : TodoPriority.high.displayColor)
             }
 
             if isLoading {
@@ -2331,6 +2368,10 @@ struct DailySuggestionCard: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.mutedInk)
             }
+
+            if let trace {
+                AITraceDisclosure(trace: trace, isExpanded: $showsTrace)
+            }
         }
         .padding(12)
         .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -2342,6 +2383,92 @@ struct DailySuggestionCard: View {
         .animation(AppMotion.reveal, value: suggestion)
         .animation(AppMotion.reveal, value: error)
         .animation(AppMotion.reveal, value: isLoading)
+        .animation(AppMotion.reveal, value: showsTrace)
+    }
+}
+
+struct AITraceCompactView: View {
+    let trace: AITrace
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.seal")
+                .font(.system(size: 10, weight: .bold))
+            Text("AI 已调用")
+                .font(.system(size: 11, weight: .semibold))
+            Text("\(trace.model) · \(trace.durationText) · 输入 \(trace.inputCharacters) 字 / 输出 \(trace.outputCharacters) 字")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppTheme.mutedInk)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(AppTheme.accent)
+    }
+}
+
+struct AITraceDisclosure: View {
+    let trace: AITrace
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Button {
+                withAnimation(AppMotion.reveal) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                    Text("查看 AI 调用详情")
+                        .font(.system(size: 11, weight: .semibold))
+                    Spacer()
+                    Text("\(trace.statusCode) · \(trace.startedAtText)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
+                .foregroundStyle(AppTheme.accent)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.tactilePlain)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 5) {
+                    AITraceLine(label: "场景", value: trace.scenario)
+                    AITraceLine(label: "模型", value: trace.model)
+                    AITraceLine(label: "接口", value: trace.endpoint)
+                    AITraceLine(label: "耗时", value: trace.durationText)
+                    AITraceLine(label: "规模", value: "输入 \(trace.inputCharacters) 字，输出 \(trace.outputCharacters) 字")
+                    AITraceLine(label: "返回", value: trace.responsePreview.isEmpty ? "空返回" : trace.responsePreview)
+                }
+                .padding(9)
+                .background(Color.white.opacity(0.58), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppTheme.hairline)
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
+struct AITraceLine: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .frame(width: 30, alignment: .leading)
+            Text(value)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AppTheme.ink)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -2446,6 +2573,7 @@ struct QuickCaptureBar: View {
     let onClear: () -> Void
     let isCreating: Bool
     let aiStatusMessage: String?
+    let aiTrace: AITrace?
     let isAIEnabled: Bool
 
     var body: some View {
@@ -2556,6 +2684,12 @@ struct QuickCaptureBar: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
+            if let aiTrace {
+                AITraceCompactView(trace: aiTrace)
+                    .padding(.leading, 32)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if isExpanded {
                 HStack(alignment: .center, spacing: 8) {
                     PriorityPicker(priority: $priority)
@@ -2595,6 +2729,7 @@ struct QuickCaptureBar: View {
         .animation(AppMotion.capture, value: hasDraft)
         .animation(AppMotion.capture, value: isCreating)
         .animation(AppMotion.capture, value: aiStatusMessage)
+        .animation(AppMotion.capture, value: aiTrace)
     }
 
     private var canCreate: Bool {
@@ -3578,6 +3713,8 @@ struct NotesReadOnlyRow: View {
 
     @State private var summary: String?
     @State private var summaryError: String?
+    @State private var summaryTrace: AITrace?
+    @State private var showsSummaryTrace = false
     @State private var isSummarizing = false
 
     init(title: String = "", notes: String, isDone: Bool = false) {
@@ -3627,6 +3764,10 @@ struct NotesReadOnlyRow: View {
                         .foregroundStyle(TodoPriority.high.displayColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                if let summaryTrace {
+                    AITraceDisclosure(trace: summaryTrace, isExpanded: $showsSummaryTrace)
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
@@ -3675,20 +3816,22 @@ struct NotesReadOnlyRow: View {
         guard aiSettings.canUseAI, !isSummarizing else { return }
         isSummarizing = true
         summaryError = nil
+        summaryTrace = nil
         let configuration = aiSettings.configuration
         let apiKey = aiSettings.apiKey
         let sourceTitle = title
         let sourceNotes = displayText
         Task {
             do {
-                let value = try await AIClient.shared.summarizeNotes(
+                let result = try await AIClient.shared.summarizeNotes(
                     title: sourceTitle,
                     notes: sourceNotes,
                     configuration: configuration,
                     apiKey: apiKey
                 )
                 await MainActor.run {
-                    summary = value
+                    summary = result.content
+                    summaryTrace = result.trace
                     isSummarizing = false
                 }
             } catch {

@@ -89,6 +89,42 @@ struct AIConfiguration: Codable, Equatable {
     }
 }
 
+struct AITrace: Equatable {
+    let scenario: String
+    let model: String
+    let endpoint: String
+    let startedAt: Date
+    let duration: TimeInterval
+    let inputCharacters: Int
+    let outputCharacters: Int
+    let statusCode: Int
+    let responsePreview: String
+
+    var durationText: String {
+        if duration < 1 {
+            return "\(Int(duration * 1000))ms"
+        }
+        return String(format: "%.1fs", duration)
+    }
+
+    var startedAtText: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: startedAt)
+    }
+}
+
+struct AICompletionResult: Equatable {
+    let content: String
+    let trace: AITrace
+}
+
+struct AIParsedTodoResult: Equatable {
+    let input: ParsedTodoInput
+    let trace: AITrace
+}
+
 @MainActor
 final class AISettingsStore: ObservableObject {
     @Published var configuration: AIConfiguration {
@@ -108,6 +144,7 @@ final class AISettingsStore: ObservableObject {
     @Published private(set) var isTestingConnection = false
     @Published private(set) var connectionMessage: String?
     @Published private(set) var connectionSucceeded = false
+    @Published private(set) var lastTrace: AITrace?
 
     init() {
         configuration = Self.loadConfiguration()
@@ -131,9 +168,10 @@ final class AISettingsStore: ObservableObject {
 
         do {
             try saveAPIKey()
-            let reply = try await AIClient.shared.testConnection(configuration: currentConfiguration, apiKey: currentAPIKey)
+            let result = try await AIClient.shared.testConnection(configuration: currentConfiguration, apiKey: currentAPIKey)
             connectionSucceeded = true
-            connectionMessage = reply.isEmpty ? "连接成功" : "连接成功：\(reply)"
+            connectionMessage = result.content.isEmpty ? "连接成功" : "连接成功：\(result.content)"
+            lastTrace = result.trace
         } catch {
             connectionSucceeded = false
             connectionMessage = "连接失败：\(error.localizedDescription)"
@@ -272,8 +310,9 @@ struct AIClient {
     private let jsonDecoder = JSONDecoder()
     private let jsonEncoder = JSONEncoder()
 
-    func testConnection(configuration: AIConfiguration, apiKey: String) async throws -> String {
-        let content = try await complete(
+    func testConnection(configuration: AIConfiguration, apiKey: String) async throws -> AICompletionResult {
+        let result = try await complete(
+            scenario: "测试连接",
             configuration: configuration,
             apiKey: apiKey,
             systemPrompt: "你是连接测试服务。只回复 OK。",
@@ -281,7 +320,10 @@ struct AIClient {
             temperature: 0,
             maxTokens: 16
         )
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AICompletionResult(
+            content: result.content.trimmingCharacters(in: .whitespacesAndNewlines),
+            trace: result.trace
+        )
     }
 
     func parseQuickInput(
@@ -292,7 +334,7 @@ struct AIClient {
         apiKey: String,
         now: Date = Date(),
         calendar: Calendar = .current
-    ) async throws -> ParsedTodoInput {
+    ) async throws -> AIParsedTodoResult {
         let referenceText = Self.referenceDateText(for: now)
         let fallbackDate = Self.formatISODate(fallback.date)
         let userPrompt =
@@ -313,7 +355,8 @@ struct AIClient {
             请只输出 JSON，不要解释。
             """
 
-        let content = try await complete(
+        let result = try await complete(
+            scenario: "快记解析",
             configuration: configuration,
             apiKey: apiKey,
             systemPrompt: quickParseSystemPrompt,
@@ -322,8 +365,8 @@ struct AIClient {
             maxTokens: 520
         )
 
-        let payload = try decodeJSON(AIParsedTodoPayload.self, from: content)
-        return ParsedTodoInput(
+        let payload = try decodeJSON(AIParsedTodoPayload.self, from: result.content)
+        let parsedInput = ParsedTodoInput(
             title: fallback.title,
             notes: clean(payload.notes) ?? fallback.notes,
             priority: Self.priority(from: payload.priority) ?? fallback.priority,
@@ -331,6 +374,7 @@ struct AIClient {
             progress: Self.progress(from: payload.progress) ?? fallback.progress,
             isWeekly: payload.isWeekly ?? fallback.isWeekly
         )
+        return AIParsedTodoResult(input: parsedInput, trace: result.trace)
     }
 
     func dailySuggestion(
@@ -339,7 +383,7 @@ struct AIClient {
         apiKey: String,
         now: Date = Date(),
         calendar: Calendar = .current
-    ) async throws -> String {
+    ) async throws -> AICompletionResult {
         let activeTodos = todos
             .filter { $0.progress != .done }
             .sorted { lhs, rhs in
@@ -353,7 +397,8 @@ struct AIClient {
             return "- [\(todo.priority.rawValue)/\(todo.progress.rawValue)] \(dateText)：\(todo.trimmedTitle)\(notes)"
         }.joined(separator: "\n")
 
-        let content = try await complete(
+        let result = try await complete(
+            scenario: "每日建议",
             configuration: configuration,
             apiKey: apiKey,
             systemPrompt: dailySuggestionSystemPrompt,
@@ -366,7 +411,10 @@ struct AIClient {
             temperature: 0.2,
             maxTokens: 360
         )
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AICompletionResult(
+            content: result.content.trimmingCharacters(in: .whitespacesAndNewlines),
+            trace: result.trace
+        )
     }
 
     func summarizeNotes(
@@ -374,8 +422,9 @@ struct AIClient {
         notes: String,
         configuration: AIConfiguration,
         apiKey: String
-    ) async throws -> String {
-        let content = try await complete(
+    ) async throws -> AICompletionResult {
+        let result = try await complete(
+            scenario: "备注摘要",
             configuration: configuration,
             apiKey: apiKey,
             systemPrompt: notesSummarySystemPrompt,
@@ -388,17 +437,21 @@ struct AIClient {
             temperature: 0.15,
             maxTokens: 180
         )
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AICompletionResult(
+            content: result.content.trimmingCharacters(in: .whitespacesAndNewlines),
+            trace: result.trace
+        )
     }
 
     private func complete(
+        scenario: String,
         configuration: AIConfiguration,
         apiKey: String,
         systemPrompt: String,
         userPrompt: String,
         temperature: Double,
         maxTokens: Int
-    ) async throws -> String {
+    ) async throws -> AICompletionResult {
         guard configuration.canUse else {
             throw AIClientError.disabled
         }
@@ -408,6 +461,8 @@ struct AIClient {
         }
 
         let url = try chatCompletionsURL(from: configuration.cleanedBaseURL)
+        let startedAt = Date()
+        let inputCharacters = systemPrompt.count + userPrompt.count
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -426,6 +481,7 @@ struct AIClient {
         request.httpBody = try jsonEncoder.encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
+        let duration = Date().timeIntervalSince(startedAt)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIClientError.invalidResponse
         }
@@ -438,7 +494,18 @@ struct AIClient {
         guard let content = decoded.choices.first?.message.content else {
             throw AIClientError.emptyResponse
         }
-        return content
+        let trace = AITrace(
+            scenario: scenario,
+            model: configuration.cleanedModel,
+            endpoint: url.absoluteString,
+            startedAt: startedAt,
+            duration: duration,
+            inputCharacters: inputCharacters,
+            outputCharacters: content.count,
+            statusCode: httpResponse.statusCode,
+            responsePreview: Self.preview(content)
+        )
+        return AICompletionResult(content: content, trace: trace)
     }
 
     private func chatCompletionsURL(from baseURL: String) throws -> URL {
@@ -548,6 +615,16 @@ struct AIClient {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
+    }
+
+    private static func preview(_ value: String, limit: Int = 180) -> String {
+        let normalized = value
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > limit else {
+            return normalized
+        }
+        return "\(normalized.prefix(limit))..."
     }
 
     private static func formatISODate(_ date: Date) -> String {
