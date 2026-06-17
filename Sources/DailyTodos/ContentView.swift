@@ -1896,8 +1896,10 @@ struct TodoMiniCalendar: View {
             HStack(spacing: 8) {
                 SidebarSectionLabel("有记录")
                 Spacer()
-                monthStepper
+                yearStepper
             }
+
+            monthStepper
 
             LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(weekdayLabels, id: \.self) { label in
@@ -1934,37 +1936,22 @@ struct TodoMiniCalendar: View {
         }
     }
 
-    private var monthStepper: some View {
-        HStack(spacing: 3) {
-            Button {
-                shiftMonth(-1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 8, weight: .bold))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
+    private var yearStepper: some View {
+        HStack(spacing: 2) {
+            calendarStepButton(systemImage: "chevron.left.2", help: "上一年") {
+                shiftYear(-1)
             }
-            .buttonStyle(.tactilePlain)
-            .help("上个月")
 
-            Text(monthTitle)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
+            Text(yearTitle)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
                 .monospacedDigit()
-                .frame(minWidth: 64)
+                .frame(minWidth: 44)
 
-            Button {
-                shiftMonth(1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .bold))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
+            calendarStepButton(systemImage: "chevron.right.2", help: "下一年") {
+                shiftYear(1)
             }
-            .buttonStyle(.tactilePlain)
-            .help("下个月")
         }
-        .foregroundStyle(AppTheme.mutedInk)
         .padding(.horizontal, 3)
         .padding(.vertical, 2)
         .background(Color.white.opacity(0.38), in: Capsule())
@@ -1974,14 +1961,63 @@ struct TodoMiniCalendar: View {
         )
     }
 
+    private var monthStepper: some View {
+        HStack(spacing: 4) {
+            calendarStepButton(systemImage: "chevron.left", help: "上个月") {
+                shiftMonth(-1)
+            }
+
+            Text(monthTitle)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.ink)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity)
+
+            calendarStepButton(systemImage: "chevron.right", help: "下个月") {
+                shiftMonth(1)
+            }
+        }
+        .foregroundStyle(AppTheme.mutedInk)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(Color.white.opacity(0.44), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.78))
+        )
+    }
+
+    private func calendarStepButton(systemImage: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 8, weight: .bold))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.tactilePlain)
+        .help(help)
+    }
+
+    private var yearTitle: String {
+        visibleMonth.formatted(.dateTime.year())
+    }
+
     private var monthTitle: String {
-        visibleMonth.formatted(.dateTime.year().month(.abbreviated))
+        visibleMonth.formatted(.dateTime.month(.wide))
     }
 
     private func shiftMonth(_ value: Int) {
         if let nextMonth = calendar.date(byAdding: .month, value: value, to: visibleMonth) {
             withAnimation(AppMotion.quick) {
                 visibleMonth = nextMonth
+            }
+        }
+    }
+
+    private func shiftYear(_ value: Int) {
+        if let nextYear = calendar.date(byAdding: .year, value: value, to: visibleMonth) {
+            withAnimation(AppMotion.quick) {
+                visibleMonth = nextYear
             }
         }
     }

@@ -1,6 +1,6 @@
 {
-  "version": "1.1.1",
-  "build": 3,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.1/AntOrder-1.1.1.pkg",
-  "releaseNotes": "修复更新检查中的状态显示：检查中不再混用旧失败文案，失败信息改为设置页内联反馈。"
+  "version": "1.1.2",
+  "build": 4,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.2/AntOrder-1.1.2.pkg",
+  "releaseNotes": "左侧有记录日历新增年份切换，并保留月份切换，跨年查看待办更方便。"
 }
