@@ -323,49 +323,41 @@ struct ContentView: View {
     private let calendar = Calendar.current
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 0) {
+            AppTopBar(
+                title: dayTitle,
+                subtitle: topBarSubtitle,
+                isAIEnabled: aiSettings.canUseAI,
+                selectedSkinRawValue: $selectedSkinRawValue,
+                onOpenAISettings: { isAISettingsPresented = true },
+                onNewTodo: focusQuickCapture
+            )
+            .frame(height: 48)
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
+            HStack(spacing: 0) {
+                SidebarView(scope: $scope)
+                    .frame(width: sidebarColumnWidth)
+
+                Divider()
+                    .overlay(AppTheme.hairline)
+
+                taskColumn
+                    .frame(minWidth: 700)
+            }
+        }
+        .background(
             LinearGradient(
                 colors: AppTheme.canvasGradient,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                AppTopBar(
-                    title: dayTitle,
-                    subtitle: topBarSubtitle,
-                    isAIEnabled: aiSettings.canUseAI,
-                    selectedSkinRawValue: $selectedSkinRawValue,
-                    onOpenAISettings: { isAISettingsPresented = true },
-                    onNewTodo: focusQuickCapture
-                )
-                .frame(height: 48)
-
-                Divider()
-                    .overlay(AppTheme.hairline)
-
-                HStack(spacing: 0) {
-                    SidebarView(scope: $scope)
-                        .frame(width: sidebarColumnWidth)
-
-                    Divider()
-                        .overlay(AppTheme.hairline)
-
-                    taskColumn
-                        .frame(minWidth: 700)
-                }
-            }
-            .background(AppTheme.workSurface, in: RoundedRectangle(cornerRadius: 34, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .stroke(AppTheme.shellStroke, lineWidth: 1)
-            )
-            .shadow(color: AppTheme.shadow, radius: 34, x: 0, y: 22)
-            .padding(18)
-            .id(selectedSkinRawValue)
-        }
+        )
         .foregroundStyle(AppTheme.ink)
+        .id(selectedSkinRawValue)
         .onAppear {
             activeAppSkin = AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
         }
@@ -823,7 +815,7 @@ struct AppTopBar: View {
     var body: some View {
         HStack(spacing: 0) {
             HStack(spacing: 14) {
-                windowControls
+                systemWindowControlsSpace
                 topBarIcon("sidebar.left")
                 topBarIcon("chevron.left")
                     .opacity(0.62)
@@ -875,6 +867,11 @@ struct AppTopBar: View {
         .background(topBarBackground)
     }
 
+    private var systemWindowControlsSpace: some View {
+        Color.clear
+            .frame(width: 76, height: 22)
+    }
+
     private var titleCluster: some View {
         HStack(spacing: 8) {
             Text(title)
@@ -897,15 +894,6 @@ struct AppTopBar: View {
                 .stroke(AppTheme.hairline.opacity(0.86))
         )
         .shadow(color: AppTheme.rowShadow.opacity(0.55), radius: 6, x: 0, y: 2)
-    }
-
-    private var windowControls: some View {
-        HStack(spacing: 7) {
-            Circle().fill(Color(red: 1.0, green: 0.36, blue: 0.32))
-            Circle().fill(Color(red: 1.0, green: 0.73, blue: 0.18))
-            Circle().fill(Color(red: 0.22, green: 0.78, blue: 0.31))
-        }
-        .frame(width: 42, height: 12)
     }
 
     private func topBarIcon(_ systemName: String) -> some View {
