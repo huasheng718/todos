@@ -327,6 +327,7 @@ struct ContentView: View {
             AppTopBar(
                 title: dayTitle,
                 subtitle: topBarSubtitle,
+                statusText: summaryText,
                 isAIEnabled: aiSettings.canUseAI,
                 selectedSkinRawValue: $selectedSkinRawValue,
                 onOpenAISettings: { isAISettingsPresented = true },
@@ -807,6 +808,7 @@ struct SkinPickerButton: View {
 struct AppTopBar: View {
     let title: String
     let subtitle: String
+    let statusText: String
     let isAIEnabled: Bool
     @Binding var selectedSkinRawValue: String
     let onOpenAISettings: () -> Void
@@ -829,18 +831,19 @@ struct AppTopBar: View {
                 .frame(height: 22)
                 .overlay(AppTheme.hairline.opacity(0.88))
 
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 titleCluster
 
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.78))
-                    .frame(width: 28, height: 28)
-                    .help("更多")
-
-                Spacer(minLength: 16)
+                Spacer(minLength: 24)
 
                 HStack(spacing: 8) {
+                    topBarStatus
+
+                    Divider()
+                        .frame(height: 22)
+                        .overlay(AppTheme.hairline.opacity(0.72))
+                        .padding(.horizontal, 2)
+
                     AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
                     SkinPickerButton(selection: $selectedSkinRawValue)
 
@@ -873,27 +876,50 @@ struct AppTopBar: View {
     }
 
     private var titleCluster: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.ink)
-                .lineLimit(1)
-
-            if !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
                     .lineLimit(1)
+
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .lineLimit(1)
+                }
             }
+            .layoutPriority(1)
+
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk.opacity(0.78))
+                .frame(width: 22, height: 22)
+                .help("更多")
         }
-        .padding(.horizontal, 12)
+        .frame(minWidth: 210, alignment: .leading)
+    }
+
+    private var topBarStatus: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "list.bullet.rectangle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+
+            Text(statusText)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.ink.opacity(0.78))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 11)
         .padding(.vertical, 6)
-        .background(Color.white.opacity(0.60), in: Capsule())
+        .background(Color.white.opacity(0.52), in: Capsule())
         .overlay(
             Capsule()
-                .stroke(AppTheme.hairline.opacity(0.86))
+                .stroke(AppTheme.hairline.opacity(0.82))
         )
-        .shadow(color: AppTheme.rowShadow.opacity(0.55), radius: 6, x: 0, y: 2)
+        .help("当前视图概览")
     }
 
     private func topBarIcon(_ systemName: String) -> some View {
