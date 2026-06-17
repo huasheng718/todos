@@ -6,6 +6,7 @@ private let priorityColumnWidth: CGFloat = 78
 private let followUpColumnWidth: CGFloat = 154
 private let todoActionColumnWidth: CGFloat = 128
 private let compactHitTargetSize: CGFloat = 32
+private let sidebarColumnWidth: CGFloat = 236
 
 private enum AppMotion {
     static let press = Animation.easeOut(duration: 0.12)
@@ -330,15 +331,30 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            HStack(spacing: 0) {
-                SidebarView(scope: $scope)
-                    .frame(width: 236)
+            VStack(spacing: 0) {
+                AppTopBar(
+                    title: dayTitle,
+                    subtitle: topBarSubtitle,
+                    isAIEnabled: aiSettings.canUseAI,
+                    selectedSkinRawValue: $selectedSkinRawValue,
+                    onOpenAISettings: { isAISettingsPresented = true },
+                    onNewTodo: focusQuickCapture
+                )
+                .frame(height: 48)
 
                 Divider()
                     .overlay(AppTheme.hairline)
 
-                taskColumn
-                    .frame(minWidth: 700)
+                HStack(spacing: 0) {
+                    SidebarView(scope: $scope)
+                        .frame(width: sidebarColumnWidth)
+
+                    Divider()
+                        .overlay(AppTheme.hairline)
+
+                    taskColumn
+                        .frame(minWidth: 700)
+                }
             }
             .background(AppTheme.workSurface, in: RoundedRectangle(cornerRadius: 34, style: .continuous))
             .overlay(
@@ -369,10 +385,10 @@ struct ContentView: View {
 
     private var taskColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            pageHeader
                 .padding(.horizontal, 28)
-                .padding(.top, 34)
-                .padding(.bottom, 10)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
 
             if let error = store.lastError {
                 Text(error)
@@ -427,57 +443,40 @@ struct ContentView: View {
         .background(AppTheme.workSurface)
     }
 
-    private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(dayTitle)
-                    .font(.system(size: 28, weight: .semibold))
-                Text(daySubtitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
+    private var pageHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(daySubtitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.mutedInk)
+                .lineLimit(1)
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 10) {
-                HStack(spacing: 8) {
-                    AISettingsButton(
-                        isEnabled: aiSettings.canUseAI,
-                        action: { isAISettingsPresented = true }
-                    )
-
-                    SkinPickerButton(selection: $selectedSkinRawValue)
-
-                    Button {
-                        withAnimation(AppMotion.smooth) {
-                            isQuickCaptureExpanded = true
-                        }
-                        focusedField = .newTitle
-                    } label: {
-                        Label("快记", systemImage: "plus")
-                            .font(.caption.weight(.semibold))
-                            .frame(width: 72, height: 30)
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(.white)
-                    .background(AppTheme.accent, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.52))
-                    )
-                    .shadow(color: AppTheme.accent.opacity(0.24), radius: 12, x: 0, y: 7)
-                    .interactionHitArea(34)
-                    .help("记录新的待办")
-                }
-
-                Text(summaryText)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
+            Text(summaryText)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.50), in: Capsule())
         }
         .sheet(isPresented: $isAISettingsPresented) {
             AISettingsSheet()
                 .environmentObject(aiSettings)
+        }
+    }
+
+    private var topBarSubtitle: String {
+        switch scope {
+        case .dashboard:
+            return summaryText
+        case .all:
+            return "\(store.todos.count) 个事项"
+        case .waiting:
+            return "\(waitingTodos.count) 等待"
+        case .weekly:
+            return "\(weeklyTodos.count) 固定"
+        case .day(let date):
+            return date.formatted(.dateTime.month().day().weekday(.wide))
         }
     }
 
@@ -705,6 +704,13 @@ struct ContentView: View {
         }
     }
 
+    private func focusQuickCapture() {
+        withAnimation(AppMotion.smooth) {
+            isQuickCaptureExpanded = true
+        }
+        focusedField = .newTitle
+    }
+
     private func cancelCreate() {
         guard !isCreatingTodo else { return }
         newTitle = ""
@@ -803,6 +809,121 @@ struct SkinPickerButton: View {
         }
         .menuStyle(.borderlessButton)
         .help("切换皮肤")
+    }
+}
+
+struct AppTopBar: View {
+    let title: String
+    let subtitle: String
+    let isAIEnabled: Bool
+    @Binding var selectedSkinRawValue: String
+    let onOpenAISettings: () -> Void
+    let onNewTodo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 14) {
+                windowControls
+                topBarIcon("sidebar.left")
+                topBarIcon("chevron.left")
+                    .opacity(0.62)
+                topBarIcon("chevron.right")
+                    .opacity(0.36)
+            }
+            .frame(width: sidebarColumnWidth, alignment: .leading)
+            .padding(.leading, 16)
+
+            Divider()
+                .frame(height: 22)
+                .overlay(AppTheme.hairline.opacity(0.88))
+
+            HStack(spacing: 12) {
+                titleCluster
+
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.mutedInk.opacity(0.78))
+                    .frame(width: 28, height: 28)
+                    .help("更多")
+
+                Spacer(minLength: 16)
+
+                HStack(spacing: 8) {
+                    AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
+                    SkinPickerButton(selection: $selectedSkinRawValue)
+
+                    Button(action: onNewTodo) {
+                        Label("快记", systemImage: "plus")
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 72, height: 30)
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(.white)
+                    .background(AppTheme.accent, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.52))
+                    )
+                    .shadow(color: AppTheme.accent.opacity(0.18), radius: 10, x: 0, y: 5)
+                    .interactionHitArea(34)
+                    .help("记录新的待办")
+                }
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 16)
+        }
+        .background(topBarBackground)
+    }
+
+    private var titleCluster: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(1)
+
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.60), in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.hairline.opacity(0.86))
+        )
+        .shadow(color: AppTheme.rowShadow.opacity(0.55), radius: 6, x: 0, y: 2)
+    }
+
+    private var windowControls: some View {
+        HStack(spacing: 7) {
+            Circle().fill(Color(red: 1.0, green: 0.36, blue: 0.32))
+            Circle().fill(Color(red: 1.0, green: 0.73, blue: 0.18))
+            Circle().fill(Color(red: 0.22, green: 0.78, blue: 0.31))
+        }
+        .frame(width: 42, height: 12)
+    }
+
+    private func topBarIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppTheme.mutedInk)
+            .frame(width: 18, height: 22)
+    }
+
+    private var topBarBackground: some View {
+        LinearGradient(
+            colors: [
+                AppTheme.panel.opacity(0.86),
+                AppTheme.workSurface.opacity(0.92)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 }
 
