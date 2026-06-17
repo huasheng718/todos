@@ -838,7 +838,7 @@ struct AISettingsSheet: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("AI 设置")
                         .font(.system(size: 22, weight: .semibold))
-                    Text("通过 CC Switch 本地代理增强快记解析、每日建议和备注摘要。")
+                    Text("选择 CC Switch 分组或 OpenAI 兼容代理，用于快记解析、每日建议和备注摘要。")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.mutedInk)
                 }
@@ -865,30 +865,30 @@ struct AISettingsSheet: View {
                 .toggleStyle(.switch)
 
                 LabeledContent("供应商") {
-                    Picker("供应商", selection: $aiSettings.configuration.provider) {
+                    Picker("AI 供应商", selection: $aiSettings.configuration.provider) {
                         ForEach(AIProvider.allCases) { provider in
                             Text(provider.title).tag(provider)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 260)
+                    .frame(width: 390)
                     .onChange(of: aiSettings.configuration.provider) { _, _ in
                         aiSettings.resetForSelectedProvider()
                     }
                 }
 
-                LabeledContent("本地代理 URL") {
-                    TextField("http://127.0.0.1:15721/v1", text: $aiSettings.configuration.baseURL)
+                LabeledContent("代理 URL") {
+                    TextField("http://39.170.58.150:8888/v1", text: $aiSettings.configuration.baseURL)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .frame(width: 330)
+                        .frame(width: 390)
                 }
 
                 LabeledContent("模型") {
-                    TextField("gpt-4o-mini", text: $aiSettings.configuration.model)
+                    TextField("gpt-5.5", text: $aiSettings.configuration.model)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .frame(width: 330)
+                        .frame(width: 390)
                 }
 
                 HStack(spacing: 8) {
@@ -937,7 +937,7 @@ struct AISettingsSheet: View {
             Spacer(minLength: 0)
         }
         .padding(22)
-        .frame(width: 560, height: 430)
+        .frame(width: 620, height: 430)
         .background(AppTheme.workSurface)
         .foregroundStyle(AppTheme.ink)
     }
