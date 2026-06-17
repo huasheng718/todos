@@ -838,7 +838,7 @@ struct AISettingsSheet: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("AI 设置")
                         .font(.system(size: 22, weight: .semibold))
-                    Text("选择 CC Switch 分组或 OpenAI 兼容代理，用于快记解析、每日建议和备注摘要。")
+                    Text("推荐走 CC Switch 的 Codex 本地路由，由 CC Switch 转发到当前选中的 gpt-外网。")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.mutedInk)
                 }
@@ -878,7 +878,7 @@ struct AISettingsSheet: View {
                 }
 
                 LabeledContent("代理 URL") {
-                    TextField("http://39.170.58.150:8888/v1", text: $aiSettings.configuration.baseURL)
+                    TextField("http://127.0.0.1:15721/v1", text: $aiSettings.configuration.baseURL)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .frame(width: 390)
@@ -889,6 +889,13 @@ struct AISettingsSheet: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .frame(width: 390)
+                }
+
+                if aiSettings.configuration.provider == .ccSwitchCodexRoute {
+                    Label("请先在 CC Switch 的 Codex 分组中选中 gpt-外网，蚁序会请求本地路由。", systemImage: "info.circle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(spacing: 8) {

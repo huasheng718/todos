@@ -2,15 +2,26 @@ import Foundation
 
 enum AIProvider: String, CaseIterable, Codable, Identifiable {
     case ccSwitch
-    case ccSwitchCodexGPTExternal
+    case ccSwitchCodexRoute
     case openAICompatible
 
     var id: String { rawValue }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        switch value {
+        case "ccSwitchCodexGPTExternal":
+            self = .ccSwitchCodexRoute
+        default:
+            self = AIProvider(rawValue: value) ?? .ccSwitch
+        }
+    }
+
     var title: String {
         switch self {
         case .ccSwitch: "CC Switch"
-        case .ccSwitchCodexGPTExternal: "Codex / gpt-外网"
+        case .ccSwitchCodexRoute: "CC Switch / Codex 路由"
         case .openAICompatible: "OpenAI 兼容"
         }
     }
@@ -18,7 +29,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
     var defaultBaseURL: String {
         switch self {
         case .ccSwitch: "http://127.0.0.1:15721/v1"
-        case .ccSwitchCodexGPTExternal: "http://39.170.58.150:8888/v1"
+        case .ccSwitchCodexRoute: "http://127.0.0.1:15721/v1"
         case .openAICompatible: "http://127.0.0.1:15721/v1"
         }
     }
@@ -26,7 +37,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
     var defaultModel: String {
         switch self {
         case .ccSwitch: "gpt-5.5"
-        case .ccSwitchCodexGPTExternal: "gpt-5.5"
+        case .ccSwitchCodexRoute: "gpt-5.5"
         case .openAICompatible: "gpt-4o-mini"
         }
     }
