@@ -1,6 +1,6 @@
 {
-  "version": "1.1.4",
-  "build": 6,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.4/AntOrder-1.1.4.pkg",
-  "releaseNotes": "更新安装包增加安装后自动重启：安装完成会关闭旧进程并打开新版本。"
+  "version": "1.1.5",
+  "build": 7,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.5/AntOrder-1.1.5.pkg",
+  "releaseNotes": "优化字体清晰度、文字对比度和面板底色，修复安装包打包时旧临时目录权限导致失败的问题。"
 }

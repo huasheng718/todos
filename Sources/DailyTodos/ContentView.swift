@@ -66,7 +66,7 @@ private struct TactilePlainButtonStyle: ButtonStyle {
             return AppTheme.accentSoft.opacity(0.82)
         }
         if isHovered {
-            return Color.white.opacity(0.50)
+            return Color.white.opacity(0.68)
         }
         return Color.clear
     }
@@ -181,10 +181,10 @@ private enum AppTheme {
 
     static var sidebarSelected: Color {
         switch AppSkin.current {
-        case .ocean: Color.white.opacity(0.58)
-        case .aurora: Color.white.opacity(0.56)
-        case .board: Color.white.opacity(0.52)
-        case .leafcutter: Color.white.opacity(0.48)
+        case .ocean: Color.white.opacity(0.74)
+        case .aurora: Color.white.opacity(0.72)
+        case .board: Color.white.opacity(0.68)
+        case .leafcutter: Color.white.opacity(0.64)
         }
     }
 
@@ -199,27 +199,27 @@ private enum AppTheme {
 
     static var mutedInk: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.335, green: 0.405, blue: 0.500)
-        case .aurora: Color(red: 0.420, green: 0.405, blue: 0.500)
-        case .board: Color(red: 0.330, green: 0.320, blue: 0.345)
-        case .leafcutter: Color(red: 0.405, green: 0.345, blue: 0.260)
+        case .ocean: Color(red: 0.245, green: 0.310, blue: 0.410)
+        case .aurora: Color(red: 0.315, green: 0.300, blue: 0.405)
+        case .board: Color(red: 0.245, green: 0.240, blue: 0.270)
+        case .leafcutter: Color(red: 0.315, green: 0.245, blue: 0.165)
         }
     }
 
     static var panel: Color {
         switch AppSkin.current {
-        case .ocean, .aurora: Color.white.opacity(0.94)
-        case .board: Color.white.opacity(0.92)
-        case .leafcutter: Color(red: 1.0, green: 0.986, blue: 0.946).opacity(0.94)
+        case .ocean, .aurora: Color.white.opacity(0.985)
+        case .board: Color.white.opacity(0.970)
+        case .leafcutter: Color(red: 1.0, green: 0.988, blue: 0.950).opacity(0.985)
         }
     }
 
     static var row: Color {
         switch AppSkin.current {
-        case .ocean: Color.white.opacity(0.98)
-        case .aurora: Color(red: 0.975, green: 0.960, blue: 1.0)
-        case .board: Color(red: 0.955, green: 0.975, blue: 1.0)
-        case .leafcutter: Color(red: 1.0, green: 0.978, blue: 0.922)
+        case .ocean: Color.white
+        case .aurora: Color(red: 0.990, green: 0.982, blue: 1.0)
+        case .board: Color(red: 0.980, green: 0.988, blue: 0.998)
+        case .leafcutter: Color(red: 1.0, green: 0.986, blue: 0.942)
         }
     }
 
@@ -254,19 +254,19 @@ private enum AppTheme {
 
     static var border: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.790, green: 0.850, blue: 0.925)
-        case .aurora: Color(red: 0.840, green: 0.790, blue: 0.940)
-        case .board: Color(red: 0.830, green: 0.825, blue: 0.830)
-        case .leafcutter: Color(red: 0.820, green: 0.748, blue: 0.610)
+        case .ocean: Color(red: 0.705, green: 0.785, blue: 0.875)
+        case .aurora: Color(red: 0.760, green: 0.705, blue: 0.880)
+        case .board: Color(red: 0.745, green: 0.740, blue: 0.765)
+        case .leafcutter: Color(red: 0.720, green: 0.640, blue: 0.500)
         }
     }
 
     static var hairline: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.835, green: 0.885, blue: 0.945)
-        case .aurora: Color(red: 0.875, green: 0.830, blue: 0.950)
-        case .board: Color(red: 0.850, green: 0.845, blue: 0.850)
-        case .leafcutter: Color(red: 0.858, green: 0.790, blue: 0.650)
+        case .ocean: Color(red: 0.780, green: 0.845, blue: 0.920)
+        case .aurora: Color(red: 0.825, green: 0.770, blue: 0.925)
+        case .board: Color(red: 0.805, green: 0.800, blue: 0.820)
+        case .leafcutter: Color(red: 0.780, green: 0.700, blue: 0.560)
         }
     }
 
@@ -402,6 +402,7 @@ struct ContentView: View {
                 .ignoresSafeArea(.container, edges: .vertical)
         }
         .foregroundStyle(AppTheme.ink)
+        .font(.system(size: 13, weight: .regular, design: .default))
         .id(selectedSkinRawValue)
         .onAppear {
             activeAppSkin = AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
@@ -861,7 +862,7 @@ struct AppTopBar: View {
                     .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
                     .lineLimit(1)
             }
@@ -976,7 +977,7 @@ struct AppSettingsSheet: View {
                                             .font(.system(size: 13, weight: .semibold))
                                             .foregroundStyle(AppTheme.ink)
                                         Text(skin.shortTitle)
-                                            .font(.system(size: 11, weight: .medium))
+                                            .font(.system(size: 11, weight: .semibold))
                                             .foregroundStyle(AppTheme.mutedInk)
                                     }
 
@@ -991,7 +992,7 @@ struct AppSettingsSheet: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(skin == selectedSkin ? AppTheme.accentSoft : Color.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .background(skin == selectedSkin ? AppTheme.accentSoft : Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .stroke(skin == selectedSkin ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
@@ -1017,14 +1018,14 @@ struct AppSettingsSheet: View {
                                 }
 
                                 Text(updateStatusText)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(updateController.isChecking ? AppTheme.ink : AppTheme.mutedInk)
                                     .lineLimit(2)
 
                                 if let lastCheckedAt = updateController.lastCheckedAt {
                                     Text("上次检查 \(lastCheckedAt.formatted(date: .omitted, time: .shortened))")
                                         .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(AppTheme.mutedInk.opacity(0.72))
+                                        .foregroundStyle(AppTheme.mutedInk)
                                 }
                             }
 
@@ -1095,7 +1096,7 @@ struct AppSettingsSheet: View {
             content()
         }
         .padding(12)
-        .background(Color.white.opacity(0.48), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.white.opacity(0.76), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.border.opacity(0.78))
@@ -1141,7 +1142,7 @@ struct AISettingsSheet: View {
                 Text("AI 设置")
                     .font(.system(size: 25, weight: .semibold))
                 Text("DeepSeek 负责智能解析、推进建议和备注摘要；密钥只保存在本机私有配置文件。")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
                     .lineLimit(2)
             }
@@ -1183,7 +1184,7 @@ struct AISettingsSheet: View {
                         DeepSeekModelPicker(model: $aiSettings.configuration.model)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text(currentModelSubtitle)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(AppTheme.mutedInk)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -1235,7 +1236,7 @@ struct AISettingsSheet: View {
                     Text(aiSettings.configuration.isEnabled ? "AI 已启用" : "AI 未启用")
                         .font(.system(size: 16, weight: .semibold))
                     Text(statusSubtitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1272,7 +1273,7 @@ struct AISettingsSheet: View {
         if aiSettings.connectionSucceeded {
             return Color(red: 0.90, green: 0.97, blue: 0.91)
         }
-        return aiSettings.configuration.isEnabled ? AppTheme.accentSoft : Color.white.opacity(0.58)
+        return aiSettings.configuration.isEnabled ? AppTheme.accentSoft : Color.white.opacity(0.78)
     }
 
     private var statusStroke: Color {
@@ -1299,7 +1300,7 @@ struct AISettingsSheet: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.white.opacity(0.90), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.hairline)
@@ -1308,7 +1309,7 @@ struct AISettingsSheet: View {
 
     private var securityNote: some View {
         Label("API Key 保存到本机用户目录的私有文件，权限 600，不写入源码或 Git 仓库；这不是 Keychain 加密。", systemImage: "lock.shield")
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(AppTheme.mutedInk)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
@@ -1343,7 +1344,7 @@ struct AISettingsSheet: View {
                         .font(.system(size: 11, weight: .bold))
                         .padding(.top, 1)
                     Text(message)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(aiSettings.connectionSucceeded ? Color(red: 0.14, green: 0.58, blue: 0.34) : TodoPriority.high.displayColor)
@@ -1352,7 +1353,7 @@ struct AISettingsSheet: View {
                     ProgressView()
                         .controlSize(.small)
                     Text("正在请求 DeepSeek")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                 }
             }
@@ -1471,14 +1472,14 @@ struct AIUsageRow: View {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(AppTheme.panel.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.hairline)
@@ -1647,7 +1648,7 @@ struct SidebarView: View {
                     .foregroundStyle(AppTheme.mutedInk)
                 Text(AppVersion.displayText)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.76))
+                    .foregroundStyle(AppTheme.mutedInk)
             }
 
             Spacer(minLength: 0)
@@ -1734,7 +1735,7 @@ struct DateButton: View {
                         .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
                         .lineLimit(1)
                 }
@@ -1774,7 +1775,7 @@ struct DateButton: View {
             return AppTheme.sidebarSelected
         }
         if isHovered {
-            return Color.white.opacity(0.28)
+            return Color.white.opacity(0.46)
         }
         return Color.clear
     }
@@ -1860,7 +1861,7 @@ struct QuickDateCell: View {
             .foregroundStyle(isSelected ? .white : AppTheme.ink)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
-            .background(isSelected ? AppTheme.accent : Color.white.opacity(0.52), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(isSelected ? AppTheme.accent : Color.white.opacity(0.74), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(isSelected ? AppTheme.accent.opacity(0.34) : AppTheme.hairline)
@@ -1928,7 +1929,7 @@ struct TodoMiniCalendar: View {
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.44), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(Color.white.opacity(0.74), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .stroke(AppTheme.hairline)
@@ -1954,7 +1955,7 @@ struct TodoMiniCalendar: View {
         }
         .padding(.horizontal, 3)
         .padding(.vertical, 2)
-        .background(Color.white.opacity(0.38), in: Capsule())
+        .background(Color.white.opacity(0.68), in: Capsule())
         .overlay(
             Capsule()
                 .stroke(AppTheme.hairline.opacity(0.78))
@@ -1980,7 +1981,7 @@ struct TodoMiniCalendar: View {
         .foregroundStyle(AppTheme.mutedInk)
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
-        .background(Color.white.opacity(0.44), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.78))
@@ -2147,7 +2148,7 @@ struct SearchField: View {
                 .foregroundStyle(text.isEmpty ? AppTheme.mutedInk : AppTheme.accent)
             TextField("搜索标题或备注", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppTheme.ink)
             if !text.isEmpty {
                 Button {
@@ -2164,7 +2165,7 @@ struct SearchField: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(isHovered ? 0.82 : 0.62), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.white.opacity(isHovered ? 0.96 : 0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(text.isEmpty ? AppTheme.hairline.opacity(0.75) : AppTheme.accent.opacity(0.22))
@@ -2214,7 +2215,7 @@ struct AllTodosViewModePicker: View {
         }
         .padding(3)
         .frame(width: 318)
-        .background(Color.white.opacity(0.58), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.82))
@@ -2240,7 +2241,7 @@ struct ListToolbar: View {
             }
         }
         .padding(5)
-        .background(Color.white.opacity(0.44), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.85))
@@ -2641,11 +2642,11 @@ struct TodoMatrixQuadrant: View {
             LazyVStack(spacing: 6) {
                 if group.todos.isEmpty {
                     Text("暂无事项")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 24)
-                        .background(Color.white.opacity(0.42), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 } else {
                     ForEach(group.todos) { todo in
                         TodoFlowRow(
@@ -2702,11 +2703,11 @@ struct TodoBoardColumn: View {
             LazyVStack(spacing: 8) {
                 if todos.isEmpty {
                     Text("暂无事项")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 28)
-                        .background(Color.white.opacity(0.46), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
                     ForEach(todos) { todo in
                         TodoBoardCard(
@@ -3054,7 +3055,7 @@ struct DailySuggestionCard: View {
                     ProgressView()
                         .controlSize(.small)
                     Text("正在读取当前待办并生成推进顺序")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                 }
                 .transition(.opacity)
@@ -3073,7 +3074,7 @@ struct DailySuggestionCard: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 Text("用当前未完成事项生成今天的推进顺序。")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
             }
 
@@ -3105,7 +3106,7 @@ struct AITraceCompactView: View {
             Text("AI 已调用")
                 .font(.system(size: 11, weight: .semibold))
             Text("\(trace.model) · \(trace.durationText) · 输入 \(trace.inputCharacters) 字 / 输出 \(trace.outputCharacters) 字")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -3132,7 +3133,7 @@ struct AITraceDisclosure: View {
                         .font(.system(size: 11, weight: .semibold))
                     Spacer()
                     Text("\(trace.statusCode) · \(trace.startedAtText)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                 }
                 .foregroundStyle(AppTheme.accent)
@@ -3150,7 +3151,7 @@ struct AITraceDisclosure: View {
                     AITraceLine(label: "返回", value: trace.responsePreview.isEmpty ? "空返回" : trace.responsePreview)
                 }
                 .padding(9)
-                .background(Color.white.opacity(0.58), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(AppTheme.hairline)
@@ -3172,7 +3173,7 @@ struct AITraceLine: View {
                 .foregroundStyle(AppTheme.mutedInk)
                 .frame(width: 30, alignment: .leading)
             Text(value)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(AppTheme.ink)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -3193,7 +3194,7 @@ struct WorkSection<Content: View>: View {
                 Text(group.kind.title)
                     .font(.system(size: 12, weight: .semibold))
                 Text(group.kind.subtitle)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(AppTheme.mutedInk)
                 Spacer()
                 Text("\(group.todos.count) 项")
@@ -3951,7 +3952,7 @@ struct TodoFlowRow: View {
 
                     if hasNotes {
                         Text(todo.trimmedNotes)
-                            .font(.system(size: 12))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.mutedInk)
                             .strikethrough(todo.isDone, color: AppTheme.mutedInk)
                             .lineLimit(4)
@@ -4061,9 +4062,9 @@ struct TodoFlowRow: View {
             return AppTheme.rowTint(priority: todo.priority, isOverdue: true)
         }
         if isHovered {
-            return AppTheme.panel.opacity(todo.isDone ? 0.68 : 0.96)
+            return AppTheme.panel.opacity(todo.isDone ? 0.82 : 1)
         }
-        return AppTheme.panel.opacity(todo.isDone ? 0.58 : 0.82)
+        return AppTheme.panel.opacity(todo.isDone ? 0.74 : 0.94)
     }
 
     private var rowStroke: Color {
@@ -4364,7 +4365,7 @@ struct CompactNotesField: View {
 
             TextField("备注（可选，添加背景、链接、判断依据）", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .medium))
                 .submitLabel(.done)
                 .onSubmit {
                     onSubmit?()
@@ -4601,7 +4602,7 @@ struct NotesReadOnlyRow: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(displayText)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.mutedInk)
                     .strikethrough(isDone, color: AppTheme.mutedInk)
                     .lineLimit(8)
@@ -4615,7 +4616,7 @@ struct NotesReadOnlyRow: View {
                             .foregroundStyle(AppTheme.accent)
                             .padding(.top, 2)
                         Text(summary)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppTheme.ink)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -4766,7 +4767,7 @@ struct InlineNotesEditor: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             TextEditor(text: $text)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .medium))
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
@@ -4774,8 +4775,8 @@ struct InlineNotesEditor: View {
 
             if text.isEmpty {
                 Text(placeholder)
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.mutedInk.opacity(0.82))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 10)
                     .allowsHitTesting(false)

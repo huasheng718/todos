@@ -3,21 +3,26 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/build/蚁序.app"
-PKG_ROOT="$ROOT_DIR/build/pkgroot"
-PKG_SCRIPTS="$ROOT_DIR/build/pkgscripts"
 INFO_PLIST="$ROOT_DIR/Info.plist"
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST")"
 PKG_PATH="$ROOT_DIR/build/蚁序-${VERSION}.pkg"
 ASCII_PKG_PATH="$ROOT_DIR/build/AntOrder-${VERSION}.pkg"
+WORK_DIR="$(mktemp -d "$ROOT_DIR/build/pkgwork-${VERSION}.XXXXXX")"
+PKG_ROOT="$WORK_DIR/pkgroot"
+PKG_SCRIPTS="$WORK_DIR/pkgscripts"
+
+cleanup() {
+  rm -rf "$WORK_DIR"
+}
+trap cleanup EXIT
 
 cd "$ROOT_DIR"
 
 "$ROOT_DIR/scripts/package_app.sh" >/dev/null
 xattr -cr "$APP_DIR"
 
-rm -rf "$PKG_ROOT" "$PKG_SCRIPTS"
 rm -f "$PKG_PATH" "$ASCII_PKG_PATH"
 mkdir -p "$PKG_ROOT/Applications" "$PKG_SCRIPTS"
 
