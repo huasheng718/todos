@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/.build/release"
-APP_DIR="${APP_DIR_OVERRIDE:-$ROOT_DIR/build/蚁序.app}"
+DEFAULT_APP_PARENT="$ROOT_DIR/.build/package-app"
+APP_DIR="${APP_DIR_OVERRIDE:-$DEFAULT_APP_PARENT/蚁序.app}"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -11,6 +12,9 @@ ICONSET_DIR="$ROOT_DIR/build/AppIcon.iconset"
 ICON_SOURCE="$ROOT_DIR/Assets/AppIcon.png"
 
 cd "$ROOT_DIR"
+
+mkdir -p "$ROOT_DIR/.build" "$ROOT_DIR/build"
+touch "$ROOT_DIR/.build/.metadata_never_index" "$ROOT_DIR/build/.metadata_never_index"
 
 SWIFTPM_FLAGS=(
   -c release
@@ -23,6 +27,10 @@ SWIFTPM_FLAGS=(
 )
 
 CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/clang-module-cache" swift build "${SWIFTPM_FLAGS[@]}"
+
+if [ -z "${APP_DIR_OVERRIDE:-}" ]; then
+  rm -rf "$DEFAULT_APP_PARENT"
+fi
 
 rm -rf "$APP_DIR" "$ICONSET_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$ICONSET_DIR"
