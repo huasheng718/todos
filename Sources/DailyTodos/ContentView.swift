@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 
 private let statusColumnWidth: CGFloat = 82
@@ -565,7 +566,6 @@ struct ContentView: View {
             items: filteredHandbookItems,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
-            folderSuggestions: filteredHandbookFolders,
             onCreate: createHandbookItem,
             onUpdate: updateHandbookItem,
             onDelete: deleteHandbookItem
@@ -3626,36 +3626,42 @@ struct HandbookContentView: View {
     let items: [HandbookItem]
     let selectedCategory: HandbookCategory?
     let selectedFolder: String?
-    let folderSuggestions: [String]
     let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onDelete: (HandbookItem) -> Void
 
-    @State private var draftCategory: HandbookCategory = .businessRule
-    @State private var draftFolder = ""
     @State private var draftTitle = ""
     @State private var draftBody = ""
     @State private var selectedItemID: UUID?
     @State private var isDetailEditing = false
     @State private var shouldSelectLatestAfterCreate = false
+    @State private var activeFilter: HandbookListFilter = .all
     @FocusState private var focusedField: HandbookFocusField?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HandbookCaptureBar(
-                category: $draftCategory,
-                folder: $draftFolder,
                 title: $draftTitle,
                 content: $draftBody,
                 focusedField: $focusedField,
                 suggestedCategory: selectedCategory,
                 suggestedFolder: selectedFolder,
-                folderSuggestions: folderSuggestions,
                 onCreate: submit
+            )
+
+            HandbookWorkbenchHeader(
+                selectedCategory: selectedCategory,
+                selectedFolder: selectedFolder,
+                totalCount: items.count,
+                visibleCount: visibleItems.count,
+                activeFilter: $activeFilter
             )
 
             if items.isEmpty {
                 HandbookEmptyState(category: selectedCategory)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if visibleItems.isEmpty {
+                HandbookFilteredEmptyState(filter: activeFilter)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HStack(alignment: .top, spacing: 10) {
@@ -3681,24 +3687,14 @@ struct HandbookContentView: View {
         }
         .animation(AppMotion.reveal, value: isDetailEditing)
         .animation(AppMotion.list, value: selectedItemID)
-        .onChange(of: selectedCategory) { _, newValue in
-            if let newValue {
-                draftCategory = newValue
-            }
-        }
-        .onChange(of: selectedFolder) { _, newValue in
-            if let newValue {
-                draftFolder = newValue
-            }
-        }
         .onChange(of: items) { _, newItems in
-            syncSelection(with: newItems)
+            syncSelection(with: activeFilter.filter(newItems))
+        }
+        .onChange(of: activeFilter) { _, _ in
+            syncSelection(with: visibleItems)
         }
         .onAppear {
-            if let selectedFolder {
-                draftFolder = selectedFolder
-            }
-            syncSelection(with: items)
+            syncSelection(with: visibleItems)
         }
     }
 
@@ -3709,28 +3705,31 @@ struct HandbookContentView: View {
             focusedField = .title
             return
         }
-        let category = selectedCategory ?? draftCategory
-        let folder = (selectedFolder ?? draftFolder).trimmingCharacters(in: .whitespacesAndNewlines)
+        let category = selectedCategory ?? HandbookCategory.infer(from: "\(title)\n\(body)")
+        let folder = (selectedFolder ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         onCreate(category, folder, title, body, [])
         shouldSelectLatestAfterCreate = true
+        activeFilter = .all
         draftTitle = ""
         draftBody = ""
-        draftCategory = category
-        draftFolder = folder
         focusedField = .title
+    }
+
+    private var visibleItems: [HandbookItem] {
+        activeFilter.filter(items)
     }
 
     private var selectedItem: HandbookItem? {
         guard let selectedItemID else {
-            return items.first
+            return visibleItems.first
         }
-        return items.first { $0.id == selectedItemID } ?? items.first
+        return visibleItems.first { $0.id == selectedItemID } ?? visibleItems.first
     }
 
     private var handbookList: some View {
         ScrollView {
             LazyVStack(spacing: 7) {
-                ForEach(items) { item in
+                ForEach(visibleItems) { item in
                     HandbookRow(
                         item: item,
                         isSelected: selectedItem?.id == item.id,
@@ -3783,15 +3782,153 @@ enum HandbookFocusField: Hashable {
     case body
 }
 
+enum HandbookListFilter: String, CaseIterable, Identifiable {
+    case all
+    case recent
+    case attached
+    case longform
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "全部"
+        case .recent: "最近"
+        case .attached: "附件"
+        case .longform: "沉淀"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: "tray.full"
+        case .recent: "clock"
+        case .attached: "paperclip"
+        case .longform: "doc.richtext"
+        }
+    }
+
+    var emptyText: String {
+        switch self {
+        case .all: "当前没有手记"
+        case .recent: "最近 7 天没有更新的手记"
+        case .attached: "当前范围没有带附件的手记"
+        case .longform: "当前范围还没有中篇或文章"
+        }
+    }
+
+    func filter(_ items: [HandbookItem]) -> [HandbookItem] {
+        switch self {
+        case .all:
+            return items
+        case .recent:
+            let threshold = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? .distantPast
+            return items.filter { $0.updatedAt >= threshold }
+        case .attached:
+            return items.filter { !$0.attachments.isEmpty }
+        case .longform:
+            return items.filter { $0.lengthKind == .medium || $0.lengthKind == .article }
+        }
+    }
+}
+
+struct HandbookWorkbenchHeader: View {
+    let selectedCategory: HandbookCategory?
+    let selectedFolder: String?
+    let totalCount: Int
+    let visibleCount: Int
+    @Binding var activeFilter: HandbookListFilter
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(contextTitle)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+
+                Text(contextSubtitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 10)
+
+            HStack(spacing: 5) {
+                ForEach(HandbookListFilter.allCases) { filter in
+                    HandbookFilterChip(
+                        filter: filter,
+                        isActive: activeFilter == filter,
+                        onSelect: {
+                            withAnimation(AppMotion.modeSwitch) {
+                                activeFilter = filter
+                            }
+                        }
+                    )
+                }
+            }
+            .padding(3)
+            .background(Color.white.opacity(0.70), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.hairline.opacity(0.72))
+            )
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(AppTheme.workSurface.opacity(0.64), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.70))
+        )
+    }
+
+    private var contextTitle: String {
+        if let selectedFolder, !selectedFolder.isEmpty {
+            return selectedFolder
+        }
+        return selectedCategory?.title ?? "手记工作台"
+    }
+
+    private var contextSubtitle: String {
+        let scope = selectedCategory?.subtitle ?? "规则、调研、会议与灵感的收集沉淀"
+        if activeFilter == .all {
+            return "\(scope) · \(totalCount) 条"
+        }
+        return "\(scope) · \(activeFilter.title) \(visibleCount)/\(totalCount)"
+    }
+}
+
+struct HandbookFilterChip: View {
+    let filter: HandbookListFilter
+    let isActive: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            Label(filter.title, systemImage: filter.icon)
+                .font(.system(size: 11, weight: .bold))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+        }
+        .buttonStyle(.tactilePlain)
+        .foregroundStyle(isActive ? AppTheme.accent : AppTheme.mutedInk)
+        .background(isActive ? AppTheme.accentSoft.opacity(0.90) : Color.clear, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(isActive ? AppTheme.accent.opacity(0.20) : Color.clear)
+        )
+        .help(filter.title)
+    }
+}
+
 struct HandbookCaptureBar: View {
-    @Binding var category: HandbookCategory
-    @Binding var folder: String
     @Binding var title: String
     @Binding var content: String
     var focusedField: FocusState<HandbookFocusField?>.Binding
     let suggestedCategory: HandbookCategory?
     let suggestedFolder: String?
-    let folderSuggestions: [String]
     let onCreate: () -> Void
     @State private var isHovered = false
     @State private var isExpanded = false
@@ -3801,31 +3938,35 @@ struct HandbookCaptureBar: View {
             || !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var inferredCategory: HandbookCategory {
+        suggestedCategory ?? HandbookCategory.infer(from: "\(title)\n\(content)")
+    }
+
+    private var categoryTone: HandbookCategory {
+        inferredCategory
+    }
+
+    private var hasInput: Bool {
+        canCreate
+    }
+
+    private var shouldShowContextLine: Bool {
+        isExpanded || !content.isEmpty || suggestedFolder?.isEmpty == false
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: isExpanded || !content.isEmpty ? 8 : 0) {
+        VStack(alignment: .leading, spacing: isExpanded || !content.isEmpty ? 8 : 6) {
             HStack(spacing: 8) {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(category.accentColor)
+                    .foregroundStyle(categoryTone.accentColor)
                     .frame(width: 28, height: 28)
-                    .background(category.softColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(categoryTone.softColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                Picker("分类", selection: $category) {
-                    ForEach(HandbookCategory.allCases) { option in
-                        Label(option.title, systemImage: option.icon).tag(option)
-                    }
+                if hasInput || suggestedCategory != nil {
+                    HandbookInferenceBadge(category: inferredCategory, isLocked: suggestedCategory != nil)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 112)
-                .disabled(suggestedCategory != nil)
-                .help(suggestedCategory == nil ? "选择手记分类" : "当前由左侧分类决定")
-
-                HandbookFolderField(
-                    folder: $folder,
-                    suggestedFolder: suggestedFolder,
-                    suggestions: folderSuggestions
-                )
 
                 TextField("快速收集：会议结论、业务规则、调研发现或灵感", text: $title)
                     .textFieldStyle(.plain)
@@ -3875,6 +4016,13 @@ struct HandbookCaptureBar: View {
                 .disabled(!canCreate)
             }
 
+            if shouldShowContextLine {
+                captureContextLine
+                    .padding(.leading, 36)
+                    .padding(.trailing, 2)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if isExpanded || !content.isEmpty {
                 HandbookBodyEditor(
                     "补充正文：记录背景、证据、结论或可复用口径",
@@ -3893,7 +4041,7 @@ struct HandbookCaptureBar: View {
                 .fill(AppTheme.panel)
                 .overlay(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(canCreate ? category.accentColor : AppTheme.accent)
+                        .fill(canCreate ? categoryTone.accentColor : AppTheme.accent)
                         .frame(width: 3)
                         .opacity(canCreate ? 0.95 : 0.34)
                         .padding(.vertical, 9)
@@ -3901,7 +4049,7 @@ struct HandbookCaptureBar: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(isHovered ? category.accentColor.opacity(0.30) : AppTheme.border.opacity(0.70))
+                .stroke(isHovered ? categoryTone.accentColor.opacity(0.30) : AppTheme.border.opacity(0.70))
         )
         .shadow(color: AppTheme.rowShadow.opacity(isHovered ? 0.72 : 0.42), radius: isHovered ? 10 : 5, x: 0, y: isHovered ? 5 : 2)
         .onHover { hovered in
@@ -3910,6 +4058,29 @@ struct HandbookCaptureBar: View {
             }
         }
         .animation(AppMotion.reveal, value: isExpanded)
+        .animation(AppMotion.quick, value: hasInput)
+    }
+
+    private var captureContextLine: some View {
+        HStack(spacing: 6) {
+            Label("输入后自动判断主类型", systemImage: "wand.and.sparkles")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
+
+            if let suggestedFolder, !suggestedFolder.isEmpty {
+                Text("· 将归入 \(suggestedFolder)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            } else {
+                Text("· 二级目录可在整理时补充")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 
     private func submitIfReady() {
@@ -3919,66 +4090,26 @@ struct HandbookCaptureBar: View {
             isExpanded = false
         }
     }
+
 }
 
-struct HandbookFolderField: View {
-    @Binding var folder: String
-    let suggestedFolder: String?
-    let suggestions: [String]
-
-    private var effectiveFolder: Binding<String> {
-        Binding(
-            get: { suggestedFolder ?? folder },
-            set: { newValue in
-                if suggestedFolder == nil {
-                    folder = newValue
-                }
-            }
-        )
-    }
+struct HandbookInferenceBadge: View {
+    let category: HandbookCategory
+    let isLocked: Bool
 
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "folder")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 14)
-
-            TextField("目录", text: effectiveFolder)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .disabled(suggestedFolder != nil)
-
-            if suggestedFolder == nil && !suggestions.isEmpty {
-                Menu {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(suggestion) {
-                            folder = suggestion
-                        }
-                    }
-                    Divider()
-                    Button("清空目录") {
-                        folder = ""
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .frame(width: 20, height: 24)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("选择已有目录")
-            }
-        }
-        .padding(.horizontal, 8)
-        .frame(width: 132, height: 30)
-        .background(Color.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(AppTheme.border.opacity(0.82))
-        )
-        .help(suggestedFolder == nil ? "输入自定义二级目录" : "当前由左侧目录决定")
+        Label(isLocked ? category.title : "推断：\(category.title)", systemImage: isLocked ? "pin.fill" : category.icon)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(category.accentColor)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(height: 30)
+            .background(category.softColor, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(category.accentColor.opacity(0.22))
+            )
+            .help(isLocked ? "当前由左侧分类决定" : "根据输入内容自动判断，后续可在编辑中调整")
     }
 }
 
@@ -3995,18 +4126,14 @@ struct HandbookRow: View {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(item.category.accentColor)
                 .frame(width: 4)
-                .padding(.vertical, 3)
+                .padding(.vertical, 2)
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    HandbookCategoryTag(category: item.category)
-                    if !item.trimmedFolder.isEmpty {
-                        HandbookFolderTag(folder: item.trimmedFolder)
-                    }
-                    HandbookLengthTag(kind: item.lengthKind)
-                    if !item.attachments.isEmpty {
-                        HandbookAttachmentCountTag(count: item.attachments.count)
-                    }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Label(item.category.title, systemImage: item.category.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(item.category.accentColor)
+                        .labelStyle(.titleAndIcon)
 
                     Spacer(minLength: 8)
 
@@ -4014,40 +4141,54 @@ struct HandbookRow: View {
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AppTheme.mutedInk)
-                }
-
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.displayTitle)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(AppTheme.ink)
-                            .lineLimit(2)
-
-                        if let summary = item.cardSummary {
-                            Text(summary)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppTheme.mutedInk)
-                                .lineSpacing(2)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
 
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .semibold))
-                            .interactionHitArea()
+                            .font(.system(size: 12, weight: .bold))
+                            .frame(width: 30, height: 28)
                     }
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(isSelected ? item.category.accentColor : AppTheme.mutedInk)
                     .help("编辑手记")
                 }
+
+                Text(item.displayTitle)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineSpacing(1)
+                    .lineLimit(2)
+
+                if let summary = item.cardSummary {
+                    Text(summary)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .lineSpacing(2)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 6) {
+                    if !item.trimmedFolder.isEmpty {
+                        HandbookFolderTag(folder: item.trimmedFolder)
+                    }
+                    HandbookLengthTag(kind: item.lengthKind)
+                    if !item.attachments.isEmpty {
+                        HandbookAttachmentCountTag(count: item.attachments.count)
+                    }
+                    Text("\(item.trimmedBody.count) 字")
+                        .font(.system(size: 11, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.56), in: Capsule())
+
+                    Spacer(minLength: 0)
+                }
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -4146,6 +4287,31 @@ struct HandbookAttachmentCountTag: View {
 }
 
 private extension HandbookCategory {
+    static func infer(from text: String) -> HandbookCategory {
+        let normalized = text.lowercased()
+        let scores: [(category: HandbookCategory, score: Int)] = HandbookCategory.allCases.map { category in
+            (category, category.inferenceKeywords.reduce(0) { score, keyword in
+                normalized.contains(keyword) ? score + 1 : score
+            })
+        }
+        return scores.max { lhs, rhs in lhs.score < rhs.score }?.score == 0
+            ? .businessRule
+            : scores.max { lhs, rhs in lhs.score < rhs.score }?.category ?? .businessRule
+    }
+
+    private var inferenceKeywords: [String] {
+        switch self {
+        case .businessRule:
+            ["规则", "口径", "流程", "审批", "规范", "要求", "制度", "边界", "权限", "配置", "字段", "规则"]
+        case .research:
+            ["调研", "竞品", "用户", "访谈", "观察", "数据", "资料", "摘录", "报告", "分析", "样本"]
+        case .meeting:
+            ["会议", "纪要", "对接", "同步", "讨论", "结论", "行动项", "参会", "复盘", "评审", "会"]
+        case .inspiration:
+            ["灵感", "想法", "机会", "假设", "创意", "可以", "尝试", "也许", "思路", "idea", "验证"]
+        }
+    }
+
     var accentColor: Color {
         switch self {
         case .businessRule:
@@ -4255,6 +4421,32 @@ struct HandbookDetailPanel: View {
                 Spacer()
 
                 Button {
+                    copyToPasteboard(item.displayTitle)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .help("复制标题")
+
+                Button {
+                    copyToPasteboard(item.trimmedBody.isEmpty ? item.displayTitle : item.trimmedBody)
+                } label: {
+                    Label("复制正文", systemImage: "text.page")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 80, height: 30)
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .background(Color.white.opacity(0.62), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(AppTheme.hairline.opacity(0.64))
+                )
+
+                Button {
                     syncDraft(with: item)
                     withAnimation(AppMotion.reveal) {
                         isEditing = true
@@ -4280,10 +4472,18 @@ struct HandbookDetailPanel: View {
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
 
+            HandbookDetailMetaBar(item: item)
+
             Divider()
                 .overlay(AppTheme.hairline.opacity(0.72))
 
             ScrollView {
+                let outline = MarkdownOutlineEntry.extract(from: item.trimmedBody)
+                if !outline.isEmpty {
+                    HandbookOutlineStrip(entries: outline)
+                        .padding(.bottom, 10)
+                }
+
                 if item.trimmedBody.isEmpty {
                     Text("这条手记还没有正文。")
                         .font(.system(size: 13, weight: .semibold))
@@ -4346,7 +4546,7 @@ struct HandbookDetailPanel: View {
 
                 Spacer()
 
-                Text("Markdown")
+                Label("整理阶段再确定目录与结构", systemImage: "tray.full")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(AppTheme.mutedInk)
                     .padding(.horizontal, 8)
@@ -4428,8 +4628,114 @@ struct HandbookDetailPanel: View {
         attachments = item.attachments
     }
 
+    private func copyToPasteboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
     private var draftLengthKind: HandbookLengthKind {
         HandbookItem(category: category, folder: folder, title: title, body: bodyText).lengthKind
+    }
+}
+
+struct HandbookDetailMetaBar: View {
+    let item: HandbookItem
+
+    var body: some View {
+        HStack(spacing: 7) {
+            HandbookMetaPill(icon: "character.cursor.ibeam", text: "\(item.trimmedBody.count) 字")
+            HandbookMetaPill(icon: "calendar", text: item.createdAt.formatted(.dateTime.year().month().day()))
+            if !item.attachments.isEmpty {
+                HandbookMetaPill(icon: "paperclip", text: "\(item.attachments.count) 个附件")
+            }
+            if !item.trimmedFolder.isEmpty {
+                HandbookMetaPill(icon: "folder", text: item.trimmedFolder)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+struct HandbookMetaPill: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: icon)
+            .font(.system(size: 11, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(AppTheme.mutedInk)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(AppTheme.workSurface.opacity(0.74), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.hairline.opacity(0.56))
+            )
+    }
+}
+
+struct MarkdownOutlineEntry: Identifiable, Equatable {
+    let id = UUID()
+    let level: Int
+    let title: String
+
+    static func extract(from text: String) -> [MarkdownOutlineEntry] {
+        text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .compactMap { line -> MarkdownOutlineEntry? in
+                let rawLine = String(line).trimmingCharacters(in: .whitespaces)
+                guard rawLine.hasPrefix("#") else { return nil }
+                let level = rawLine.prefix(while: { $0 == "#" }).count
+                guard (1...3).contains(level) else { return nil }
+                let title = rawLine
+                    .dropFirst(level)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !title.isEmpty else { return nil }
+                return MarkdownOutlineEntry(level: level, title: title)
+            }
+    }
+}
+
+struct HandbookOutlineStrip: View {
+    let entries: [MarkdownOutlineEntry]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label("结构", systemImage: "list.bullet.indent")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(entries.prefix(8)) { entry in
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(AppTheme.accent.opacity(entry.level == 1 ? 0.88 : 0.48))
+                            .frame(width: entry.level == 1 ? 6 : 4, height: entry.level == 1 ? 6 : 4)
+
+                        Text(entry.title)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .frame(height: 26)
+                    .background(Color.white.opacity(0.62), in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(AppTheme.hairline.opacity(0.52))
+                    )
+                }
+            }
+        }
+        .padding(10)
+        .background(AppTheme.workSurface.opacity(0.56), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.62))
+        )
     }
 }
 
@@ -4906,6 +5212,30 @@ struct HandbookEmptyState: View {
                 .foregroundStyle(AppTheme.ink)
 
             Text("在上方输入标题和内容，沉淀可复用的信息。")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 62)
+    }
+}
+
+struct HandbookFilteredEmptyState: View {
+    let filter: HandbookListFilter
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: filter.icon)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 52, height: 52)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+
+            Text(filter.emptyText)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+
+            Text("切回全部，或在上方继续收集新的手记。")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
         }
