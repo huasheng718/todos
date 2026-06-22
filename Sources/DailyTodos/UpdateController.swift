@@ -11,6 +11,7 @@ final class UpdateController: ObservableObject {
     private let lastAutoCheckKey = "dailyTodos.update.lastAutoCheck"
     private let autoCheckInterval: TimeInterval = 24 * 60 * 60
     private let minimumVisibleCheckDuration: TimeInterval = 0.35
+    private let manifestClient = UpdateManifestClient()
 
     func checkForUpdates() {
         runUpdateCheck(isManual: true)
@@ -39,7 +40,9 @@ final class UpdateController: ObservableObject {
                     presentUpdateAlert(manifest)
                 } else {
                     availableUpdate = nil
-                    statusMessage = isManual ? "当前已是最新版本 v\(AppVersion.shortVersion)" : nil
+                    statusMessage = isManual
+                        ? "当前已是最新版本 v\(AppVersion.shortVersion) (\(AppVersion.build))，已检查远端 v\(manifest.version) (\(manifest.build))"
+                        : nil
                 }
             } catch {
                 availableUpdate = nil
@@ -63,18 +66,7 @@ final class UpdateController: ObservableObject {
             throw UpdateError.missingManifestURL
         }
 
-        var request = URLRequest(url: manifestURL)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 12
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode
-            throw UpdateError.invalidResponse(statusCode: statusCode)
-        }
-
-        return try JSONDecoder().decode(AppUpdateManifest.self, from: data)
+        return try await manifestClient.fetchManifest(from: manifestURL)
     }
 
     private func presentUpdateAlert(_ manifest: AppUpdateManifest) {
@@ -159,9 +151,143 @@ struct AppUpdateManifest: Decodable, Equatable {
     let releaseNotes: String?
 }
 
-private enum UpdateError: LocalizedError {
+struct UpdateManifestClient {
+    func fetchManifest(from manifestURL: URL) async throws -> AppUpdateManifest {
+        var firstError: Error?
+
+        if Self.isGitHubContentsURL(manifestURL) {
+            do {
+                return try await fetchGitHubContentsManifest(from: manifestURL)
+            } catch {
+                firstError = error
+            }
+        } else if let contentsURL = Self.githubContentsURL(for: manifestURL) {
+            do {
+                return try await fetchGitHubContentsManifest(from: contentsURL)
+            } catch {
+                firstError = error
+            }
+        }
+
+        do {
+            return try await fetchRawManifest(from: manifestURL)
+        } catch {
+            throw firstError ?? error
+        }
+    }
+
+    private func fetchGitHubContentsManifest(from url: URL) async throws -> AppUpdateManifest {
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 12
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+
+        let data = try await responseData(for: request)
+        return try Self.decodeGitHubContentsManifest(from: data)
+    }
+
+    private func fetchRawManifest(from url: URL) async throws -> AppUpdateManifest {
+        var request = URLRequest(url: Self.cacheBustedURL(url))
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+
+        let data = try await responseData(for: request)
+        return try JSONDecoder().decode(AppUpdateManifest.self, from: data)
+    }
+
+    private func responseData(for request: URLRequest) async throws -> Data {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = 12
+        configuration.timeoutIntervalForResource = 18
+        configuration.urlCache = nil
+
+        let session = URLSession(configuration: configuration)
+        defer { session.finishTasksAndInvalidate() }
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            throw UpdateError.invalidResponse(statusCode: statusCode)
+        }
+        return data
+    }
+
+    static func githubContentsURL(for rawURL: URL) -> URL? {
+        guard rawURL.host == "raw.githubusercontent.com" else {
+            return nil
+        }
+
+        let parts = rawURL.path.split(separator: "/", omittingEmptySubsequences: true)
+        guard parts.count >= 4 else {
+            return nil
+        }
+
+        let owner = String(parts[0])
+        let repo = String(parts[1])
+        let ref = String(parts[2])
+        let filePath = parts.dropFirst(3).joined(separator: "/")
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "api.github.com"
+        components.path = "/repos/\(owner)/\(repo)/contents/\(filePath)"
+        components.queryItems = [
+            URLQueryItem(name: "ref", value: ref)
+        ]
+        return components.url
+    }
+
+    static func isGitHubContentsURL(_ url: URL) -> Bool {
+        guard url.host == "api.github.com" else {
+            return false
+        }
+        return url.path.contains("/contents/")
+    }
+
+    static func cacheBustedURL(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "_yxcb", value: String(Int(Date().timeIntervalSince1970 * 1000))))
+        components.queryItems = queryItems
+        return components.url ?? url
+    }
+
+    static func decodeGitHubContentsManifest(from data: Data) throws -> AppUpdateManifest {
+        let contents = try JSONDecoder().decode(GitHubContentsResponse.self, from: data)
+        guard contents.encoding.lowercased() == "base64" else {
+            throw UpdateError.unsupportedEncoding(contents.encoding)
+        }
+
+        let normalizedContent = contents.content.filter { !$0.isWhitespace }
+        guard let manifestData = Data(base64Encoded: normalizedContent) else {
+            throw UpdateError.invalidManifestPayload
+        }
+
+        return try JSONDecoder().decode(AppUpdateManifest.self, from: manifestData)
+    }
+}
+
+private struct GitHubContentsResponse: Decodable {
+    let content: String
+    let encoding: String
+}
+
+enum UpdateError: LocalizedError {
     case missingManifestURL
     case invalidResponse(statusCode: Int?)
+    case invalidManifestPayload
+    case unsupportedEncoding(String)
 
     var errorDescription: String? {
         switch self {
@@ -175,6 +301,10 @@ private enum UpdateError: LocalizedError {
                 return "更新服务暂不可用（HTTP \(statusCode)）。"
             }
             return "更新服务暂不可用。"
+        case .invalidManifestPayload:
+            return "更新信息内容不完整，暂时无法检查。"
+        case .unsupportedEncoding:
+            return "更新信息格式不受支持，暂时无法检查。"
         }
     }
 }

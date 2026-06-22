@@ -1,6 +1,6 @@
 {
-  "version": "1.1.6",
-  "build": 8,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.6/AntOrder-1.1.6.pkg",
-  "releaseNotes": "重构为左一主导航、左二辅导航、右三主体内容区，新增手记模块，用于收集业务规则、调研、会议和灵感；修复打包脚本复用旧 app 目录导致权限失败的问题。"
+  "version": "1.1.7",
+  "build": 9,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.7/AntOrder-1.1.7.pkg",
+  "releaseNotes": "修复检查更新获取不到新版本的问题：默认使用 GitHub Contents API 获取 latest.json，并兼容 raw 源兜底；设置页会显示本地版本与远端版本，便于确认更新链路。"
 }
