@@ -1,6 +1,5 @@
 import Foundation
 import SQLite3
-import SwiftUI
 
 @MainActor
 final class TodoStore: ObservableObject {
@@ -149,15 +148,23 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    func addHandbookItem(category: HandbookCategory, title: String, body: String) {
+    func addHandbookItem(
+        category: HandbookCategory,
+        folder: String = "",
+        title: String,
+        body: String,
+        attachments: [HandbookAttachment] = []
+    ) {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
 
         let item = HandbookItem(
             category: category,
+            folder: folder.trimmingCharacters(in: .whitespacesAndNewlines),
             title: cleanedTitle.isEmpty ? category.title : cleanedTitle,
-            body: cleanedBody
+            body: cleanedBody,
+            attachments: attachments
         )
 
         do {
@@ -169,7 +176,14 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    func update(_ item: HandbookItem, category: HandbookCategory, title: String, body: String) {
+    func update(
+        _ item: HandbookItem,
+        category: HandbookCategory,
+        folder: String,
+        title: String,
+        body: String,
+        attachments: [HandbookAttachment]
+    ) {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
@@ -177,8 +191,10 @@ final class TodoStore: ObservableObject {
 
         var updated = handbookItems[index]
         updated.category = category
+        updated.folder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.title = cleanedTitle.isEmpty ? category.title : cleanedTitle
         updated.body = cleanedBody
+        updated.attachments = attachments
         updated.updatedAt = Date()
 
         do {
@@ -201,10 +217,17 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    func handbookItems(in category: HandbookCategory?, matching query: String = "") -> [HandbookItem] {
+    func handbookItems(in category: HandbookCategory?, folder: String? = nil, matching query: String = "") -> [HandbookItem] {
         handbookItems.filter { item in
-            (category == nil || item.category == category) && matches(item, query: query)
+            (category == nil || item.category == category)
+                && matchesFolder(item, folder: folder)
+                && matches(item, query: query)
         }
+    }
+
+    func handbookFolders() -> [String] {
+        let folders = Set(handbookItems.map(\.trimmedFolder).filter { !$0.isEmpty })
+        return folders.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     func todos(on date: Date, matching query: String = "") -> [TodoItem] {
@@ -262,8 +285,8 @@ final class TodoStore: ObservableObject {
             )
             """
         )
-        try addColumnIfNeeded(name: "progress", definition: "TEXT NOT NULL DEFAULT 'pending'")
-        try addColumnIfNeeded(name: "is_weekly", definition: "INTEGER NOT NULL DEFAULT 0")
+        try addColumnIfNeeded(table: "todos", name: "progress", definition: "TEXT NOT NULL DEFAULT 'pending'")
+        try addColumnIfNeeded(table: "todos", name: "is_weekly", definition: "INTEGER NOT NULL DEFAULT 0")
         try execute("UPDATE todos SET progress = CASE WHEN is_done = 1 THEN 'done' ELSE 'pending' END WHERE progress IS NULL OR progress = ''")
         try execute("CREATE INDEX IF NOT EXISTS idx_todos_date ON todos(date)")
         try execute("CREATE INDEX IF NOT EXISTS idx_todos_progress_date ON todos(progress, date)")
@@ -273,14 +296,19 @@ final class TodoStore: ObservableObject {
             CREATE TABLE IF NOT EXISTS handbook_items (
                 id TEXT PRIMARY KEY NOT NULL,
                 category TEXT NOT NULL,
+                folder TEXT NOT NULL DEFAULT '',
                 title TEXT NOT NULL,
                 body TEXT NOT NULL DEFAULT '',
+                attachments_json TEXT NOT NULL DEFAULT '[]',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             )
             """
         )
+        try addColumnIfNeeded(table: "handbook_items", name: "folder", definition: "TEXT NOT NULL DEFAULT ''")
+        try addColumnIfNeeded(table: "handbook_items", name: "attachments_json", definition: "TEXT NOT NULL DEFAULT '[]'")
         try execute("CREATE INDEX IF NOT EXISTS idx_handbook_category_updated ON handbook_items(category, updated_at)")
+        try execute("CREATE INDEX IF NOT EXISTS idx_handbook_folder_updated ON handbook_items(folder, updated_at)")
     }
 
     private func migrateLegacyJSONIfNeeded() throws {
@@ -326,7 +354,7 @@ final class TodoStore: ObservableObject {
     private func fetchHandbookItems() throws -> [HandbookItem] {
         let sql =
             """
-            SELECT id, category, title, body, created_at, updated_at
+            SELECT id, category, folder, title, body, attachments_json, created_at, updated_at
             FROM handbook_items
             """
         var statement: OpaquePointer?
@@ -366,8 +394,8 @@ final class TodoStore: ObservableObject {
         let sql =
             """
             INSERT OR REPLACE INTO handbook_items
-            (id, category, title, body, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (id, category, folder, title, body, attachments_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
         try withPreparedStatement(sql) { statement in
             bind(item, to: statement)
@@ -427,15 +455,17 @@ final class TodoStore: ObservableObject {
         let sql =
             """
             UPDATE handbook_items
-            SET category = ?, title = ?, body = ?, updated_at = ?
+            SET category = ?, folder = ?, title = ?, body = ?, attachments_json = ?, updated_at = ?
             WHERE id = ?
             """
         try withPreparedStatement(sql) { statement in
             bindText(item.category.rawValue, to: statement, at: 1)
-            bindText(item.title, to: statement, at: 2)
-            bindText(item.body, to: statement, at: 3)
-            sqlite3_bind_double(statement, 4, item.updatedAt.timeIntervalSince1970)
-            bindText(item.id.uuidString, to: statement, at: 5)
+            bindText(item.folder, to: statement, at: 2)
+            bindText(item.title, to: statement, at: 3)
+            bindText(item.body, to: statement, at: 4)
+            bindText(attachmentsJSON(for: item.attachments), to: statement, at: 5)
+            sqlite3_bind_double(statement, 6, item.updatedAt.timeIntervalSince1970)
+            bindText(item.id.uuidString, to: statement, at: 7)
 
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw SQLiteStoreError.execute(message: databaseErrorMessage)
@@ -480,11 +510,11 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    private func addColumnIfNeeded(name: String, definition: String) throws {
+    private func addColumnIfNeeded(table: String, name: String, definition: String) throws {
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
 
-        guard sqlite3_prepare_v2(db, "PRAGMA table_info(todos)", -1, &statement, nil) == SQLITE_OK else {
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &statement, nil) == SQLITE_OK else {
             throw SQLiteStoreError.prepare(message: databaseErrorMessage)
         }
 
@@ -495,7 +525,7 @@ final class TodoStore: ObservableObject {
             }
         }
 
-        try execute("ALTER TABLE todos ADD COLUMN \(name) \(definition)")
+        try execute("ALTER TABLE \(table) ADD COLUMN \(name) \(definition)")
     }
 
     private func withPreparedStatement(_ sql: String, _ body: (OpaquePointer?) throws -> Void) throws {
@@ -524,10 +554,12 @@ final class TodoStore: ObservableObject {
     private func bind(_ item: HandbookItem, to statement: OpaquePointer?) {
         bindText(item.id.uuidString, to: statement, at: 1)
         bindText(item.category.rawValue, to: statement, at: 2)
-        bindText(item.title, to: statement, at: 3)
-        bindText(item.body, to: statement, at: 4)
-        sqlite3_bind_double(statement, 5, item.createdAt.timeIntervalSince1970)
-        sqlite3_bind_double(statement, 6, item.updatedAt.timeIntervalSince1970)
+        bindText(item.folder, to: statement, at: 3)
+        bindText(item.title, to: statement, at: 4)
+        bindText(item.body, to: statement, at: 5)
+        bindText(attachmentsJSON(for: item.attachments), to: statement, at: 6)
+        sqlite3_bind_double(statement, 7, item.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(statement, 8, item.updatedAt.timeIntervalSince1970)
     }
 
     private func bindText(_ value: String, to statement: OpaquePointer?, at index: Int32) {
@@ -573,8 +605,10 @@ final class TodoStore: ObservableObject {
             let idText = sqlite3_column_text(statement, 0).map({ String(cString: $0) }),
             let id = UUID(uuidString: idText),
             let categoryText = sqlite3_column_text(statement, 1).map({ String(cString: $0) }),
-            let title = sqlite3_column_text(statement, 2).map({ String(cString: $0) }),
-            let body = sqlite3_column_text(statement, 3).map({ String(cString: $0) })
+            let folder = sqlite3_column_text(statement, 2).map({ String(cString: $0) }),
+            let title = sqlite3_column_text(statement, 3).map({ String(cString: $0) }),
+            let body = sqlite3_column_text(statement, 4).map({ String(cString: $0) }),
+            let attachmentsJSON = sqlite3_column_text(statement, 5).map({ String(cString: $0) })
         else {
             throw SQLiteStoreError.decode
         }
@@ -582,10 +616,12 @@ final class TodoStore: ObservableObject {
         return HandbookItem(
             id: id,
             category: HandbookCategory(rawValue: categoryText) ?? .inspiration,
+            folder: folder,
             title: title,
             body: body,
-            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
-            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 5))
+            attachments: decodeAttachments(from: attachmentsJSON),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
         )
     }
 
@@ -608,7 +644,30 @@ final class TodoStore: ObservableObject {
         guard !cleanedQuery.isEmpty else { return true }
         return item.title.localizedCaseInsensitiveContains(cleanedQuery)
             || item.body.localizedCaseInsensitiveContains(cleanedQuery)
+            || item.folder.localizedCaseInsensitiveContains(cleanedQuery)
             || item.category.title.localizedCaseInsensitiveContains(cleanedQuery)
+            || item.attachments.contains { $0.name.localizedCaseInsensitiveContains(cleanedQuery) }
+    }
+
+    private func matchesFolder(_ item: HandbookItem, folder: String?) -> Bool {
+        guard let folder, !folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return true }
+        return item.trimmedFolder == folder.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func attachmentsJSON(for attachments: [HandbookAttachment]) -> String {
+        guard let data = try? JSONEncoder.todoEncoder.encode(attachments),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return json
+    }
+
+    private func decodeAttachments(from json: String) -> [HandbookAttachment] {
+        guard let data = json.data(using: .utf8),
+              let attachments = try? JSONDecoder.todoDecoder.decode([HandbookAttachment].self, from: data) else {
+            return []
+        }
+        return attachments
     }
 
     private func insertionIndex(for item: TodoItem) -> Int {
@@ -682,6 +741,14 @@ private extension JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
+    }
+}
+
+private extension JSONEncoder {
+    static var todoEncoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }
 }
 

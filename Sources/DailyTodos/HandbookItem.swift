@@ -3,25 +3,101 @@ import Foundation
 struct HandbookItem: Identifiable, Codable, Equatable {
     var id: UUID
     var category: HandbookCategory
+    var folder: String
     var title: String
     var body: String
+    var attachments: [HandbookAttachment]
     var createdAt: Date
     var updatedAt: Date
 
     init(
         id: UUID = UUID(),
         category: HandbookCategory,
+        folder: String = "",
         title: String,
         body: String,
+        attachments: [HandbookAttachment] = [],
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
         self.id = id
         self.category = category
+        self.folder = folder
         self.title = title
         self.body = body
+        self.attachments = attachments
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+}
+
+struct HandbookAttachment: Identifiable, Codable, Equatable {
+    var id: UUID
+    var kind: HandbookAttachmentKind
+    var name: String
+    var path: String
+    var createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        kind: HandbookAttachmentKind,
+        name: String,
+        path: String,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.kind = kind
+        self.name = name
+        self.path = path
+        self.createdAt = createdAt
+    }
+}
+
+enum HandbookAttachmentKind: String, Codable, CaseIterable, Identifiable, Equatable {
+    case file
+    case image
+    case video
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .file: "附件"
+        case .image: "图片"
+        case .video: "视频"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .file: "paperclip"
+        case .image: "photo"
+        case .video: "film"
+        }
+    }
+}
+
+enum HandbookLengthKind: String, Codable, CaseIterable, Identifiable, Equatable {
+    case snippet
+    case medium
+    case article
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .snippet: "杂记"
+        case .medium: "中篇"
+        case .article: "文章"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .snippet: "note.text"
+        case .medium: "doc.text"
+        case .article: "doc.richtext"
+        }
     }
 }
 
@@ -62,11 +138,36 @@ enum HandbookCategory: String, Codable, CaseIterable, Identifiable, Equatable {
 }
 
 extension HandbookItem {
+    var trimmedFolder: String {
+        folder.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedBody: String {
         body.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var displayTitle: String {
+        trimmedTitle.isEmpty ? category.title : trimmedTitle
+    }
+
+    var cardSummary: String? {
+        let source = trimmedBody
+        guard !source.isEmpty else { return nil }
+        return source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    var lengthKind: HandbookLengthKind {
+        let characterCount = trimmedBody.count
+        if characterCount >= 1200 {
+            return .article
+        }
+        if characterCount >= 300 {
+            return .medium
+        }
+        return .snippet
     }
 }

@@ -5,6 +5,7 @@ struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
     @StateObject private var aiSettings = AISettingsStore()
     @StateObject private var updateController = UpdateController()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -16,7 +17,13 @@ struct DailyTodosApp: App {
                 .background(WindowChromeConfigurator())
                 .task {
                     store.load()
+                    updateController.startMonitoring()
                     updateController.checkForUpdatesIfNeeded()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    guard newPhase == .active else { return }
+                    updateController.checkForUpdatesIfNeeded()
+                    updateController.remindAboutAvailableUpdateIfNeeded()
                 }
         }
         .defaultSize(width: 1280, height: 860)

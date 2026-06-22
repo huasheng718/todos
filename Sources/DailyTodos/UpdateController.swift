@@ -7,11 +7,41 @@ final class UpdateController: ObservableObject {
     @Published private(set) var statusMessage: String?
     @Published private(set) var availableUpdate: AppUpdateManifest?
     @Published private(set) var lastCheckedAt: Date?
+    @Published private(set) var lastPromptedAt: Date?
 
     private let lastAutoCheckKey = "dailyTodos.update.lastAutoCheck"
+    private let lastPromptedBuildKey = "dailyTodos.update.lastPromptedBuild"
+    private let lastPromptedAtKey = "dailyTodos.update.lastPromptedAt"
     private let autoCheckInterval: TimeInterval = 24 * 60 * 60
+    private let updatePromptReminderInterval: TimeInterval = 12 * 60 * 60
+    private let monitorPollInterval: TimeInterval = 60 * 60
     private let minimumVisibleCheckDuration: TimeInterval = 0.35
     private let manifestClient = UpdateManifestClient()
+    private var monitorTask: Task<Void, Never>?
+
+    deinit {
+        monitorTask?.cancel()
+    }
+
+    var hasAvailableUpdate: Bool {
+        availableUpdate != nil
+    }
+
+    func startMonitoring() {
+        guard monitorTask == nil else { return }
+
+        let pollInterval = monitorPollInterval
+        monitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(pollInterval))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self?.checkForUpdatesIfNeeded()
+                    self?.remindAboutAvailableUpdateIfNeeded()
+                }
+            }
+        }
+    }
 
     func checkForUpdates() {
         runUpdateCheck(isManual: true)
@@ -20,6 +50,22 @@ final class UpdateController: ObservableObject {
     func checkForUpdatesIfNeeded() {
         guard shouldRunAutoCheck else { return }
         runUpdateCheck(isManual: false)
+    }
+
+    func remindAboutAvailableUpdateIfNeeded() {
+        guard let availableUpdate, shouldPresentUpdatePrompt(for: availableUpdate) else { return }
+        presentUpdateAlert(availableUpdate)
+    }
+
+    func downloadAvailableUpdate() {
+        guard let availableUpdate else {
+            checkForUpdates()
+            return
+        }
+
+        Task {
+            await downloadAndOpenInstaller(for: availableUpdate)
+        }
     }
 
     private func runUpdateCheck(isManual: Bool) {
@@ -37,7 +83,9 @@ final class UpdateController: ObservableObject {
                 if manifest.build > currentBuild {
                     availableUpdate = manifest
                     statusMessage = "发现新版本 \(manifest.version) (\(manifest.build))"
-                    presentUpdateAlert(manifest)
+                    if isManual || shouldPresentUpdatePrompt(for: manifest) {
+                        presentUpdateAlert(manifest)
+                    }
                 } else {
                     availableUpdate = nil
                     statusMessage = isManual
@@ -70,6 +118,8 @@ final class UpdateController: ObservableObject {
     }
 
     private func presentUpdateAlert(_ manifest: AppUpdateManifest) {
+        recordUpdatePrompt(for: manifest)
+
         let alert = NSAlert()
         alert.messageText = "发现新版本 \(manifest.version)"
         alert.informativeText = [
@@ -88,6 +138,26 @@ final class UpdateController: ObservableObject {
                 await downloadAndOpenInstaller(for: manifest)
             }
         }
+    }
+
+    private func shouldPresentUpdatePrompt(for manifest: AppUpdateManifest) -> Bool {
+        let lastPromptedBuild = UserDefaults.standard.integer(forKey: lastPromptedBuildKey)
+        guard lastPromptedBuild == manifest.build else {
+            return true
+        }
+
+        guard let lastPromptedAt = UserDefaults.standard.object(forKey: lastPromptedAtKey) as? Date else {
+            return true
+        }
+
+        return Date().timeIntervalSince(lastPromptedAt) >= updatePromptReminderInterval
+    }
+
+    private func recordUpdatePrompt(for manifest: AppUpdateManifest) {
+        let now = Date()
+        UserDefaults.standard.set(manifest.build, forKey: lastPromptedBuildKey)
+        UserDefaults.standard.set(now, forKey: lastPromptedAtKey)
+        lastPromptedAt = now
     }
 
     private func downloadAndOpenInstaller(for manifest: AppUpdateManifest) async {

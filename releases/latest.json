@@ -1,6 +1,6 @@
 {
-  "version": "1.1.7",
-  "build": 9,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.7/AntOrder-1.1.7.pkg",
-  "releaseNotes": "修复检查更新获取不到新版本的问题：默认使用 GitHub Contents API 获取 latest.json，并兼容 raw 源兜底；设置页会显示本地版本与远端版本，便于确认更新链路。"
+  "version": "1.1.8",
+  "build": 10,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.8/AntOrder-1.1.8.pkg",
+  "releaseNotes": "蚁序 1.1.8 更新。"
 }
