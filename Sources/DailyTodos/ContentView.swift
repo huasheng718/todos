@@ -6,7 +6,8 @@ private let priorityColumnWidth: CGFloat = 78
 private let followUpColumnWidth: CGFloat = 154
 private let todoActionColumnWidth: CGFloat = 128
 private let compactHitTargetSize: CGFloat = 38
-private let sidebarColumnWidth: CGFloat = 236
+private let primarySidebarWidth: CGFloat = 76
+private let secondarySidebarWidth: CGFloat = 250
 
 private enum AppMotion {
     static let press = Animation.easeOut(duration: 0.12)
@@ -338,8 +339,11 @@ struct ContentView: View {
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var updateController: UpdateController
     @AppStorage(AppSkin.storageKey) private var selectedSkinRawValue = AppSkin.ocean.rawValue
+    @State private var activeSection: AppSection = .todos
     @State private var scope: TodoScope = .all
+    @State private var handbookCategory: HandbookCategory? = nil
     @State private var searchText = ""
+    @State private var handbookSearchText = ""
     @State private var newTitle = ""
     @State private var newPriority: TodoPriority = .medium
     @State private var newProgress: TodoProgress = .pending
@@ -360,21 +364,29 @@ struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(
-                scope: $scope,
+            PrimarySidebarView(
+                activeSection: $activeSection,
                 onOpenSettings: { isAppSettingsPresented = true }
             )
                 .frame(
-                    minWidth: sidebarColumnWidth,
-                    idealWidth: sidebarColumnWidth,
-                    maxWidth: sidebarColumnWidth,
+                    minWidth: primarySidebarWidth,
+                    idealWidth: primarySidebarWidth,
+                    maxWidth: primarySidebarWidth,
+                    maxHeight: .infinity
+                )
+
+            secondarySidebar
+                .frame(
+                    minWidth: secondarySidebarWidth,
+                    idealWidth: secondarySidebarWidth,
+                    maxWidth: secondarySidebarWidth,
                     maxHeight: .infinity
                 )
 
             VStack(spacing: 0) {
                 AppTopBar(
-                    title: dayTitle,
-                    subtitle: daySubtitle,
+                    title: contentTitle,
+                    subtitle: contentSubtitle,
                     isAIEnabled: aiSettings.canUseAI,
                     onOpenAISettings: { isAISettingsPresented = true }
                 )
@@ -383,7 +395,7 @@ struct ContentView: View {
                 Divider()
                     .overlay(AppTheme.hairline)
 
-                taskColumn
+                contentColumn
                     .frame(minWidth: 700, maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -398,7 +410,14 @@ struct ContentView: View {
             Rectangle()
                 .fill(AppTheme.hairline)
                 .frame(width: 1)
-                .offset(x: sidebarColumnWidth)
+                .offset(x: primarySidebarWidth)
+                .ignoresSafeArea(.container, edges: .vertical)
+        }
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(AppTheme.hairline)
+                .frame(width: 1)
+                .offset(x: primarySidebarWidth + secondarySidebarWidth)
                 .ignoresSafeArea(.container, edges: .vertical)
         }
         .foregroundStyle(AppTheme.ink)
@@ -426,6 +445,31 @@ struct ContentView: View {
         .sheet(isPresented: $isAppSettingsPresented) {
             AppSettingsSheet(selectedSkinRawValue: $selectedSkinRawValue)
                 .environmentObject(updateController)
+        }
+    }
+
+    @ViewBuilder
+    private var secondarySidebar: some View {
+        switch activeSection {
+        case .todos:
+            TodoSidebarView(scope: $scope)
+        case .handbook:
+            HandbookSidebarView(
+                selectedCategory: $handbookCategory,
+                searchText: $handbookSearchText
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var contentColumn: some View {
+        switch activeSection {
+        case .todos:
+            taskColumn
+                .transition(AppMotion.viewTransition)
+        case .handbook:
+            handbookColumn
+                .transition(AppMotion.viewTransition)
         }
     }
 
@@ -488,6 +532,21 @@ struct ContentView: View {
         .background(AppTheme.workSurface)
     }
 
+    private var handbookColumn: some View {
+        HandbookContentView(
+            items: filteredHandbookItems,
+            selectedCategory: handbookCategory,
+            onCreate: createHandbookItem,
+            onUpdate: updateHandbookItem,
+            onDelete: deleteHandbookItem
+        )
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .background(AppTheme.workSurface)
+        .animation(AppMotion.list, value: filteredHandbookItems)
+        .animation(AppMotion.smooth, value: handbookCategory)
+    }
+
     private var filteredTodos: [TodoItem] {
         switch scope {
         case .dashboard:
@@ -500,6 +559,31 @@ struct ContentView: View {
             store.todos(matching: searchText).filter { $0.progress == .waiting }
         case .weekly:
             store.todos(matching: searchText).filter(\.isWeekly)
+        }
+    }
+
+    private var filteredHandbookItems: [HandbookItem] {
+        store.handbookItems(in: handbookCategory, matching: handbookSearchText)
+    }
+
+    private var contentTitle: String {
+        switch activeSection {
+        case .todos:
+            return dayTitle
+        case .handbook:
+            return handbookCategory?.title ?? "手记"
+        }
+    }
+
+    private var contentSubtitle: String {
+        switch activeSection {
+        case .todos:
+            return daySubtitle
+        case .handbook:
+            if let handbookCategory {
+                return "\(handbookCategory.subtitle)，用于沉淀可复用信息"
+            }
+            return "收集业务规则、调研、会议和灵感"
         }
     }
 
@@ -696,6 +780,26 @@ struct ContentView: View {
         }
     }
 
+    private func createHandbookItem(category: HandbookCategory, title: String, body: String) {
+        withAnimation(AppMotion.capture) {
+            store.addHandbookItem(category: category, title: title, body: body)
+            handbookCategory = category
+        }
+    }
+
+    private func updateHandbookItem(_ item: HandbookItem, category: HandbookCategory, title: String, body: String) {
+        withAnimation(AppMotion.smooth) {
+            store.update(item, category: category, title: title, body: body)
+            handbookCategory = category
+        }
+    }
+
+    private func deleteHandbookItem(_ item: HandbookItem) {
+        withAnimation(AppMotion.quick) {
+            store.delete(item)
+        }
+    }
+
     private func focusQuickCapture() {
         withAnimation(AppMotion.smooth) {
             isQuickCaptureExpanded = true
@@ -750,6 +854,27 @@ struct ContentView: View {
         let month = calendar.component(.month, from: date)
         let day = calendar.component(.day, from: date)
         return "\(month)/\(day)\(timeText)"
+    }
+}
+
+enum AppSection: String, CaseIterable, Identifiable {
+    case todos
+    case handbook
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .todos: "待办"
+        case .handbook: "手记"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .todos: "checklist"
+        case .handbook: "book.closed"
+        }
     }
 }
 
@@ -1519,10 +1644,99 @@ struct AppLogoImage: View {
     }
 }
 
-struct SidebarView: View {
+struct PrimarySidebarView: View {
+    @Binding var activeSection: AppSection
+    let onOpenSettings: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 10) {
+                ForEach(AppSection.allCases) { section in
+                    PrimarySidebarButton(
+                        section: section,
+                        isSelected: activeSection == section
+                    ) {
+                        withAnimation(AppMotion.modeSwitch) {
+                            activeSection = section
+                        }
+                    }
+                }
+            }
+            .padding(.top, 52)
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 10) {
+                AppLogoImage()
+                    .frame(width: 42, height: 42)
+
+                Text("蚁序")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+
+                Button(action: onOpenSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .semibold))
+                        .interactionHitArea()
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .help("应用设置")
+            }
+            .padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.sidebar)
+    }
+}
+
+struct PrimarySidebarButton: View {
+    let section: AppSection
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 18, weight: .bold))
+                Text(section.title)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+            .frame(width: 58, height: 56)
+            .background(buttonBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : Color.white.opacity(isHovered ? 0.38 : 0))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.tactilePlain)
+        .help(section.title)
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
+    }
+
+    private var buttonBackground: Color {
+        if isSelected {
+            return AppTheme.sidebarSelected
+        }
+        if isHovered {
+            return Color.white.opacity(0.44)
+        }
+        return Color.clear
+    }
+}
+
+struct TodoSidebarView: View {
     @EnvironmentObject private var store: TodoStore
     @Binding var scope: TodoScope
-    let onOpenSettings: () -> Void
     @State private var calendarMonth = Date()
 
     private let calendar = Calendar.current
@@ -1544,7 +1758,7 @@ struct SidebarView: View {
             Divider()
                 .overlay(AppTheme.hairline.opacity(0.7))
 
-            brandFooter
+            sidebarSummary
         }
         .background(AppTheme.sidebar)
         .foregroundStyle(AppTheme.ink)
@@ -1636,34 +1850,17 @@ struct SidebarView: View {
         )
     }
 
-    private var brandFooter: some View {
-        HStack(spacing: 10) {
-            AppLogoImage()
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("蚁序")
-                    .font(.system(size: 17, weight: .bold))
-                Text("个人推进秩序")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                Text(AppVersion.displayText)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-
-            Spacer(minLength: 0)
-
-            Button(action: onOpenSettings) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 12, weight: .semibold))
-                    .interactionHitArea()
-            }
-            .buttonStyle(.tactilePlain)
-            .foregroundStyle(AppTheme.mutedInk)
-            .help("应用设置")
+    private var sidebarSummary: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("待办")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+            Text("未完成 \(activeCount) · 逾期 \(overdueCount)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
         }
         .padding(.horizontal, 17)
-        .padding(.vertical, 12)
+        .padding(.vertical, 13)
     }
 
     private var activeCount: Int {
@@ -1796,6 +1993,159 @@ struct DateButton: View {
     }
 }
 
+struct HandbookSidebarView: View {
+    @EnvironmentObject private var store: TodoStore
+    @Binding var selectedCategory: HandbookCategory?
+    @Binding var searchText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    header
+                    SearchField(text: $searchText)
+                    categoryList
+                }
+                .padding(.horizontal, 17)
+                .padding(.top, 48)
+                .padding(.bottom, 14)
+            }
+            .scrollIndicators(.hidden)
+
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.7))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("手记")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                Text("共 \(store.handbookItems.count) 条沉淀")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+            .padding(.horizontal, 17)
+            .padding(.vertical, 13)
+        }
+        .background(AppTheme.sidebar)
+        .foregroundStyle(AppTheme.ink)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("手记")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+            Text("业务规则、调研、会议、灵感")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+        }
+    }
+
+    private var categoryList: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            SidebarSectionLabel("分类")
+
+            HandbookCategoryButton(
+                title: "全部手记",
+                subtitle: "完整知识池",
+                systemImage: "tray.full",
+                count: store.handbookItems.count,
+                isSelected: selectedCategory == nil
+            ) {
+                selectedCategory = nil
+            }
+
+            ForEach(HandbookCategory.allCases) { category in
+                HandbookCategoryButton(
+                    title: category.title,
+                    subtitle: category.subtitle,
+                    systemImage: category.icon,
+                    count: count(for: category),
+                    isSelected: selectedCategory == category
+                ) {
+                    selectedCategory = category
+                }
+            }
+        }
+    }
+
+    private func count(for category: HandbookCategory) -> Int {
+        store.handbookItems.filter { $0.category == category }.count
+    }
+}
+
+struct HandbookCategoryButton: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(isSelected ? AppTheme.accentWarm : Color.clear)
+                    .frame(width: 3, height: 30)
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(isSelected ? .white : AppTheme.accent)
+                        .frame(minWidth: 24, minHeight: 20)
+                        .background(isSelected ? AppTheme.accent : AppTheme.accent.opacity(0.11), in: Capsule())
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : Color.white.opacity(isHovered ? 0.36 : 0.0))
+            )
+        }
+        .buttonStyle(.tactilePlain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onHover { hovered in
+            isHovered = hovered
+        }
+        .animation(AppMotion.hover, value: isHovered)
+        .animation(AppMotion.smooth, value: isSelected)
+    }
+
+    private var navBackground: Color {
+        if isSelected {
+            return AppTheme.sidebarSelected
+        }
+        if isHovered {
+            return Color.white.opacity(0.46)
+        }
+        return Color.clear
+    }
+}
+
 struct SidebarSectionLabel: View {
     let title: String
 
@@ -1891,6 +2241,7 @@ struct TodoMiniCalendar: View {
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
     private let weekdayLabels = ["一", "二", "三", "四", "五", "六", "日"]
+    private let monthOptions = Array(1...12)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -1943,11 +2294,35 @@ struct TodoMiniCalendar: View {
                 shiftYear(-1)
             }
 
-            Text(yearTitle)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-                .monospacedDigit()
-                .frame(minWidth: 44)
+            Menu {
+                ForEach(yearOptions, id: \.self) { year in
+                    Button {
+                        setYear(year)
+                    } label: {
+                        HStack {
+                            Text("\(year) 年")
+                            if year == currentYear {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(yearTitle)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                        .monospacedDigit()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
+                .frame(minWidth: 62, minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .help("选择年份")
 
             calendarStepButton(systemImage: "chevron.right.2", help: "下一年") {
                 shiftYear(1)
@@ -1968,11 +2343,35 @@ struct TodoMiniCalendar: View {
                 shiftMonth(-1)
             }
 
-            Text(monthTitle)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.ink)
+            Menu {
+                ForEach(monthOptions, id: \.self) { month in
+                    Button {
+                        setMonth(month)
+                    } label: {
+                        HStack {
+                            Text(monthName(for: month))
+                            if month == currentMonth {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(monthTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
                 .monospacedDigit()
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .help("选择月份")
 
             calendarStepButton(systemImage: "chevron.right", help: "下个月") {
                 shiftMonth(1)
@@ -2007,6 +2406,19 @@ struct TodoMiniCalendar: View {
         visibleMonth.formatted(.dateTime.month(.wide))
     }
 
+    private var currentYear: Int {
+        calendar.component(.year, from: visibleMonth)
+    }
+
+    private var currentMonth: Int {
+        calendar.component(.month, from: visibleMonth)
+    }
+
+    private var yearOptions: [Int] {
+        let base = currentYear
+        return Array((base - 5)...(base + 5))
+    }
+
     private func shiftMonth(_ value: Int) {
         if let nextMonth = calendar.date(byAdding: .month, value: value, to: visibleMonth) {
             withAnimation(AppMotion.quick) {
@@ -2021,6 +2433,39 @@ struct TodoMiniCalendar: View {
                 visibleMonth = nextYear
             }
         }
+    }
+
+    private func setYear(_ year: Int) {
+        var components = calendar.dateComponents([.year, .month], from: visibleMonth)
+        components.year = year
+        components.day = 1
+        if let nextDate = calendar.date(from: components) {
+            withAnimation(AppMotion.quick) {
+                visibleMonth = nextDate
+            }
+        }
+    }
+
+    private func setMonth(_ month: Int) {
+        var components = calendar.dateComponents([.year, .month], from: visibleMonth)
+        components.month = month
+        components.day = 1
+        if let nextDate = calendar.date(from: components) {
+            withAnimation(AppMotion.quick) {
+                visibleMonth = nextDate
+            }
+        }
+    }
+
+    private func monthName(for month: Int) -> String {
+        var components = DateComponents()
+        components.year = currentYear
+        components.month = month
+        components.day = 1
+        guard let date = calendar.date(from: components) else {
+            return "\(month) 月"
+        }
+        return date.formatted(.dateTime.month(.wide))
     }
 
     private var calendarDays: [MiniCalendarDay] {
@@ -2956,6 +3401,430 @@ enum WorkSectionKind: String, Identifiable {
         case .waiting: Color(red: 0.48, green: 0.44, blue: 0.96)
         case .weekly: Color(red: 0.18, green: 0.70, blue: 0.52)
         }
+    }
+}
+
+struct HandbookContentView: View {
+    let items: [HandbookItem]
+    let selectedCategory: HandbookCategory?
+    let onCreate: (HandbookCategory, String, String) -> Void
+    let onUpdate: (HandbookItem, HandbookCategory, String, String) -> Void
+    let onDelete: (HandbookItem) -> Void
+
+    @State private var draftCategory: HandbookCategory = .businessRule
+    @State private var draftTitle = ""
+    @State private var draftBody = ""
+    @FocusState private var focusedField: HandbookFocusField?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HandbookCaptureBar(
+                category: $draftCategory,
+                title: $draftTitle,
+                content: $draftBody,
+                focusedField: $focusedField,
+                suggestedCategory: selectedCategory,
+                onCreate: submit
+            )
+
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if items.isEmpty {
+                        HandbookEmptyState(category: selectedCategory)
+                    } else {
+                        ForEach(items) { item in
+                            HandbookRow(
+                                item: item,
+                                onUpdate: onUpdate,
+                                onDelete: onDelete
+                            )
+                            .transition(AppMotion.rowTransition)
+                        }
+                    }
+                }
+                .padding(6)
+            }
+        }
+        .onChange(of: selectedCategory) { _, newValue in
+            if let newValue {
+                draftCategory = newValue
+            }
+        }
+    }
+
+    private func submit() {
+        let title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = draftBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty || !body.isEmpty else {
+            focusedField = .title
+            return
+        }
+        let category = selectedCategory ?? draftCategory
+        onCreate(category, title, body)
+        draftTitle = ""
+        draftBody = ""
+        draftCategory = category
+        focusedField = .title
+    }
+}
+
+enum HandbookFocusField: Hashable {
+    case title
+    case body
+}
+
+struct HandbookCaptureBar: View {
+    @Binding var category: HandbookCategory
+    @Binding var title: String
+    @Binding var content: String
+    var focusedField: FocusState<HandbookFocusField?>.Binding
+    let suggestedCategory: HandbookCategory?
+    let onCreate: () -> Void
+    @State private var isHovered = false
+
+    private var canCreate: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 30, height: 30)
+                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                Picker("分类", selection: $category) {
+                    ForEach(HandbookCategory.allCases) { option in
+                        Label(option.title, systemImage: option.icon).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 112)
+                .disabled(suggestedCategory != nil)
+                .help(suggestedCategory == nil ? "选择手记分类" : "当前由左侧分类决定")
+
+                TextField("收集标题：例如 供应商交付口径 / 用户访谈发现", text: $title)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .semibold))
+                    .focused(focusedField, equals: .title)
+                    .submitLabel(.next)
+                    .onSubmit {
+                        focusedField.wrappedValue = .body
+                    }
+
+                Button(action: onCreate) {
+                    Label("收集", systemImage: "tray.and.arrow.down")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 72, height: 30)
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(.white)
+                .background(canCreate ? AppTheme.accentWarm : Color.black.opacity(0.28), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(canCreate ? Color.white.opacity(0.42) : Color.black.opacity(0.05))
+                )
+                .interactionHitArea()
+                .disabled(!canCreate)
+            }
+
+            HandbookBodyEditor(
+                "正文：记录业务规则、调研结论、会议纪要或灵感片段",
+                text: $content,
+                minHeight: 58,
+                maxHeight: 130
+            )
+                .focused(focusedField, equals: .body)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppTheme.panel)
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(canCreate ? AppTheme.accentWarm : AppTheme.accent)
+                        .frame(width: 3)
+                        .opacity(canCreate ? 0.95 : 0.34)
+                        .padding(.vertical, 10)
+                }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(isHovered ? AppTheme.accent.opacity(0.24) : AppTheme.border.opacity(0.86))
+        )
+        .shadow(color: AppTheme.rowShadow, radius: isHovered ? 12 : 8, x: 0, y: isHovered ? 6 : 4)
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
+    }
+}
+
+struct HandbookRow: View {
+    let item: HandbookItem
+    let onUpdate: (HandbookItem, HandbookCategory, String, String) -> Void
+    let onDelete: (HandbookItem) -> Void
+
+    @State private var isEditing = false
+    @State private var isHovered = false
+    @State private var category: HandbookCategory
+    @State private var title: String
+    @State private var bodyText: String
+
+    init(
+        item: HandbookItem,
+        onUpdate: @escaping (HandbookItem, HandbookCategory, String, String) -> Void,
+        onDelete: @escaping (HandbookItem) -> Void
+    ) {
+        self.item = item
+        self.onUpdate = onUpdate
+        self.onDelete = onDelete
+        _category = State(initialValue: item.category)
+        _title = State(initialValue: item.title)
+        _bodyText = State(initialValue: item.body)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if isEditing {
+                editBody
+            } else {
+                readBody
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isHovered ? AppTheme.accent.opacity(0.20) : AppTheme.hairline.opacity(0.86))
+        )
+        .shadow(color: isHovered ? AppTheme.rowShadow.opacity(0.92) : AppTheme.rowShadow.opacity(0.44), radius: isHovered ? 9 : 4, x: 0, y: isHovered ? 4 : 2)
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
+        .onChange(of: item) { _, newValue in
+            if !isEditing {
+                category = newValue.category
+                title = newValue.title
+                bodyText = newValue.body
+            }
+        }
+    }
+
+    private var readBody: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HandbookCategoryTag(category: item.category)
+
+                Text(item.trimmedTitle.isEmpty ? item.category.title : item.trimmedTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(2)
+
+                Spacer()
+
+                Text(item.updatedAt.formatted(.dateTime.month().day().hour().minute()))
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.mutedInk)
+
+                Button {
+                    withAnimation(AppMotion.reveal) {
+                        isEditing = true
+                    }
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12, weight: .semibold))
+                        .interactionHitArea()
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .help("编辑手记")
+            }
+
+            if !item.trimmedBody.isEmpty {
+                Text(item.trimmedBody)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineSpacing(3)
+                    .lineLimit(8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var editBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Picker("分类", selection: $category) {
+                    ForEach(HandbookCategory.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 112)
+
+                InlineTextField("标题", text: $title, isEmphasized: true)
+
+                Button(action: submitEdit) {
+                    Label("提交", systemImage: "checkmark")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 70, height: 30)
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(.white)
+                .background(canSubmit ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                .disabled(!canSubmit)
+
+                Button(action: cancelEdit) {
+                    Image(systemName: "xmark")
+                        .interactionHitArea()
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+            }
+
+            HandbookBodyEditor("内容", text: $bodyText, minHeight: 88, maxHeight: 220)
+
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    onDelete(item)
+                } label: {
+                    Label("删除手记", systemImage: "trash")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(AppTheme.mutedInk)
+                .interactionHitArea()
+            }
+        }
+    }
+
+    private var canSubmit: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func submitEdit() {
+        guard canSubmit else { return }
+        onUpdate(item, category, title, bodyText)
+        withAnimation(AppMotion.quick) {
+            isEditing = false
+        }
+    }
+
+    private func cancelEdit() {
+        category = item.category
+        title = item.title
+        bodyText = item.body
+        withAnimation(AppMotion.quick) {
+            isEditing = false
+        }
+    }
+}
+
+struct HandbookCategoryTag: View {
+    let category: HandbookCategory
+
+    var body: some View {
+        Label(category.title, systemImage: category.icon)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(AppTheme.accent)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(AppTheme.accentSoft, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.accent.opacity(0.18))
+            )
+    }
+}
+
+struct HandbookBodyEditor: View {
+    let placeholder: String
+    @Binding var text: String
+    let minHeight: CGFloat
+    let maxHeight: CGFloat
+
+    init(_ placeholder: String, text: Binding<String>, minHeight: CGFloat, maxHeight: CGFloat) {
+        self.placeholder = placeholder
+        _text = text
+        self.minHeight = minHeight
+        self.maxHeight = maxHeight
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text)
+                .font(.system(size: 13, weight: .medium))
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .frame(minHeight: editorHeight, maxHeight: editorHeight)
+
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(placeholder)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 10)
+                    .allowsHitTesting(false)
+            }
+        }
+        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AppTheme.border)
+        )
+    }
+
+    private var editorHeight: CGFloat {
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else {
+            return minHeight
+        }
+
+        let estimatedLines = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { partialResult, line in
+                partialResult + max(1, (line.count + 58) / 59)
+            }
+        return min(maxHeight, max(minHeight, CGFloat(estimatedLines) * 20 + 28))
+    }
+}
+
+struct HandbookEmptyState: View {
+    let category: HandbookCategory?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: category?.icon ?? "book.closed")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 54, height: 54)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            Text(category == nil ? "还没有手记" : "还没有\(category?.title ?? "")")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+
+            Text("在上方输入标题和内容，沉淀可复用的信息。")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 62)
     }
 }
 

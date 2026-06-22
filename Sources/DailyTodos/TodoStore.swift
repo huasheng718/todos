@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class TodoStore: ObservableObject {
     @Published private(set) var todos: [TodoItem] = []
+    @Published private(set) var handbookItems: [HandbookItem] = []
     @Published private(set) var lastError: String?
 
     private let databaseURL: URL
@@ -39,6 +40,7 @@ final class TodoStore: ObservableObject {
             try migrateLegacyJSONIfNeeded()
 
             todos = try fetchTodos()
+            handbookItems = try fetchHandbookItems()
             if todos.isEmpty && shouldSeedIfEmpty {
                 try insertInitialTodo()
                 todos = try fetchTodos()
@@ -147,6 +149,64 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    func addHandbookItem(category: HandbookCategory, title: String, body: String) {
+        let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
+
+        let item = HandbookItem(
+            category: category,
+            title: cleanedTitle.isEmpty ? category.title : cleanedTitle,
+            body: cleanedBody
+        )
+
+        do {
+            try insert(item)
+            handbookItems.insert(item, at: handbookInsertionIndex(for: item))
+            lastError = nil
+        } catch {
+            lastError = "保存手记失败：\(error.localizedDescription)"
+        }
+    }
+
+    func update(_ item: HandbookItem, category: HandbookCategory, title: String, body: String) {
+        let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
+        guard let index = handbookItems.firstIndex(where: { $0.id == item.id }) else { return }
+
+        var updated = handbookItems[index]
+        updated.category = category
+        updated.title = cleanedTitle.isEmpty ? category.title : cleanedTitle
+        updated.body = cleanedBody
+        updated.updatedAt = Date()
+
+        do {
+            try update(updated)
+            handbookItems[index] = updated
+            handbookItems.sort(by: sortHandbookItems)
+            lastError = nil
+        } catch {
+            lastError = "保存手记失败：\(error.localizedDescription)"
+        }
+    }
+
+    func delete(_ item: HandbookItem) {
+        do {
+            try deleteHandbookItem(id: item.id)
+            handbookItems.removeAll { $0.id == item.id }
+            lastError = nil
+        } catch {
+            lastError = "删除手记失败：\(error.localizedDescription)"
+        }
+    }
+
+    func handbookItems(in category: HandbookCategory?, matching query: String = "") -> [HandbookItem] {
+        handbookItems.filter { item in
+            (category == nil || item.category == category) && matches(item, query: query)
+        }
+    }
+
     func todos(on date: Date, matching query: String = "") -> [TodoItem] {
         let day = calendar.startOfDay(for: date)
         return todos.filter { todo in
@@ -208,6 +268,19 @@ final class TodoStore: ObservableObject {
         try execute("CREATE INDEX IF NOT EXISTS idx_todos_date ON todos(date)")
         try execute("CREATE INDEX IF NOT EXISTS idx_todos_progress_date ON todos(progress, date)")
         try execute("CREATE INDEX IF NOT EXISTS idx_todos_done_priority ON todos(is_done, priority)")
+        try execute(
+            """
+            CREATE TABLE IF NOT EXISTS handbook_items (
+                id TEXT PRIMARY KEY NOT NULL,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        try execute("CREATE INDEX IF NOT EXISTS idx_handbook_category_updated ON handbook_items(category, updated_at)")
     }
 
     private func migrateLegacyJSONIfNeeded() throws {
@@ -250,6 +323,26 @@ final class TodoStore: ObservableObject {
         return result.sorted(by: sortTodos)
     }
 
+    private func fetchHandbookItems() throws -> [HandbookItem] {
+        let sql =
+            """
+            SELECT id, category, title, body, created_at, updated_at
+            FROM handbook_items
+            """
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw SQLiteStoreError.prepare(message: databaseErrorMessage)
+        }
+
+        var result: [HandbookItem] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(try handbookItem(from: statement))
+        }
+        return result.sorted(by: sortHandbookItems)
+    }
+
     private func insertInitialTodo() throws {
         try insert(TodoItem(title: "写下今天最重要的三件事", notes: "用这个应用记录每天的待办事项。", date: Date()))
     }
@@ -263,6 +356,21 @@ final class TodoStore: ObservableObject {
             """
         try withPreparedStatement(sql) { statement in
             bind(todo, to: statement)
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw SQLiteStoreError.execute(message: databaseErrorMessage)
+            }
+        }
+    }
+
+    private func insert(_ item: HandbookItem) throws {
+        let sql =
+            """
+            INSERT OR REPLACE INTO handbook_items
+            (id, category, title, body, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """
+        try withPreparedStatement(sql) { statement in
+            bind(item, to: statement)
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw SQLiteStoreError.execute(message: databaseErrorMessage)
             }
@@ -315,8 +423,37 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    private func update(_ item: HandbookItem) throws {
+        let sql =
+            """
+            UPDATE handbook_items
+            SET category = ?, title = ?, body = ?, updated_at = ?
+            WHERE id = ?
+            """
+        try withPreparedStatement(sql) { statement in
+            bindText(item.category.rawValue, to: statement, at: 1)
+            bindText(item.title, to: statement, at: 2)
+            bindText(item.body, to: statement, at: 3)
+            sqlite3_bind_double(statement, 4, item.updatedAt.timeIntervalSince1970)
+            bindText(item.id.uuidString, to: statement, at: 5)
+
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw SQLiteStoreError.execute(message: databaseErrorMessage)
+            }
+        }
+    }
+
     private func delete(id: UUID) throws {
         try withPreparedStatement("DELETE FROM todos WHERE id = ?") { statement in
+            bindText(id.uuidString, to: statement, at: 1)
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw SQLiteStoreError.execute(message: databaseErrorMessage)
+            }
+        }
+    }
+
+    private func deleteHandbookItem(id: UUID) throws {
+        try withPreparedStatement("DELETE FROM handbook_items WHERE id = ?") { statement in
             bindText(id.uuidString, to: statement, at: 1)
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw SQLiteStoreError.execute(message: databaseErrorMessage)
@@ -384,6 +521,15 @@ final class TodoStore: ObservableObject {
         sqlite3_bind_double(statement, 10, todo.updatedAt.timeIntervalSince1970)
     }
 
+    private func bind(_ item: HandbookItem, to statement: OpaquePointer?) {
+        bindText(item.id.uuidString, to: statement, at: 1)
+        bindText(item.category.rawValue, to: statement, at: 2)
+        bindText(item.title, to: statement, at: 3)
+        bindText(item.body, to: statement, at: 4)
+        sqlite3_bind_double(statement, 5, item.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(statement, 6, item.updatedAt.timeIntervalSince1970)
+    }
+
     private func bindText(_ value: String, to statement: OpaquePointer?, at index: Int32) {
         sqlite3_bind_text(statement, index, value, -1, SQLITE_TRANSIENT)
     }
@@ -422,6 +568,27 @@ final class TodoStore: ObservableObject {
         )
     }
 
+    private func handbookItem(from statement: OpaquePointer?) throws -> HandbookItem {
+        guard
+            let idText = sqlite3_column_text(statement, 0).map({ String(cString: $0) }),
+            let id = UUID(uuidString: idText),
+            let categoryText = sqlite3_column_text(statement, 1).map({ String(cString: $0) }),
+            let title = sqlite3_column_text(statement, 2).map({ String(cString: $0) }),
+            let body = sqlite3_column_text(statement, 3).map({ String(cString: $0) })
+        else {
+            throw SQLiteStoreError.decode
+        }
+
+        return HandbookItem(
+            id: id,
+            category: HandbookCategory(rawValue: categoryText) ?? .inspiration,
+            title: title,
+            body: body,
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 5))
+        )
+    }
+
     private var databaseErrorMessage: String {
         guard let message = sqlite3_errmsg(db) else {
             return "unknown SQLite error"
@@ -436,8 +603,20 @@ final class TodoStore: ObservableObject {
             || todo.notes.localizedCaseInsensitiveContains(cleanedQuery)
     }
 
+    private func matches(_ item: HandbookItem, query: String) -> Bool {
+        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedQuery.isEmpty else { return true }
+        return item.title.localizedCaseInsensitiveContains(cleanedQuery)
+            || item.body.localizedCaseInsensitiveContains(cleanedQuery)
+            || item.category.title.localizedCaseInsensitiveContains(cleanedQuery)
+    }
+
     private func insertionIndex(for item: TodoItem) -> Int {
         todos.firstIndex { sortTodos(item, $0) } ?? todos.endIndex
+    }
+
+    private func handbookInsertionIndex(for item: HandbookItem) -> Int {
+        handbookItems.firstIndex { sortHandbookItems(item, $0) } ?? handbookItems.endIndex
     }
 
     private func preserveTime(from source: Date, on targetDay: Date) -> Date {
@@ -468,6 +647,13 @@ final class TodoStore: ObservableObject {
             return lhs.priority.sortRank < rhs.priority.sortRank
         }
         return lhs.createdAt < rhs.createdAt
+    }
+
+    private func sortHandbookItems(_ lhs: HandbookItem, _ rhs: HandbookItem) -> Bool {
+        if lhs.updatedAt != rhs.updatedAt {
+            return lhs.updatedAt > rhs.updatedAt
+        }
+        return lhs.createdAt > rhs.createdAt
     }
 }
 
