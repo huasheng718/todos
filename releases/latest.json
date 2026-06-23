@@ -1,6 +1,6 @@
 {
-  "version": "1.1.15",
-  "build": 17,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.15/AntOrder-1.1.15.pkg",
-  "releaseNotes": "蚁序 1.1.15 更新：优化待办侧栏和手记列表性能，减少重复计算与动画抖动，新增轻量质量检查覆盖快记解析和 SQLite 存储行为。"
+  "version": "1.1.16",
+  "build": 18,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.16/AntOrder-1.1.16.pkg",
+  "releaseNotes": "蚁序 1.1.16 更新：优化发布流程稳定性，新增干净发布工作区入口和发布前置校验，避免脏改、落后分支或非发布文件混入版本提交。"
 }
