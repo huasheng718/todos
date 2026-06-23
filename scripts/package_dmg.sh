@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INFO_PLIST="$ROOT_DIR/Info.plist"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
+mkdir -p "$ROOT_DIR/build"
 DMG_PATH="$ROOT_DIR/build/蚁序-${VERSION}.dmg"
 WORK_DIR="$(mktemp -d "$ROOT_DIR/build/dmgwork-${VERSION}.XXXXXX")"
 APP_DIR="$WORK_DIR/蚁序.app"
