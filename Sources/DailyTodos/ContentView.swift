@@ -65,7 +65,7 @@ private struct TactilePlainButtonStyle: ButtonStyle {
             return AppTheme.accentSoft.opacity(0.82)
         }
         if isHovered {
-            return Color.white.opacity(0.68)
+            return AppTheme.adaptiveWhite(0.68)
         }
         return Color.clear
     }
@@ -133,9 +133,53 @@ private enum AppSkin: String, CaseIterable, Identifiable {
 }
 
 nonisolated(unsafe) private var activeAppSkin = AppSkin.stored
+nonisolated(unsafe) private var activeColorScheme: ColorScheme = .light
 
 private enum AppTheme {
+    static var isDark: Bool {
+        activeColorScheme == .dark
+    }
+
+    static func adaptiveWhite(_ opacity: Double) -> Color {
+        guard isDark else {
+            return Color.white.opacity(opacity)
+        }
+        let adjustedOpacity = min(0.92, max(0.08, opacity * 0.72))
+        return darkOverlayBase.opacity(adjustedOpacity)
+    }
+
+    static func adaptiveBlack(_ opacity: Double) -> Color {
+        guard isDark else {
+            return Color.black.opacity(opacity)
+        }
+        return Color.black.opacity(min(0.74, max(0.08, opacity + 0.16)))
+    }
+
     static var canvasGradient: [Color] {
+        if isDark {
+            switch AppSkin.current {
+            case .ocean:
+                return [
+                    Color(red: 0.050, green: 0.075, blue: 0.096),
+                    Color(red: 0.025, green: 0.110, blue: 0.120)
+                ]
+            case .aurora:
+                return [
+                    Color(red: 0.068, green: 0.054, blue: 0.098),
+                    Color(red: 0.098, green: 0.046, blue: 0.088)
+                ]
+            case .board:
+                return [
+                    Color(red: 0.070, green: 0.070, blue: 0.076),
+                    Color(red: 0.112, green: 0.096, blue: 0.090)
+                ]
+            case .leafcutter:
+                return [
+                    Color(red: 0.070, green: 0.078, blue: 0.052),
+                    Color(red: 0.126, green: 0.076, blue: 0.040)
+                ]
+            }
+        }
         switch AppSkin.current {
         case .ocean:
             return [
@@ -161,88 +205,170 @@ private enum AppTheme {
     }
 
     static var workSurface: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.972, green: 0.985, blue: 0.995)
-        case .aurora: Color(red: 0.987, green: 0.984, blue: 0.996)
-        case .board: Color(red: 0.984, green: 0.984, blue: 0.978)
-        case .leafcutter: Color(red: 0.982, green: 0.968, blue: 0.928)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.052, green: 0.070, blue: 0.088)
+            case .aurora: Color(red: 0.060, green: 0.052, blue: 0.082)
+            case .board: Color(red: 0.070, green: 0.070, blue: 0.076)
+            case .leafcutter: Color(red: 0.070, green: 0.064, blue: 0.044)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.972, green: 0.985, blue: 0.995)
+            case .aurora: Color(red: 0.987, green: 0.984, blue: 0.996)
+            case .board: Color(red: 0.984, green: 0.984, blue: 0.978)
+            case .leafcutter: Color(red: 0.982, green: 0.968, blue: 0.928)
+            }
         }
     }
 
     static var sidebar: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.918, green: 0.950, blue: 0.982)
-        case .aurora: Color(red: 0.952, green: 0.928, blue: 0.985)
-        case .board: Color(red: 0.935, green: 0.932, blue: 0.952)
-        case .leafcutter: Color(red: 0.938, green: 0.910, blue: 0.805)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.066, green: 0.088, blue: 0.110)
+            case .aurora: Color(red: 0.078, green: 0.064, blue: 0.108)
+            case .board: Color(red: 0.084, green: 0.082, blue: 0.092)
+            case .leafcutter: Color(red: 0.084, green: 0.074, blue: 0.048)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.918, green: 0.950, blue: 0.982)
+            case .aurora: Color(red: 0.952, green: 0.928, blue: 0.985)
+            case .board: Color(red: 0.935, green: 0.932, blue: 0.952)
+            case .leafcutter: Color(red: 0.938, green: 0.910, blue: 0.805)
+            }
         }
     }
 
     static var sidebarSelected: Color {
         switch AppSkin.current {
-        case .ocean: Color.white.opacity(0.74)
-        case .aurora: Color.white.opacity(0.72)
-        case .board: Color.white.opacity(0.68)
-        case .leafcutter: Color.white.opacity(0.64)
+        case .ocean: AppTheme.adaptiveWhite(0.74)
+        case .aurora: AppTheme.adaptiveWhite(0.72)
+        case .board: AppTheme.adaptiveWhite(0.68)
+        case .leafcutter: AppTheme.adaptiveWhite(0.64)
         }
     }
 
     static var ink: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.035, green: 0.060, blue: 0.095)
-        case .aurora: Color(red: 0.045, green: 0.042, blue: 0.070)
-        case .board: Color(red: 0.060, green: 0.058, blue: 0.062)
-        case .leafcutter: Color(red: 0.095, green: 0.060, blue: 0.035)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.910, green: 0.950, blue: 0.972)
+            case .aurora: Color(red: 0.942, green: 0.932, blue: 0.974)
+            case .board: Color(red: 0.932, green: 0.930, blue: 0.918)
+            case .leafcutter: Color(red: 0.958, green: 0.928, blue: 0.870)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.035, green: 0.060, blue: 0.095)
+            case .aurora: Color(red: 0.045, green: 0.042, blue: 0.070)
+            case .board: Color(red: 0.060, green: 0.058, blue: 0.062)
+            case .leafcutter: Color(red: 0.095, green: 0.060, blue: 0.035)
+            }
         }
     }
 
     static var mutedInk: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.245, green: 0.310, blue: 0.410)
-        case .aurora: Color(red: 0.315, green: 0.300, blue: 0.405)
-        case .board: Color(red: 0.245, green: 0.240, blue: 0.270)
-        case .leafcutter: Color(red: 0.315, green: 0.245, blue: 0.165)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.650, green: 0.728, blue: 0.790)
+            case .aurora: Color(red: 0.716, green: 0.680, blue: 0.800)
+            case .board: Color(red: 0.710, green: 0.704, blue: 0.690)
+            case .leafcutter: Color(red: 0.744, green: 0.676, blue: 0.560)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.245, green: 0.310, blue: 0.410)
+            case .aurora: Color(red: 0.315, green: 0.300, blue: 0.405)
+            case .board: Color(red: 0.245, green: 0.240, blue: 0.270)
+            case .leafcutter: Color(red: 0.315, green: 0.245, blue: 0.165)
+            }
         }
     }
 
     static var panel: Color {
-        switch AppSkin.current {
-        case .ocean, .aurora: Color.white.opacity(0.985)
-        case .board: Color.white.opacity(0.970)
-        case .leafcutter: Color(red: 1.0, green: 0.988, blue: 0.950).opacity(0.985)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.085, green: 0.112, blue: 0.136)
+            case .aurora: Color(red: 0.092, green: 0.078, blue: 0.126)
+            case .board: Color(red: 0.104, green: 0.104, blue: 0.112)
+            case .leafcutter: Color(red: 0.102, green: 0.088, blue: 0.060)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean, .aurora: AppTheme.adaptiveWhite(0.985)
+            case .board: AppTheme.adaptiveWhite(0.970)
+            case .leafcutter: Color(red: 1.0, green: 0.988, blue: 0.950).opacity(0.985)
+            }
         }
     }
 
     static var row: Color {
-        switch AppSkin.current {
-        case .ocean: Color.white
-        case .aurora: Color(red: 0.990, green: 0.982, blue: 1.0)
-        case .board: Color(red: 0.980, green: 0.988, blue: 0.998)
-        case .leafcutter: Color(red: 1.0, green: 0.986, blue: 0.942)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.102, green: 0.136, blue: 0.164)
+            case .aurora: Color(red: 0.110, green: 0.092, blue: 0.150)
+            case .board: Color(red: 0.124, green: 0.124, blue: 0.132)
+            case .leafcutter: Color(red: 0.120, green: 0.102, blue: 0.066)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color.white
+            case .aurora: Color(red: 0.990, green: 0.982, blue: 1.0)
+            case .board: Color(red: 0.980, green: 0.988, blue: 0.998)
+            case .leafcutter: Color(red: 1.0, green: 0.986, blue: 0.942)
+            }
         }
     }
 
     static func rowTint(priority: TodoPriority, isOverdue: Bool) -> Color {
-        if isOverdue {
-            return Color(red: 1.0, green: 0.945, blue: 0.955)
+        if isDark {
+            if isOverdue {
+                return Color(red: 0.235, green: 0.108, blue: 0.122).opacity(0.96)
+            }
+
+            switch priority {
+            case .high:
+                return Color(red: 0.218, green: 0.104, blue: 0.118).opacity(0.94)
+            case .medium:
+                switch AppSkin.current {
+                case .ocean: return Color(red: 0.080, green: 0.170, blue: 0.176).opacity(0.96)
+                case .aurora: return Color(red: 0.132, green: 0.096, blue: 0.230).opacity(0.96)
+                case .board: return Color(red: 0.168, green: 0.148, blue: 0.102).opacity(0.96)
+                case .leafcutter: return Color(red: 0.174, green: 0.112, blue: 0.062).opacity(0.96)
+                }
+            case .low:
+                return Color(red: 0.085, green: 0.158, blue: 0.112).opacity(0.94)
+            }
         }
 
         switch AppSkin.current {
         case .ocean:
+            if isOverdue {
+                return Color(red: 1.0, green: 0.945, blue: 0.955)
+            }
             return row
         case .aurora:
+            if isOverdue {
+                return Color(red: 1.0, green: 0.945, blue: 0.955)
+            }
             switch priority {
             case .high: return Color(red: 1.0, green: 0.925, blue: 0.965)
             case .medium: return Color(red: 0.940, green: 0.925, blue: 1.0)
             case .low: return Color(red: 0.920, green: 0.980, blue: 0.965)
             }
         case .board:
+            if isOverdue {
+                return Color(red: 1.0, green: 0.945, blue: 0.955)
+            }
             switch priority {
             case .high: return Color(red: 1.0, green: 0.910, blue: 0.900)
             case .medium: return Color(red: 0.900, green: 0.940, blue: 1.0)
             case .low: return Color(red: 0.890, green: 0.980, blue: 0.930)
             }
         case .leafcutter:
+            if isOverdue {
+                return Color(red: 1.0, green: 0.945, blue: 0.955)
+            }
             switch priority {
             case .high: return Color(red: 1.0, green: 0.930, blue: 0.880)
             case .medium: return Color(red: 0.965, green: 0.952, blue: 0.870)
@@ -252,87 +378,171 @@ private enum AppTheme {
     }
 
     static var border: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.705, green: 0.785, blue: 0.875)
-        case .aurora: Color(red: 0.760, green: 0.705, blue: 0.880)
-        case .board: Color(red: 0.745, green: 0.740, blue: 0.765)
-        case .leafcutter: Color(red: 0.720, green: 0.640, blue: 0.500)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.250, green: 0.344, blue: 0.418)
+            case .aurora: Color(red: 0.320, green: 0.260, blue: 0.450)
+            case .board: Color(red: 0.330, green: 0.326, blue: 0.340)
+            case .leafcutter: Color(red: 0.365, green: 0.288, blue: 0.176)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.705, green: 0.785, blue: 0.875)
+            case .aurora: Color(red: 0.760, green: 0.705, blue: 0.880)
+            case .board: Color(red: 0.745, green: 0.740, blue: 0.765)
+            case .leafcutter: Color(red: 0.720, green: 0.640, blue: 0.500)
+            }
         }
     }
 
     static var hairline: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.780, green: 0.845, blue: 0.920)
-        case .aurora: Color(red: 0.825, green: 0.770, blue: 0.925)
-        case .board: Color(red: 0.805, green: 0.800, blue: 0.820)
-        case .leafcutter: Color(red: 0.780, green: 0.700, blue: 0.560)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.180, green: 0.250, blue: 0.305)
+            case .aurora: Color(red: 0.250, green: 0.206, blue: 0.355)
+            case .board: Color(red: 0.250, green: 0.248, blue: 0.260)
+            case .leafcutter: Color(red: 0.286, green: 0.224, blue: 0.132)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.780, green: 0.845, blue: 0.920)
+            case .aurora: Color(red: 0.825, green: 0.770, blue: 0.925)
+            case .board: Color(red: 0.805, green: 0.800, blue: 0.820)
+            case .leafcutter: Color(red: 0.780, green: 0.700, blue: 0.560)
+            }
         }
     }
 
     static var accent: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.050, green: 0.520, blue: 0.490)
-        case .aurora: Color(red: 0.430, green: 0.300, blue: 0.850)
-        case .board: Color(red: 0.075, green: 0.070, blue: 0.080)
-        case .leafcutter: Color(red: 0.705, green: 0.210, blue: 0.090)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.220, green: 0.820, blue: 0.760)
+            case .aurora: Color(red: 0.680, green: 0.560, blue: 1.000)
+            case .board: Color(red: 0.860, green: 0.790, blue: 0.620)
+            case .leafcutter: Color(red: 0.980, green: 0.515, blue: 0.210)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.050, green: 0.520, blue: 0.490)
+            case .aurora: Color(red: 0.430, green: 0.300, blue: 0.850)
+            case .board: Color(red: 0.075, green: 0.070, blue: 0.080)
+            case .leafcutter: Color(red: 0.705, green: 0.210, blue: 0.090)
+            }
         }
     }
 
     static var accentCyan: Color {
-        switch AppSkin.current {
-        case .ocean: Color(red: 0.245, green: 0.790, blue: 0.925)
-        case .aurora: Color(red: 0.975, green: 0.390, blue: 0.740)
-        case .board: Color(red: 0.455, green: 0.330, blue: 0.930)
-        case .leafcutter: Color(red: 0.410, green: 0.720, blue: 0.230)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.360, green: 0.860, blue: 1.000)
+            case .aurora: Color(red: 1.000, green: 0.520, blue: 0.800)
+            case .board: Color(red: 0.620, green: 0.520, blue: 1.000)
+            case .leafcutter: Color(red: 0.540, green: 0.820, blue: 0.340)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.245, green: 0.790, blue: 0.925)
+            case .aurora: Color(red: 0.975, green: 0.390, blue: 0.740)
+            case .board: Color(red: 0.455, green: 0.330, blue: 0.930)
+            case .leafcutter: Color(red: 0.410, green: 0.720, blue: 0.230)
+            }
         }
     }
 
     static var accentSoft: Color {
         switch AppSkin.current {
-        case .ocean: accent.opacity(0.10)
-        case .aurora: accent.opacity(0.12)
-        case .board: accent.opacity(0.08)
-        case .leafcutter: accent.opacity(0.11)
+        case .ocean: accent.opacity(isDark ? 0.18 : 0.10)
+        case .aurora: accent.opacity(isDark ? 0.20 : 0.12)
+        case .board: accent.opacity(isDark ? 0.18 : 0.08)
+        case .leafcutter: accent.opacity(isDark ? 0.20 : 0.11)
         }
     }
 
     static var shellStroke: Color {
-        switch AppSkin.current {
-        case .ocean, .aurora: Color.white.opacity(0.95)
-        case .board: Color.white.opacity(0.82)
-        case .leafcutter: Color.white.opacity(0.86)
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.180, green: 0.260, blue: 0.320).opacity(0.92)
+            case .aurora: Color(red: 0.280, green: 0.220, blue: 0.420).opacity(0.90)
+            case .board: Color(red: 0.320, green: 0.310, blue: 0.300).opacity(0.88)
+            case .leafcutter: Color(red: 0.330, green: 0.250, blue: 0.140).opacity(0.88)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean, .aurora: AppTheme.adaptiveWhite(0.95)
+            case .board: AppTheme.adaptiveWhite(0.82)
+            case .leafcutter: AppTheme.adaptiveWhite(0.86)
+            }
         }
     }
 
     static var shadow: Color {
+        if isDark {
+            return Color.black.opacity(0.34)
+        }
+
         switch AppSkin.current {
-        case .ocean: Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.12)
-        case .aurora: Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.12)
-        case .board: Color.black.opacity(0.10)
-        case .leafcutter: Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.13)
+        case .ocean: return Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.12)
+        case .aurora: return Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.12)
+        case .board: return AppTheme.adaptiveBlack(0.10)
+        case .leafcutter: return Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.13)
         }
     }
 
     static var rowShadow: Color {
+        if isDark {
+            return Color.black.opacity(0.28)
+        }
+
         switch AppSkin.current {
-        case .ocean: Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.07)
-        case .aurora: Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.07)
-        case .board: Color.black.opacity(0.05)
-        case .leafcutter: Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.07)
+        case .ocean: return Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.07)
+        case .aurora: return Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.07)
+        case .board: return AppTheme.adaptiveBlack(0.05)
+        case .leafcutter: return Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.07)
         }
     }
 
     static var accentWarm: Color {
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 1.000, green: 0.540, blue: 0.210)
+            case .aurora: Color(red: 1.000, green: 0.470, blue: 0.670)
+            case .board: Color(red: 1.000, green: 0.630, blue: 0.360)
+            case .leafcutter: Color(red: 1.000, green: 0.605, blue: 0.245)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.918, green: 0.345, blue: 0.047)
+            case .aurora: Color(red: 0.905, green: 0.300, blue: 0.520)
+            case .board: Color(red: 0.790, green: 0.310, blue: 0.130)
+            case .leafcutter: Color(red: 0.920, green: 0.395, blue: 0.085)
+            }
+        }
+    }
+
+    static var success: Color {
+        isDark ? Color(red: 0.360, green: 0.820, blue: 0.560) : Color(red: 0.140, green: 0.580, blue: 0.340)
+    }
+
+    static var successSoft: Color {
+        isDark ? Color(red: 0.070, green: 0.190, blue: 0.120).opacity(0.96) : Color(red: 0.900, green: 0.970, blue: 0.910)
+    }
+
+    private static var darkOverlayBase: Color {
         switch AppSkin.current {
-        case .ocean: Color(red: 0.918, green: 0.345, blue: 0.047)
-        case .aurora: Color(red: 0.905, green: 0.300, blue: 0.520)
-        case .board: Color(red: 0.790, green: 0.310, blue: 0.130)
-        case .leafcutter: Color(red: 0.920, green: 0.395, blue: 0.085)
+        case .ocean:
+            Color(red: 0.160, green: 0.210, blue: 0.250)
+        case .aurora:
+            Color(red: 0.180, green: 0.145, blue: 0.250)
+        case .board:
+            Color(red: 0.210, green: 0.205, blue: 0.200)
+        case .leafcutter:
+            Color(red: 0.205, green: 0.155, blue: 0.090)
         }
     }
 }
 
 struct ContentView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var updateController: UpdateController
@@ -359,6 +569,7 @@ struct ContentView: View {
     @State private var isSecondarySidebarCollapsed = false
     @State private var isHandbookContentReady = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
+    @State private var themeRefreshCounter = 0
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
@@ -432,9 +643,15 @@ struct ContentView: View {
         .id(selectedSkinRawValue)
         .onAppear {
             activeAppSkin = AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
+            activeColorScheme = colorScheme
+            themeRefreshCounter += 1
         }
         .onChange(of: selectedSkinRawValue) { _, newValue in
             activeAppSkin = AppSkin(rawValue: newValue) ?? .ocean
+        }
+        .onChange(of: colorScheme) { _, newValue in
+            activeColorScheme = newValue
+            themeRefreshCounter += 1
         }
         .onChange(of: activeSection) { _, newValue in
             guard newValue == .handbook else {
@@ -1073,7 +1290,7 @@ struct AISettingsButton: View {
             }
             .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.mutedInk)
             .frame(width: 64, height: 30)
-            .background(isEnabled ? AppTheme.accentSoft : Color.white.opacity(0.58), in: Capsule())
+            .background(isEnabled ? AppTheme.accentSoft : AppTheme.adaptiveWhite(0.58), in: Capsule())
             .overlay(
                 Capsule()
                     .stroke(isEnabled ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
@@ -1165,7 +1382,7 @@ struct AppSettingsSheet: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(skin == selectedSkin ? AppTheme.accentSoft : Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .background(skin == selectedSkin ? AppTheme.accentSoft : AppTheme.adaptiveWhite(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .stroke(skin == selectedSkin ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
@@ -1217,7 +1434,7 @@ struct AppSettingsSheet: View {
                                 .background(AppTheme.accentWarm, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(Color.white.opacity(0.28))
+                                        .stroke(AppTheme.adaptiveWhite(0.28))
                                 )
                                 .help("下载当前发现的新版本")
                             }
@@ -1234,7 +1451,7 @@ struct AppSettingsSheet: View {
                             .background(updateController.isChecking ? AppTheme.accentSoft : AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : Color.white.opacity(0.26))
+                                    .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(0.26))
                             )
                             .disabled(updateController.isChecking)
                             .help("检查更新")
@@ -1270,7 +1487,7 @@ struct AppSettingsSheet: View {
         if let message = updateController.statusMessage, message.contains("失败") || message.contains("没有发布") || message.contains("无效") {
             return TodoPriority.medium.displayColor
         }
-        return Color(red: 0.18, green: 0.62, blue: 0.38)
+        return AppTheme.success
     }
 
     private var updateReminderNote: some View {
@@ -1288,7 +1505,7 @@ struct AppSettingsSheet: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.62), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.62), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.72))
@@ -1314,7 +1531,7 @@ struct AppSettingsSheet: View {
             content()
         }
         .padding(12)
-        .background(Color.white.opacity(0.76), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.76), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.border.opacity(0.78))
@@ -1414,10 +1631,10 @@ struct AISettingsSheet: View {
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .padding(.horizontal, 11)
                         .padding(.vertical, 9)
-                        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(aiSettings.hasAPIKey ? Color(red: 0.18, green: 0.62, blue: 0.38).opacity(0.36) : AppTheme.border)
+                                .stroke(aiSettings.hasAPIKey ? AppTheme.success.opacity(0.36) : AppTheme.border)
                         )
                 }
 
@@ -1489,14 +1706,14 @@ struct AISettingsSheet: View {
 
     private var statusBackground: Color {
         if aiSettings.connectionSucceeded {
-            return Color(red: 0.90, green: 0.97, blue: 0.91)
+            return AppTheme.successSoft
         }
-        return aiSettings.configuration.isEnabled ? AppTheme.accentSoft : Color.white.opacity(0.78)
+        return aiSettings.configuration.isEnabled ? AppTheme.accentSoft : AppTheme.adaptiveWhite(0.78)
     }
 
     private var statusStroke: Color {
         if aiSettings.connectionSucceeded {
-            return Color(red: 0.18, green: 0.62, blue: 0.38).opacity(0.30)
+            return AppTheme.success.opacity(0.36)
         }
         return aiSettings.configuration.isEnabled ? AppTheme.accent.opacity(0.24) : AppTheme.hairline
     }
@@ -1511,14 +1728,14 @@ struct AISettingsSheet: View {
             Spacer()
             Text("HTTPS")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Color(red: 0.14, green: 0.58, blue: 0.34))
+                .foregroundStyle(AppTheme.success)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Color(red: 0.14, green: 0.58, blue: 0.34).opacity(0.10), in: Capsule())
+                .background(AppTheme.success.opacity(AppTheme.isDark ? 0.18 : 0.10), in: Capsule())
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.90), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.90), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.hairline)
@@ -1552,7 +1769,7 @@ struct AISettingsSheet: View {
             }
             .buttonStyle(.tactilePlain)
             .foregroundStyle(.white)
-            .background(aiSettings.configuration.hasEndpoint && aiSettings.hasAPIKey ? AppTheme.accent : Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(aiSettings.configuration.hasEndpoint && aiSettings.hasAPIKey ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .interactionHitArea()
             .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint || !aiSettings.hasAPIKey)
 
@@ -1565,7 +1782,7 @@ struct AISettingsSheet: View {
                         .font(.system(size: 11, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(aiSettings.connectionSucceeded ? Color(red: 0.14, green: 0.58, blue: 0.34) : TodoPriority.high.displayColor)
+                .foregroundStyle(aiSettings.connectionSucceeded ? AppTheme.success : TodoPriority.high.displayColor)
             } else if aiSettings.isTestingConnection {
                 HStack(spacing: 6) {
                     ProgressView()
@@ -1615,7 +1832,7 @@ struct AISettingsTextField: View {
             .font(.system(size: 13, weight: .medium, design: .monospaced))
             .padding(.horizontal, 11)
             .padding(.vertical, 9)
-            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(AppTheme.border)
@@ -1660,7 +1877,7 @@ struct DeepSeekModelPicker: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .stroke(AppTheme.border)
@@ -1719,7 +1936,7 @@ struct AppLogoImage: View {
             }
         }
         .frame(width: 46, height: 46)
-        .shadow(color: Color.black.opacity(0.10), radius: 5, x: 0, y: 3)
+        .shadow(color: AppTheme.adaptiveBlack(0.10), radius: 5, x: 0, y: 3)
         .accessibilityHidden(true)
     }
 
@@ -1803,7 +2020,7 @@ struct UpdateDot: View {
             .frame(width: size, height: size)
             .overlay(
                 Circle()
-                    .stroke(Color.white.opacity(0.92), lineWidth: max(1, size * 0.18))
+                    .stroke(AppTheme.adaptiveWhite(0.92), lineWidth: max(1, size * 0.18))
             )
             .shadow(color: TodoPriority.high.displayColor.opacity(0.35), radius: 4, x: 0, y: 1)
             .accessibilityLabel("有可用更新")
@@ -1846,9 +2063,9 @@ struct SecondarySidebarCollapseButton: View {
             return AppTheme.panel.opacity(0.96)
         }
         if isHovered {
-            return Color.white.opacity(0.82)
+            return AppTheme.adaptiveWhite(0.82)
         }
-        return Color.white.opacity(0.58)
+        return AppTheme.adaptiveWhite(0.58)
     }
 }
 
@@ -1871,7 +2088,7 @@ struct PrimarySidebarButton: View {
             .background(buttonBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : Color.white.opacity(isHovered ? 0.38 : 0))
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : AppTheme.adaptiveWhite(isHovered ? 0.38 : 0))
             )
             .contentShape(Rectangle())
         }
@@ -1889,7 +2106,7 @@ struct PrimarySidebarButton: View {
             return AppTheme.sidebarSelected
         }
         if isHovered {
-            return Color.white.opacity(0.44)
+            return AppTheme.adaptiveWhite(0.44)
         }
         return Color.clear
     }
@@ -2116,7 +2333,7 @@ struct DateButton: View {
             .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : Color.white.opacity(isHovered ? 0.36 : 0.0))
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(isHovered ? 0.36 : 0.0))
             )
         }
         .buttonStyle(.tactilePlain)
@@ -2133,7 +2350,7 @@ struct DateButton: View {
             return AppTheme.sidebarSelected
         }
         if isHovered {
-            return Color.white.opacity(0.46)
+            return AppTheme.adaptiveWhite(0.46)
         }
         return Color.clear
     }
@@ -2258,7 +2475,7 @@ struct HandbookSidebarView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.34), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(AppTheme.adaptiveWhite(0.34), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else {
                 ForEach(metrics.folders, id: \.self) { folder in
                     HandbookCategoryButton(
@@ -2356,7 +2573,7 @@ struct HandbookCategoryButton: View {
             .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : Color.white.opacity(isHovered ? 0.36 : 0.0))
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(isHovered ? 0.36 : 0.0))
             )
         }
         .buttonStyle(.tactilePlain)
@@ -2373,7 +2590,7 @@ struct HandbookCategoryButton: View {
             return AppTheme.sidebarSelected
         }
         if isHovered {
-            return Color.white.opacity(0.46)
+            return AppTheme.adaptiveWhite(0.46)
         }
         return Color.clear
     }
@@ -2444,7 +2661,7 @@ struct QuickDateCell: View {
             .foregroundStyle(isSelected ? .white : AppTheme.ink)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
-            .background(isSelected ? AppTheme.accent : Color.white.opacity(0.74), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(isSelected ? AppTheme.accent : AppTheme.adaptiveWhite(0.74), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(isSelected ? AppTheme.accent.opacity(0.34) : AppTheme.hairline)
@@ -2513,7 +2730,7 @@ struct TodoMiniCalendar: View {
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.74), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(AppTheme.adaptiveWhite(0.74), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .stroke(AppTheme.hairline)
@@ -2563,7 +2780,7 @@ struct TodoMiniCalendar: View {
         }
         .padding(.horizontal, 3)
         .padding(.vertical, 2)
-        .background(Color.white.opacity(0.68), in: Capsule())
+        .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
         .overlay(
             Capsule()
                 .stroke(AppTheme.hairline.opacity(0.78))
@@ -2613,7 +2830,7 @@ struct TodoMiniCalendar: View {
         .foregroundStyle(AppTheme.mutedInk)
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
-        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.78))
@@ -2784,7 +3001,7 @@ struct MiniCalendarDayCell: View {
                     .frame(width: 4, height: 4)
                 if pendingCount > 0 && pendingCount != totalCount {
                     Circle()
-                        .fill(isSelected ? Color.white.opacity(0.72) : AppTheme.accentWarm.opacity(0.82))
+                        .fill(isSelected ? AppTheme.adaptiveWhite(0.72) : AppTheme.accentWarm.opacity(0.82))
                         .frame(width: 4, height: 4)
                 }
             }
@@ -2805,7 +3022,7 @@ struct MiniCalendarDayCell: View {
     private var background: Color {
         if isSelected { return AppTheme.accent }
         if isToday { return AppTheme.accentSoft.opacity(0.92) }
-        return Color.white.opacity(totalCount > 0 ? 0.60 : 0.0)
+        return AppTheme.adaptiveWhite(totalCount > 0 ? 0.60 : 0.0)
     }
 
     private var stroke: Color {
@@ -2843,7 +3060,7 @@ struct SearchField: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(isHovered ? 0.96 : 0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(AppTheme.adaptiveWhite(isHovered ? 0.96 : 0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(text.isEmpty ? AppTheme.hairline.opacity(0.75) : AppTheme.accent.opacity(0.22))
@@ -2883,7 +3100,7 @@ struct AllTodosViewModePicker: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(selection == mode ? Color.white.opacity(0.24) : Color.clear, lineWidth: 1)
+                            .stroke(selection == mode ? AppTheme.adaptiveWhite(0.24) : Color.clear, lineWidth: 1)
                     )
                     .contentShape(Rectangle())
                 }
@@ -2893,7 +3110,7 @@ struct AllTodosViewModePicker: View {
         }
         .padding(3)
         .frame(width: 318)
-        .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.82))
@@ -2914,12 +3131,12 @@ struct ListToolbar: View {
             if scope == .all {
                 Divider()
                     .frame(height: 24)
-                    .overlay(Color.black.opacity(0.10))
+                    .overlay(AppTheme.adaptiveBlack(0.10))
                 AllTodosViewModePicker(selection: $allTodosViewMode)
             }
         }
         .padding(5)
-        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.72), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(0.85))
@@ -3324,7 +3541,7 @@ struct TodoMatrixQuadrant: View {
                         .foregroundStyle(AppTheme.mutedInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 24)
-                        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(AppTheme.adaptiveWhite(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 } else {
                     ForEach(group.todos) { todo in
                         TodoFlowRow(
@@ -3385,7 +3602,7 @@ struct TodoBoardColumn: View {
                         .foregroundStyle(AppTheme.mutedInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 28)
-                        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(AppTheme.adaptiveWhite(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
                     ForEach(todos) { todo in
                         TodoBoardCard(
@@ -3466,7 +3683,7 @@ struct TodoBoardCard: View {
                     Button(action: onToggle) {
                         ZStack {
                             Circle()
-                                .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : Color.white.opacity(0.72))
+                                .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : AppTheme.adaptiveWhite(0.72))
                                 .overlay(
                                     Circle()
                                         .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.38) : AppTheme.hairline, lineWidth: 1)
@@ -4079,7 +4296,7 @@ struct HandbookFilterChip: View {
         }
         .buttonStyle(.tactilePlain)
         .foregroundStyle(isActive ? AppTheme.accent : AppTheme.mutedInk)
-        .background(isActive ? AppTheme.accentSoft.opacity(0.92) : Color.white.opacity(0.48), in: Capsule())
+        .background(isActive ? AppTheme.accentSoft.opacity(0.92) : AppTheme.adaptiveWhite(0.48), in: Capsule())
         .overlay(
             Capsule()
                 .stroke(isActive ? AppTheme.accent.opacity(0.22) : AppTheme.hairline.opacity(0.56))
@@ -4172,10 +4389,10 @@ struct HandbookCaptureBar: View {
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(canCreate ? AppTheme.accentWarm : Color.black.opacity(0.28), in: Capsule())
+                .background(canCreate ? AppTheme.accentWarm : AppTheme.adaptiveBlack(0.28), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(canCreate ? Color.white.opacity(0.42) : Color.black.opacity(0.05))
+                        .stroke(canCreate ? AppTheme.adaptiveWhite(0.42) : AppTheme.adaptiveBlack(0.05))
                 )
                 .interactionHitArea()
                 .disabled(!canCreate)
@@ -4419,7 +4636,7 @@ struct HandbookFolderTag: View {
             .lineLimit(1)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(Color.white.opacity(0.68), in: Capsule())
+            .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
             .overlay(
                 Capsule()
                     .stroke(AppTheme.border.opacity(0.82))
@@ -4765,10 +4982,10 @@ struct HandbookCanvasToolbar: View {
             }
             .buttonStyle(.tactilePlain)
             .foregroundStyle(.white)
-            .background(isDirty ? accentColor : Color.black.opacity(0.28), in: Capsule())
+            .background(isDirty ? accentColor : AppTheme.adaptiveBlack(0.28), in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isDirty ? Color.white.opacity(0.34) : Color.black.opacity(0.05))
+                    .stroke(isDirty ? AppTheme.adaptiveWhite(0.34) : AppTheme.adaptiveBlack(0.05))
             )
             .disabled(!isDirty)
             .interactionHitArea()
@@ -4953,7 +5170,7 @@ struct HandbookFolderInlineTag: View {
             .foregroundStyle(trimmedFolder.isEmpty ? AppTheme.mutedInk : AppTheme.ink.opacity(0.84))
             .padding(.horizontal, 9)
             .frame(height: 25)
-            .background(Color.white.opacity(0.70), in: Capsule())
+            .background(AppTheme.adaptiveWhite(0.70), in: Capsule())
             .overlay(
                 Capsule()
                     .stroke(AppTheme.border.opacity(trimmedFolder.isEmpty ? 0.62 : 0.90))
@@ -4973,7 +5190,7 @@ struct HandbookFolderInlineTag: View {
                     .font(.system(size: 13, weight: .semibold))
                     .padding(.horizontal, 10)
                     .frame(height: 34)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(AppTheme.border)
@@ -5095,7 +5312,7 @@ struct HandbookOutlineStrip: View {
                     }
                     .padding(.horizontal, 8)
                     .frame(height: 26)
-                    .background(Color.white.opacity(0.62), in: Capsule())
+                    .background(AppTheme.adaptiveWhite(0.62), in: Capsule())
                     .overlay(
                         Capsule()
                             .stroke(AppTheme.hairline.opacity(0.52))
@@ -5143,7 +5360,7 @@ struct HandbookBodyEditor: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border)
@@ -5181,7 +5398,7 @@ struct HandbookFolderEditor: View {
         }
         .padding(.horizontal, 9)
         .frame(height: 31)
-        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border)
@@ -5239,7 +5456,7 @@ struct MarkdownHandbookEditor: View {
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
-            .background(Color.white.opacity(0.72))
+            .background(AppTheme.adaptiveWhite(0.72))
 
             Divider()
                 .overlay(AppTheme.hairline.opacity(0.62))
@@ -5272,7 +5489,7 @@ struct MarkdownHandbookEditor: View {
                 .transition(AppMotion.inlineTransition)
             }
         }
-        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .stroke(AppTheme.border)
@@ -5425,7 +5642,7 @@ struct HandbookAttachmentStrip: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.56), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(AppTheme.adaptiveWhite(0.56), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 7)], alignment: .leading, spacing: 7) {
@@ -5519,7 +5736,7 @@ struct HandbookAttachmentChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
-        .background(Color.white.opacity(isHovered ? 0.92 : 0.74), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(isHovered ? 0.92 : 0.74), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border.opacity(isHovered ? 0.96 : 0.66))
@@ -5809,7 +6026,7 @@ struct AITraceDisclosure: View {
                     AITraceLine(label: "返回", value: trace.responsePreview.isEmpty ? "空返回" : trace.responsePreview)
                 }
                 .padding(9)
-                .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(AppTheme.adaptiveWhite(0.86), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(AppTheme.hairline)
@@ -6011,10 +6228,10 @@ struct QuickCaptureBar: View {
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(canCreate && !isCreating ? AppTheme.accentWarm : Color.black.opacity(0.28), in: Capsule())
+                .background(canCreate && !isCreating ? AppTheme.accentWarm : AppTheme.adaptiveBlack(0.28), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(canCreate && !isCreating ? Color.white.opacity(0.52) : Color.black.opacity(0.05))
+                        .stroke(canCreate && !isCreating ? AppTheme.adaptiveWhite(0.52) : AppTheme.adaptiveBlack(0.05))
                 )
                 .shadow(color: canCreate && !isCreating ? AppTheme.accentWarm.opacity(0.20) : .clear, radius: 10, x: 0, y: 6)
                 .interactionHitArea()
@@ -6379,10 +6596,10 @@ struct EditableTodoRow: View {
                         }
                         .buttonStyle(.tactilePlain)
                         .foregroundStyle(.white)
-                        .background(canSubmit ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                        .background(canSubmit ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: Capsule())
                         .overlay(
                             Capsule()
-                                .stroke(canSubmit ? Color.white.opacity(0.34) : Color.black.opacity(0.05))
+                                .stroke(canSubmit ? AppTheme.adaptiveWhite(0.34) : AppTheme.adaptiveBlack(0.05))
                         )
                         .interactionHitArea()
                         .disabled(!canSubmit)
@@ -6570,7 +6787,7 @@ struct TodoFlowRow: View {
                 Button(action: onToggle) {
                     ZStack {
                         Circle()
-                            .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : Color.white.opacity(isHovered ? 0.96 : 0.70))
+                            .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : AppTheme.adaptiveWhite(isHovered ? 0.96 : 0.70))
                             .overlay(
                                 Circle()
                                     .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.32) : AppTheme.hairline, lineWidth: 1)
@@ -6854,10 +7071,10 @@ struct TodoBoardEditCard: View {
                 }
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(.white)
-                .background(canSubmit ? AppTheme.accent : Color.black.opacity(0.28), in: Capsule())
+                .background(canSubmit ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(canSubmit ? Color.white.opacity(0.34) : Color.black.opacity(0.05))
+                        .stroke(canSubmit ? AppTheme.adaptiveWhite(0.34) : AppTheme.adaptiveBlack(0.05))
                 )
                 .interactionHitArea()
                 .disabled(!canSubmit)
@@ -7002,7 +7219,7 @@ struct InlineTextField: View {
             .font(.system(size: 14, weight: isEmphasized ? .semibold : .regular))
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(AppTheme.border)
@@ -7032,7 +7249,7 @@ struct CompactNotesField: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(height: 30)
-        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border)
@@ -7166,6 +7383,15 @@ private extension TodoProgress {
     }
 
     var displayColor: Color {
+        if AppTheme.isDark {
+            switch self {
+            case .pending: return Color(red: 0.660, green: 0.730, blue: 0.800)
+            case .inProgress: return AppTheme.accent
+            case .waiting: return Color(red: 0.760, green: 0.660, blue: 1.000)
+            case .done: return AppTheme.success
+            }
+        }
+
         switch AppSkin.current {
         case .ocean:
             switch self {
@@ -7201,6 +7427,14 @@ private extension TodoProgress {
 
 private extension TodoPriority {
     var displayColor: Color {
+        if AppTheme.isDark {
+            switch self {
+            case .low: return Color(red: 0.420, green: 0.840, blue: 0.590)
+            case .medium: return AppTheme.accent
+            case .high: return Color(red: 1.000, green: 0.390, blue: 0.430)
+            }
+        }
+
         switch AppSkin.current {
         case .ocean:
             switch self {
@@ -7298,7 +7532,7 @@ struct NotesReadOnlyRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(AppTheme.border)
@@ -7440,7 +7674,7 @@ struct InlineNotesEditor: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border)
