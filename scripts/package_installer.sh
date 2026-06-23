@@ -27,9 +27,11 @@ rm -f "$PKG_PATH" "$ASCII_PKG_PATH"
 mkdir -p "$PKG_ROOT/Applications" "$PKG_SCRIPTS"
 
 export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
 ditto --norsrc --noextattr "$APP_DIR" "$PKG_ROOT/Applications/蚁序.app"
-find "$PKG_ROOT" -name '._*' -delete
-xattr -d -r com.apple.provenance "$PKG_ROOT" 2>/dev/null || true
+find "$PKG_ROOT" "$PKG_SCRIPTS" -name '._*' -delete
+xattr -cr "$APP_DIR" "$PKG_ROOT" "$PKG_SCRIPTS" 2>/dev/null || true
+xattr -d -r com.apple.provenance "$APP_DIR" "$PKG_ROOT" "$PKG_SCRIPTS" 2>/dev/null || true
 
 cat > "$PKG_SCRIPTS/postinstall" <<'SCRIPT'
 #!/bin/sh
@@ -47,10 +49,14 @@ fi
 exit 0
 SCRIPT
 chmod 755 "$PKG_SCRIPTS/postinstall"
+find "$PKG_ROOT" "$PKG_SCRIPTS" -name '._*' -delete
+xattr -cr "$PKG_ROOT" "$PKG_SCRIPTS" 2>/dev/null || true
 
 pkgbuild \
   --root "$PKG_ROOT" \
   --scripts "$PKG_SCRIPTS" \
+  --filter '\.DS_Store$' \
+  --filter '/\._' \
   --install-location "/" \
   --identifier "${BUNDLE_ID}.pkg" \
   --version "$VERSION" \

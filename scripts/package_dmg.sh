@@ -23,9 +23,11 @@ rm -f "$DMG_PATH"
 mkdir -p "$DMG_DIR"
 
 export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
 ditto --norsrc --noextattr "$APP_DIR" "$DMG_DIR/蚁序.app"
 ln -s /Applications "$DMG_DIR/Applications"
 find "$DMG_DIR" -name '._*' -delete
+xattr -cr "$APP_DIR" "$DMG_DIR" 2>/dev/null || true
 xattr -d -r com.apple.provenance "$DMG_DIR" 2>/dev/null || true
 
 hdiutil create \

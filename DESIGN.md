@@ -380,11 +380,14 @@ Logo 规则：
 
 规则：
 
-- 微交互时长 120-300ms。
-- hover、pressed、展开/收起、视图切换、编辑进入必须有反馈。
-- 使用 opacity、scale、transform、spring，避免导致布局抖动。
+- 微交互时长 120-180ms，避免慢弹簧造成拖沓感。
+- hover、pressed、展开/收起、视图切换、编辑进入必须有反馈，但反馈应克制。
+- 页面切换、列表切换、加载中、AI 结果出现统一使用原地 opacity，不使用左右/上下飞入。
+- 只有按钮 pressed 可以使用很轻的 scale；列表行、页面、卡片不使用 scale。
+- 不使用 spring 作为默认动效，除非是非常明确的物理拖拽或拖放场景。
 - 动效必须可中断，不能阻塞操作。
-- 列表状态变化可以轻微 fade/slide，不要大幅移动。
+- 列表状态变化只做 fade，不要移动整行或整组内容。
+- 加载反馈必须占位稳定，不因 ProgressView、提示文案出现导致主体内容跳动。
 
 ## 可点击区域
 
@@ -465,7 +468,7 @@ Logo 规则：
 SwiftUI 中优先使用这些模式：
 
 - 共享语义 token：`AppTheme.ink`、`mutedInk`、`accent`、`accentWarm`、`border`、`hairline`。
-- 共享动效 token：`AppMotion.quick`、`hover`、`smooth`、`reveal`。
+- 共享动效 token：`AppMotion.quick`、`hover`、`smooth`、`reveal`、`inlineTransition`。
 - 共享点击热区：`interactionHitArea()`。
 - `Button` label 内设置完整 frame 和 `contentShape`。
 - 列表行使用稳定高度和条件备注区域。

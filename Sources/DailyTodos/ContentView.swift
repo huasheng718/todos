@@ -10,35 +10,30 @@ private let todoActionColumnWidth: CGFloat = 128
 private let compactHitTargetSize: CGFloat = 38
 private let primarySidebarWidth: CGFloat = 76
 private let secondarySidebarWidth: CGFloat = 250
-private let collapsedSecondarySidebarWidth: CGFloat = 32
+private let collapsedSecondarySidebarWidth: CGFloat = 0
 
 private enum AppMotion {
     static let press = Animation.easeOut(duration: 0.12)
-    static let quick = Animation.easeInOut(duration: 0.16)
-    static let hover = Animation.easeOut(duration: 0.14)
-    static let smooth = Animation.spring(response: 0.30, dampingFraction: 0.86, blendDuration: 0.08)
-    static let reveal = Animation.spring(response: 0.26, dampingFraction: 0.84, blendDuration: 0.05)
-    static let list = Animation.spring(response: 0.34, dampingFraction: 0.88, blendDuration: 0.08)
-    static let capture = Animation.spring(response: 0.24, dampingFraction: 0.80, blendDuration: 0.04)
-    static let status = Animation.spring(response: 0.22, dampingFraction: 0.76, blendDuration: 0.04)
-    static let complete = Animation.spring(response: 0.20, dampingFraction: 0.68, blendDuration: 0.04)
-    static let modeSwitch = Animation.spring(response: 0.38, dampingFraction: 0.88, blendDuration: 0.08)
+    static let quick = Animation.easeInOut(duration: 0.14)
+    static let hover = Animation.easeOut(duration: 0.12)
+    static let smooth = Animation.easeInOut(duration: 0.18)
+    static let reveal = Animation.easeInOut(duration: 0.16)
+    static let list = Animation.easeInOut(duration: 0.16)
+    static let capture = Animation.easeInOut(duration: 0.14)
+    static let status = Animation.easeInOut(duration: 0.16)
+    static let complete = Animation.easeInOut(duration: 0.16)
+    static let modeSwitch = Animation.easeInOut(duration: 0.18)
 
     static var rowTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity
-                .combined(with: .move(edge: .top))
-                .combined(with: .scale(scale: 0.985, anchor: .top)),
-            removal: .opacity
-                .combined(with: .scale(scale: 0.982, anchor: .center))
-        )
+        .opacity
     }
 
     static var viewTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .trailing)),
-            removal: .opacity.combined(with: .move(edge: .leading))
-        )
+        .opacity
+    }
+
+    static var inlineTransition: AnyTransition {
+        .opacity
     }
 }
 
@@ -368,47 +363,50 @@ struct ContentView: View {
     private let calendar = Calendar.current
 
     var body: some View {
-        HStack(spacing: 0) {
+        ZStack(alignment: .leading) {
             PrimarySidebarView(
                 activeSection: $activeSection,
                 hasUpdate: updateController.hasAvailableUpdate,
                 onOpenSettings: { isAppSettingsPresented = true }
             )
-                .frame(
-                    minWidth: primarySidebarWidth,
-                    idealWidth: primarySidebarWidth,
-                    maxWidth: primarySidebarWidth,
-                    maxHeight: .infinity
-                )
+            .frame(width: primarySidebarWidth)
+            .frame(maxHeight: .infinity)
+            .zIndex(2)
 
-            secondarySidebarContainer
-                .frame(
-                    minWidth: currentSecondarySidebarWidth,
-                    idealWidth: currentSecondarySidebarWidth,
-                    maxWidth: currentSecondarySidebarWidth,
-                    maxHeight: .infinity
-                )
+            HStack(spacing: 0) {
+                secondarySidebarContainer
+                    .frame(
+                        minWidth: currentSecondarySidebarWidth,
+                        idealWidth: currentSecondarySidebarWidth,
+                        maxWidth: currentSecondarySidebarWidth,
+                        maxHeight: .infinity
+                    )
 
-            VStack(spacing: 0) {
-                AppTopBar(
-                    title: contentTitle,
-                    subtitle: contentSubtitle,
-                    isAIEnabled: aiSettings.canUseAI,
-                    onOpenAISettings: { isAISettingsPresented = true }
-                )
-                .frame(height: 48)
+                VStack(spacing: 0) {
+                    AppTopBar(
+                        title: contentTitle,
+                        subtitle: contentSubtitle,
+                        isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+                        isAIEnabled: aiSettings.canUseAI,
+                        onOpenAISettings: { isAISettingsPresented = true }
+                    )
+                    .frame(height: 48)
 
-                Divider()
-                    .overlay(AppTheme.hairline)
+                    Divider()
+                        .overlay(AppTheme.hairline)
 
-                contentColumn
-                    .frame(minWidth: 700, maxWidth: .infinity, maxHeight: .infinity)
+                    contentColumn
+                        .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background {
+                    AppTheme.workSurface
+                        .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                AppTheme.workSurface
-                    .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
-            }
+            .padding(.leading, primarySidebarWidth)
+            .layoutPriority(1)
         }
         .background(AppTheme.sidebar.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
@@ -420,11 +418,13 @@ struct ContentView: View {
                 .ignoresSafeArea(.container, edges: .vertical)
         }
         .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(AppTheme.hairline)
-                .frame(width: 1)
-                .offset(x: primarySidebarWidth + currentSecondarySidebarWidth)
-                .ignoresSafeArea(.container, edges: .vertical)
+            if !isSecondarySidebarCollapsed {
+                Rectangle()
+                    .fill(AppTheme.hairline)
+                    .frame(width: 1)
+                    .offset(x: primarySidebarWidth + currentSecondarySidebarWidth)
+                    .ignoresSafeArea(.container, edges: .vertical)
+            }
         }
         .foregroundStyle(AppTheme.ink)
         .font(.system(size: 13, weight: .regular, design: .default))
@@ -469,21 +469,12 @@ struct ContentView: View {
     }
 
     private var secondarySidebarContainer: some View {
-        ZStack(alignment: .topTrailing) {
-            if !isSecondarySidebarCollapsed {
-                secondarySidebar
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
-            } else {
-                AppTheme.sidebar
-            }
-
-            SecondarySidebarCollapseButton(isCollapsed: $isSecondarySidebarCollapsed)
-                .padding(.top, 50)
-                .padding(.trailing, isSecondarySidebarCollapsed ? 3 : -12)
-        }
-        .background(AppTheme.sidebar)
-        .clipped()
-        .animation(AppMotion.modeSwitch, value: isSecondarySidebarCollapsed)
+        secondarySidebar
+            .opacity(isSecondarySidebarCollapsed ? 0 : 1)
+            .allowsHitTesting(!isSecondarySidebarCollapsed)
+            .background(AppTheme.sidebar)
+            .clipped()
+            .animation(AppMotion.modeSwitch, value: isSecondarySidebarCollapsed)
     }
 
     private var currentSecondarySidebarWidth: CGFloat {
@@ -1024,6 +1015,7 @@ struct SkinPickerButton: View {
 struct AppTopBar: View {
     let title: String
     let subtitle: String
+    @Binding var isSecondarySidebarCollapsed: Bool
     let isAIEnabled: Bool
     let onOpenAISettings: () -> Void
 
@@ -1044,6 +1036,7 @@ struct AppTopBar: View {
             Spacer(minLength: 24)
 
             HStack(spacing: 8) {
+                SecondarySidebarCollapseButton(isCollapsed: $isSecondarySidebarCollapsed)
                 AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
             }
             .padding(.trailing, 16)
@@ -1789,7 +1782,8 @@ struct PrimarySidebarView: View {
             }
             .padding(.bottom, 14)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: primarySidebarWidth)
+        .frame(maxHeight: .infinity)
         .background(AppTheme.sidebar)
     }
 }
@@ -1821,17 +1815,18 @@ struct SecondarySidebarCollapseButton: View {
             }
         } label: {
             Image(systemName: isCollapsed ? "sidebar.leading" : "sidebar.left")
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(isCollapsed ? AppTheme.accent : AppTheme.mutedInk)
-                .frame(width: 26, height: 32)
-                .background(buttonBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 34, height: 30)
+                .background(buttonBackground, in: Capsule())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    Capsule()
                         .stroke(AppTheme.hairline.opacity(isHovered || isCollapsed ? 0.92 : 0.56))
                 )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
+        .interactionHitArea()
         .help(isCollapsed ? "展开辅导航" : "收起辅导航")
         .onHover { hovered in
             withAnimation(AppMotion.hover) {
@@ -3413,7 +3408,7 @@ struct TodoBoardCard: View {
                 onDelete: onDelete,
                 onExitEditing: { isEditing = false }
             )
-            .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
+            .transition(AppMotion.inlineTransition)
         } else {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .center, spacing: 8) {
@@ -3526,7 +3521,7 @@ struct TodoBoardCard: View {
                     isHovered = hovered
                 }
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
+            .transition(AppMotion.inlineTransition)
         }
     }
 
@@ -3633,7 +3628,6 @@ struct HandbookContentView: View {
     @State private var draftTitle = ""
     @State private var draftBody = ""
     @State private var selectedItemID: UUID?
-    @State private var isDetailEditing = false
     @State private var shouldSelectLatestAfterCreate = false
     @State private var activeFilter: HandbookListFilter = .all
     @FocusState private var focusedField: HandbookFocusField?
@@ -3649,34 +3643,36 @@ struct HandbookContentView: View {
                 onCreate: submit
             )
 
-            HandbookWorkbenchHeader(
-                selectedCategory: selectedCategory,
-                selectedFolder: selectedFolder,
-                totalCount: items.count,
-                visibleCount: visibleItems.count,
-                activeFilter: $activeFilter
-            )
-
             if items.isEmpty {
-                HandbookEmptyState(category: selectedCategory)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                HStack(alignment: .top, spacing: 10) {
+                    handbookListCard
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                    HandbookEmptyState(category: selectedCategory)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .transition(AppMotion.viewTransition)
             } else if visibleItems.isEmpty {
-                HandbookFilteredEmptyState(filter: activeFilter)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                HStack(alignment: .top, spacing: 10) {
+                    handbookListCard
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                    HandbookFilteredEmptyState(filter: activeFilter)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .transition(AppMotion.viewTransition)
             } else {
                 HStack(alignment: .top, spacing: 10) {
-                    handbookList
-                        .frame(minWidth: 330, idealWidth: 390, maxWidth: 430)
+                    handbookListCard
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
 
                     HandbookDetailPanel(
                         item: selectedItem,
-                        isEditing: $isDetailEditing,
                         onUpdate: onUpdate,
                         onDelete: { item in
                             onDelete(item)
                             if selectedItemID == item.id {
                                 selectedItemID = nil
-                                isDetailEditing = false
                             }
                         }
                     )
@@ -3685,7 +3681,6 @@ struct HandbookContentView: View {
                 .transition(AppMotion.viewTransition)
             }
         }
-        .animation(AppMotion.reveal, value: isDetailEditing)
         .animation(AppMotion.list, value: selectedItemID)
         .onChange(of: items) { _, newItems in
             syncSelection(with: activeFilter.filter(newItems))
@@ -3726,45 +3721,56 @@ struct HandbookContentView: View {
         return visibleItems.first { $0.id == selectedItemID } ?? visibleItems.first
     }
 
-    private var handbookList: some View {
-        ScrollView {
-            LazyVStack(spacing: 7) {
-                ForEach(visibleItems) { item in
-                    HandbookRow(
-                        item: item,
-                        isSelected: selectedItem?.id == item.id,
-                        onSelect: {
-                            withAnimation(AppMotion.smooth) {
-                                selectedItemID = item.id
-                                isDetailEditing = false
+    private var handbookListCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HandbookListCardHeader(
+                selectedCategory: selectedCategory,
+                selectedFolder: selectedFolder,
+                totalCount: items.count,
+                visibleCount: visibleItems.count,
+                activeFilter: $activeFilter
+            )
+
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.56))
+
+            ScrollView {
+                LazyVStack(spacing: 7) {
+                    ForEach(visibleItems) { item in
+                        HandbookRow(
+                            item: item,
+                            isSelected: selectedItem?.id == item.id,
+                            onSelect: {
+                                withAnimation(AppMotion.smooth) {
+                                    selectedItemID = item.id
+                                }
                             }
-                        },
-                        onEdit: {
-                            withAnimation(AppMotion.reveal) {
-                                selectedItemID = item.id
-                                isDetailEditing = true
-                            }
-                        }
-                    )
-                    .transition(AppMotion.rowTransition)
+                        )
+                        .transition(AppMotion.rowTransition)
+                    }
                 }
+                .padding(7)
             }
-            .padding(6)
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(AppTheme.panel.opacity(0.74), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.72))
+        )
+        .shadow(color: AppTheme.rowShadow.opacity(0.22), radius: 5, x: 0, y: 2)
     }
 
     private func syncSelection(with currentItems: [HandbookItem]) {
         if shouldSelectLatestAfterCreate {
             selectedItemID = currentItems.first?.id
-            isDetailEditing = false
             shouldSelectLatestAfterCreate = false
             return
         }
 
         guard !currentItems.isEmpty else {
             selectedItemID = nil
-            isDetailEditing = false
             return
         }
 
@@ -3773,7 +3779,6 @@ struct HandbookContentView: View {
         }
 
         selectedItemID = currentItems.first?.id
-        isDetailEditing = false
     }
 }
 
@@ -3832,7 +3837,7 @@ enum HandbookListFilter: String, CaseIterable, Identifiable {
     }
 }
 
-struct HandbookWorkbenchHeader: View {
+struct HandbookListCardHeader: View {
     let selectedCategory: HandbookCategory?
     let selectedFolder: String?
     let totalCount: Int
@@ -3840,7 +3845,7 @@ struct HandbookWorkbenchHeader: View {
     @Binding var activeFilter: HandbookListFilter
 
     var body: some View {
-        HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(contextTitle)
                     .font(.system(size: 13, weight: .bold))
@@ -3852,9 +3857,7 @@ struct HandbookWorkbenchHeader: View {
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 10)
-
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 ForEach(HandbookListFilter.allCases) { filter in
                     HandbookFilterChip(
                         filter: filter,
@@ -3867,20 +3870,12 @@ struct HandbookWorkbenchHeader: View {
                     )
                 }
             }
-            .padding(3)
-            .background(Color.white.opacity(0.70), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(AppTheme.hairline.opacity(0.72))
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .background(AppTheme.workSurface.opacity(0.64), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(AppTheme.hairline.opacity(0.70))
-        )
+        .padding(.top, 10)
+        .padding(.bottom, 9)
+        .background(AppTheme.panel.opacity(0.84))
     }
 
     private var contextTitle: String {
@@ -3893,7 +3888,7 @@ struct HandbookWorkbenchHeader: View {
     private var contextSubtitle: String {
         let scope = selectedCategory?.subtitle ?? "规则、调研、会议与灵感的收集沉淀"
         if activeFilter == .all {
-            return "\(scope) · \(totalCount) 条"
+            return "\(scope) · \(totalCount) 条沉淀"
         }
         return "\(scope) · \(activeFilter.title) \(visibleCount)/\(totalCount)"
     }
@@ -3906,18 +3901,27 @@ struct HandbookFilterChip: View {
 
     var body: some View {
         Button(action: onSelect) {
-            Label(filter.title, systemImage: filter.icon)
-                .font(.system(size: 11, weight: .bold))
-                .labelStyle(.titleAndIcon)
-                .padding(.horizontal, 8)
-                .frame(height: 28)
+            HStack(spacing: 5) {
+                Image(systemName: filter.icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 15)
+
+                if isActive {
+                    Text(filter.title)
+                        .font(.system(size: 11, weight: .bold))
+                        .transition(AppMotion.inlineTransition)
+                }
+            }
+            .padding(.horizontal, isActive ? 8 : 6)
+            .frame(minWidth: isActive ? 58 : 30, minHeight: 28)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
         .foregroundStyle(isActive ? AppTheme.accent : AppTheme.mutedInk)
-        .background(isActive ? AppTheme.accentSoft.opacity(0.90) : Color.clear, in: Capsule())
+        .background(isActive ? AppTheme.accentSoft.opacity(0.92) : Color.white.opacity(0.48), in: Capsule())
         .overlay(
             Capsule()
-                .stroke(isActive ? AppTheme.accent.opacity(0.20) : Color.clear)
+                .stroke(isActive ? AppTheme.accent.opacity(0.22) : AppTheme.hairline.opacity(0.56))
         )
         .help(filter.title)
     }
@@ -3965,7 +3969,7 @@ struct HandbookCaptureBar: View {
 
                 if hasInput || suggestedCategory != nil {
                     HandbookInferenceBadge(category: inferredCategory, isLocked: suggestedCategory != nil)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+                        .transition(AppMotion.inlineTransition)
                 }
 
                 TextField("快速收集：会议结论、业务规则、调研发现或灵感", text: $title)
@@ -4020,7 +4024,7 @@ struct HandbookCaptureBar: View {
                 captureContextLine
                     .padding(.leading, 36)
                     .padding(.trailing, 2)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(AppMotion.inlineTransition)
             }
 
             if isExpanded || !content.isEmpty {
@@ -4031,7 +4035,7 @@ struct HandbookCaptureBar: View {
                     maxHeight: 150
                 )
                     .focused(focusedField, equals: .body)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(AppMotion.inlineTransition)
             }
         }
         .padding(.horizontal, 11)
@@ -4117,7 +4121,6 @@ struct HandbookRow: View {
     let item: HandbookItem
     let isSelected: Bool
     let onSelect: () -> Void
-    let onEdit: () -> Void
 
     @State private var isHovered = false
 
@@ -4130,10 +4133,14 @@ struct HandbookRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Label(item.category.title, systemImage: item.category.icon)
+                    Image(systemName: item.category.icon)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(item.category.accentColor)
-                        .labelStyle(.titleAndIcon)
+                        .frame(width: 16)
+
+                    Text(item.category.title)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(item.category.accentColor)
 
                     Spacer(minLength: 8)
 
@@ -4141,15 +4148,6 @@ struct HandbookRow: View {
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AppTheme.mutedInk)
-
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 30, height: 28)
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(isSelected ? item.category.accentColor : AppTheme.mutedInk)
-                    .help("编辑手记")
                 }
 
                 Text(item.displayTitle)
@@ -4169,29 +4167,42 @@ struct HandbookRow: View {
 
                 HStack(spacing: 6) {
                     if !item.trimmedFolder.isEmpty {
-                        HandbookFolderTag(folder: item.trimmedFolder)
+                        Image(systemName: "folder")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                        Text(item.trimmedFolder)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                            .lineLimit(1)
                     }
-                    HandbookLengthTag(kind: item.lengthKind)
+
+                    Text(item.lengthKind.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(item.lengthKind.color)
+
                     if !item.attachments.isEmpty {
-                        HandbookAttachmentCountTag(count: item.attachments.count)
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                        Text("\(item.attachments.count)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
                     }
+
                     Text("\(item.trimmedBody.count) 字")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AppTheme.mutedInk)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.white.opacity(0.56), in: Capsule())
 
                     Spacer(minLength: 0)
                 }
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 9)
         .padding(.vertical, 8)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(isSelected ? item.category.accentColor.opacity(0.42) : AppTheme.hairline.opacity(isHovered ? 0.92 : 0.62))
         )
         .shadow(color: AppTheme.rowShadow.opacity(isSelected ? 0.70 : (isHovered ? 0.56 : 0.24)), radius: isSelected ? 8 : (isHovered ? 6 : 2), x: 0, y: isSelected ? 3 : 1)
@@ -4213,7 +4224,7 @@ struct HandbookRow: View {
         if isHovered {
             return AppTheme.panel
         }
-        return AppTheme.panel.opacity(0.92)
+        return AppTheme.panel.opacity(0.82)
     }
 }
 
@@ -4365,7 +4376,6 @@ private extension HandbookLengthKind {
 
 struct HandbookDetailPanel: View {
     let item: HandbookItem?
-    @Binding var isEditing: Bool
     let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onDelete: (HandbookItem) -> Void
 
@@ -4374,17 +4384,13 @@ struct HandbookDetailPanel: View {
     @State private var title = ""
     @State private var bodyText = ""
     @State private var attachments: [HandbookAttachment] = []
+    @FocusState private var canvasFocus: HandbookCanvasFocus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let item {
-                if isEditing {
-                    editPanel(for: item)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                } else {
-                    readPanel(for: item)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                }
+                canvasPanel(for: item)
+                    .transition(AppMotion.inlineTransition)
             } else {
                 detailPlaceholder
             }
@@ -4404,180 +4410,61 @@ struct HandbookDetailPanel: View {
         }
     }
 
-    private func readPanel(for item: HandbookItem) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 8) {
-                HandbookCategoryTag(category: item.category)
-                if !item.trimmedFolder.isEmpty {
-                    HandbookFolderTag(folder: item.trimmedFolder)
-                }
-                HandbookLengthTag(kind: item.lengthKind)
-
-                Text(item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
-                    .font(.system(size: 11, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(AppTheme.mutedInk)
-
-                Spacer()
-
-                Button {
-                    copyToPasteboard(item.displayTitle)
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
-                .help("复制标题")
-
-                Button {
-                    copyToPasteboard(item.trimmedBody.isEmpty ? item.displayTitle : item.trimmedBody)
-                } label: {
-                    Label("复制正文", systemImage: "text.page")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 80, height: 30)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
-                .background(Color.white.opacity(0.62), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(AppTheme.hairline.opacity(0.64))
-                )
-
-                Button {
-                    syncDraft(with: item)
-                    withAnimation(AppMotion.reveal) {
-                        isEditing = true
-                    }
-                } label: {
-                    Label("编辑", systemImage: "pencil")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 66, height: 30)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(item.category.accentColor)
-                .background(item.category.softColor, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(item.category.accentColor.opacity(0.22))
-                )
-                .interactionHitArea()
-            }
-
-            Text(item.displayTitle)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HandbookDetailMetaBar(item: item)
+    private func canvasPanel(for item: HandbookItem) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HandbookCanvasToolbar(
+                accentColor: category.accentColor,
+                isDirty: isDirty(comparedTo: item),
+                onDelete: { onDelete(item) },
+                onCopyTitle: { copyToPasteboard(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : title) },
+                onCopyBody: { copyToPasteboard(bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? title : bodyText) },
+                onSave: { submitEdit(for: item) }
+            )
 
             Divider()
-                .overlay(AppTheme.hairline.opacity(0.72))
+                .overlay(AppTheme.hairline.opacity(0.56))
 
             ScrollView {
-                let outline = MarkdownOutlineEntry.extract(from: item.trimmedBody)
+                HandbookEditableCanvas(
+                    category: $category,
+                    folder: $folder,
+                    title: $title,
+                    bodyText: $bodyText,
+                    focusedField: $canvasFocus,
+                    lengthKind: draftLengthKind,
+                    updatedAt: item.updatedAt,
+                    attachmentCount: attachments.count
+                )
+                .padding(.bottom, 16)
+
+                let outline = MarkdownOutlineEntry.extract(from: bodyText.trimmingCharacters(in: .whitespacesAndNewlines))
                 if !outline.isEmpty {
                     HandbookOutlineStrip(entries: outline)
-                        .padding(.bottom, 10)
+                        .padding(.bottom, 16)
                 }
 
-                if item.trimmedBody.isEmpty {
-                    Text("这条手记还没有正文。")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
-                } else {
-                    MarkdownPreview(text: item.trimmedBody)
-                        .padding(.bottom, 8)
-                }
-
-                if !item.attachments.isEmpty {
-                    HandbookAttachmentStrip(attachments: item.attachments, isEditing: false)
-                        .padding(.top, 4)
+                HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
+                    .padding(.top, 8)
+                    .onChange(of: attachments) { _, _ in
+                        submitEdit(for: item)
+                    }
+            }
+            .onChange(of: category) { _, _ in
+                submitEdit(for: item)
+            }
+            .onChange(of: folder) { _, _ in
+                submitEdit(for: item)
+            }
+            .onChange(of: canvasFocus) { oldValue, newValue in
+                if oldValue != nil && newValue == nil {
+                    submitEdit(for: item)
                 }
             }
             .scrollIndicators(.hidden)
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 22)
         }
-        .padding(16)
-    }
-
-    private func editPanel(for item: HandbookItem) -> some View {
-        VStack(alignment: .leading, spacing: 11) {
-            HStack(spacing: 8) {
-                Picker("分类", selection: $category) {
-                    ForEach(HandbookCategory.allCases) { option in
-                        Label(option.title, systemImage: option.icon).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 120)
-
-                InlineTextField("标题", text: $title, isEmphasized: true)
-
-                Button(action: { submitEdit(for: item) }) {
-                    Label("保存", systemImage: "checkmark")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 70, height: 30)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(canSubmit ? category.accentColor : Color.black.opacity(0.28), in: Capsule())
-                .disabled(!canSubmit)
-
-                Button(action: { cancelEdit(for: item) }) {
-                    Image(systemName: "xmark")
-                        .interactionHitArea()
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
-                .help("取消")
-            }
-
-            HStack(spacing: 8) {
-                HandbookFolderEditor(folder: $folder)
-                    .frame(width: 176)
-
-                HandbookLengthTag(kind: draftLengthKind)
-
-                Spacer()
-
-                Label("整理阶段再确定目录与结构", systemImage: "tray.full")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.68), in: Capsule())
-            }
-
-            MarkdownHandbookEditor(text: $bodyText, minHeight: 260, maxHeight: 430)
-
-            HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
-
-            HStack {
-                Button(role: .destructive) {
-                    onDelete(item)
-                    isEditing = false
-                } label: {
-                    Label("删除手记", systemImage: "trash")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(TodoPriority.high.displayColor)
-                .interactionHitArea()
-
-                Spacer()
-
-                Text("标题和正文至少保留一项")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-        }
-        .padding(14)
     }
 
     private var detailPlaceholder: some View {
@@ -4607,16 +4494,6 @@ struct HandbookDetailPanel: View {
     private func submitEdit(for item: HandbookItem) {
         guard canSubmit else { return }
         onUpdate(item, category, folder, title, bodyText, attachments)
-        withAnimation(AppMotion.quick) {
-            isEditing = false
-        }
-    }
-
-    private func cancelEdit(for item: HandbookItem) {
-        syncDraft(with: item)
-        withAnimation(AppMotion.quick) {
-            isEditing = false
-        }
     }
 
     private func syncDraft(with item: HandbookItem?) {
@@ -4636,44 +4513,363 @@ struct HandbookDetailPanel: View {
     private var draftLengthKind: HandbookLengthKind {
         HandbookItem(category: category, folder: folder, title: title, body: bodyText).lengthKind
     }
+
+    private func isDirty(comparedTo item: HandbookItem) -> Bool {
+        category != item.category
+            || folder.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedFolder
+            || title.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedTitle
+            || bodyText.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedBody
+            || attachments != item.attachments
+    }
+}
+
+enum HandbookCanvasFocus: Hashable {
+    case title
+    case body
+}
+
+struct HandbookCanvasToolbar: View {
+    let accentColor: Color
+    let isDirty: Bool
+    let onDelete: () -> Void
+    let onCopyTitle: () -> Void
+    let onCopyBody: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Button(role: .destructive, action: onDelete) {
+                Label("删除", systemImage: "trash")
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(height: 30)
+                    .padding(.horizontal, 8)
+            }
+            .buttonStyle(.tactilePlain)
+            .foregroundStyle(TodoPriority.high.displayColor)
+            .interactionHitArea()
+            .help("删除手记")
+
+            Text("直接编辑，离开输入框或点击保存后写入")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(-1)
+
+            Spacer(minLength: 0)
+
+            Label(isDirty ? "未保存" : "已保存", systemImage: isDirty ? "circle.dotted" : "checkmark.circle")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(isDirty ? AppTheme.accentWarm : AppTheme.mutedInk)
+                .lineLimit(1)
+
+            Menu {
+                Button(action: onCopyTitle) {
+                    Label("复制标题", systemImage: "doc.on.doc")
+                }
+
+                Button(action: onCopyBody) {
+                    Label("复制正文", systemImage: "text.page")
+                }
+            } label: {
+                Label("复制", systemImage: "doc.on.doc")
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(width: 62, height: 30)
+            }
+            .menuStyle(.borderlessButton)
+            .buttonStyle(.tactilePlain)
+            .foregroundStyle(AppTheme.mutedInk)
+            .help("复制标题或正文")
+
+            Button(action: onSave) {
+                Label("保存", systemImage: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(width: 64, height: 30)
+            }
+            .buttonStyle(.tactilePlain)
+            .foregroundStyle(.white)
+            .background(isDirty ? accentColor : Color.black.opacity(0.28), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isDirty ? Color.white.opacity(0.34) : Color.black.opacity(0.05))
+            )
+            .disabled(!isDirty)
+            .interactionHitArea()
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(AppTheme.panel.opacity(0.96))
+    }
+}
+
+struct HandbookEditableCanvas: View {
+    @Binding var category: HandbookCategory
+    @Binding var folder: String
+    @Binding var title: String
+    @Binding var bodyText: String
+    var focusedField: FocusState<HandbookCanvasFocus?>.Binding
+    let lengthKind: HandbookLengthKind
+    let updatedAt: Date
+    let attachmentCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField("手记标题", text: $title, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(1...3)
+                .focused(focusedField, equals: .title)
+
+            HandbookDetailMetaBar(
+                category: $category,
+                folder: $folder,
+                lengthKind: lengthKind,
+                characterCount: bodyText.trimmingCharacters(in: .whitespacesAndNewlines).count,
+                updatedAt: updatedAt,
+                attachmentCount: attachmentCount
+            )
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $bodyText)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineSpacing(5)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, -4)
+                    .frame(minHeight: max(360, editorHeight), maxHeight: max(360, editorHeight))
+                    .focused(focusedField, equals: .body)
+
+                if bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("从这里开始写手记，支持 Markdown。")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .padding(.top, 8)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var editorHeight: CGFloat {
+        let estimatedLines = bodyText
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { partialResult, line in
+                partialResult + max(1, (line.count + 58) / 59)
+            }
+        return CGFloat(max(12, estimatedLines)) * 24 + 32
+    }
 }
 
 struct HandbookDetailMetaBar: View {
-    let item: HandbookItem
+    @Binding var category: HandbookCategory
+    @Binding var folder: String
+    let lengthKind: HandbookLengthKind
+    let characterCount: Int
+    let updatedAt: Date
+    let attachmentCount: Int
 
     var body: some View {
-        HStack(spacing: 7) {
-            HandbookMetaPill(icon: "character.cursor.ibeam", text: "\(item.trimmedBody.count) 字")
-            HandbookMetaPill(icon: "calendar", text: item.createdAt.formatted(.dateTime.year().month().day()))
-            if !item.attachments.isEmpty {
-                HandbookMetaPill(icon: "paperclip", text: "\(item.attachments.count) 个附件")
-            }
-            if !item.trimmedFolder.isEmpty {
-                HandbookMetaPill(icon: "folder", text: item.trimmedFolder)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                editableTags
+                HandbookMetaDot()
+                passiveMeta
+                Spacer(minLength: 0)
             }
 
-            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 7) {
+                editableTags
+                passiveMeta
+            }
+        }
+    }
+
+    private var editableTags: some View {
+        HStack(spacing: 7) {
+            HandbookCategoryInlineTag(category: $category)
+            HandbookFolderInlineTag(folder: $folder)
+        }
+    }
+
+    private var passiveMeta: some View {
+        HStack(spacing: 8) {
+            HandbookMetaText(icon: lengthKind.icon, text: lengthKind.title)
+            HandbookMetaDot()
+            HandbookMetaText(icon: "character.cursor.ibeam", text: "\(characterCount) 字")
+            HandbookMetaDot()
+            HandbookMetaText(icon: "calendar", text: updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
+            if attachmentCount > 0 {
+                HandbookMetaDot()
+                HandbookMetaText(icon: "paperclip", text: "\(attachmentCount) 个附件")
+            }
         }
     }
 }
 
-struct HandbookMetaPill: View {
+struct HandbookCategoryInlineTag: View {
+    @Binding var category: HandbookCategory
+
+    var body: some View {
+        Menu {
+            Picker("分类", selection: $category) {
+                ForEach(HandbookCategory.allCases) { option in
+                    Label(option.title, systemImage: option.icon).tag(option)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: category.icon)
+                    .font(.system(size: 11, weight: .bold))
+
+                Text(category.title)
+                    .font(.system(size: 12, weight: .bold))
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .black))
+                    .foregroundStyle(category.accentColor.opacity(0.72))
+            }
+            .foregroundStyle(category.accentColor)
+            .padding(.horizontal, 9)
+            .frame(height: 25)
+            .background(category.softColor, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(category.accentColor.opacity(0.24))
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("点击修改分类")
+    }
+}
+
+struct HandbookFolderInlineTag: View {
+    @Binding var folder: String
+
+    @State private var isEditing = false
+    @State private var draft = ""
+    @FocusState private var isDraftFocused: Bool
+
+    var body: some View {
+        Button {
+            draft = trimmedFolder
+            withAnimation(AppMotion.quick) {
+                isEditing = true
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: trimmedFolder.isEmpty ? "folder.badge.plus" : "folder")
+                    .font(.system(size: 11, weight: .bold))
+
+                Text(trimmedFolder.isEmpty ? "未归档" : trimmedFolder)
+                    .font(.system(size: 12, weight: .bold))
+                    .lineLimit(1)
+                    .frame(maxWidth: 160, alignment: .leading)
+
+                Image(systemName: "pencil")
+                    .font(.system(size: 9, weight: .black))
+                    .foregroundStyle(AppTheme.mutedInk.opacity(0.78))
+            }
+            .foregroundStyle(trimmedFolder.isEmpty ? AppTheme.mutedInk : AppTheme.ink.opacity(0.84))
+            .padding(.horizontal, 9)
+            .frame(height: 25)
+            .background(Color.white.opacity(0.70), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.border.opacity(trimmedFolder.isEmpty ? 0.62 : 0.90))
+            )
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+        .help("点击修改二级目录")
+        .popover(isPresented: $isEditing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("二级目录")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+
+                TextField("例如：审批流", text: $draft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppTheme.border)
+                    )
+                    .focused($isDraftFocused)
+                    .onSubmit(commit)
+
+                HStack(spacing: 8) {
+                    Button("清空") {
+                        draft = ""
+                        commit()
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(AppTheme.mutedInk)
+
+                    Spacer(minLength: 0)
+
+                    Button("取消") {
+                        isEditing = false
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(AppTheme.mutedInk)
+
+                    Button("完成") {
+                        commit()
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .background(AppTheme.accent, in: Capsule())
+                }
+                .font(.system(size: 12, weight: .bold))
+            }
+            .padding(12)
+            .frame(width: 256)
+            .background(AppTheme.panel.opacity(0.98))
+            .onAppear {
+                draft = trimmedFolder
+                isDraftFocused = true
+            }
+        }
+    }
+
+    private var trimmedFolder: String {
+        folder.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func commit() {
+        folder = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        withAnimation(AppMotion.quick) {
+            isEditing = false
+        }
+    }
+}
+
+struct HandbookMetaText: View {
     let icon: String
     let text: String
 
     var body: some View {
         Label(text, systemImage: icon)
-            .font(.system(size: 11, weight: .bold))
+            .font(.system(size: 12, weight: .semibold))
             .monospacedDigit()
             .foregroundStyle(AppTheme.mutedInk)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(AppTheme.workSurface.opacity(0.74), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(AppTheme.hairline.opacity(0.56))
-            )
+    }
+}
+
+struct HandbookMetaDot: View {
+    var body: some View {
+        Circle()
+            .fill(AppTheme.hairline)
+            .frame(width: 4, height: 4)
     }
 }
 
@@ -4877,7 +5073,7 @@ struct MarkdownHandbookEditor: View {
                         .padding(12)
                 }
                 .frame(minHeight: editorHeight, maxHeight: editorHeight)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .transition(AppMotion.inlineTransition)
             } else {
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $text)
@@ -4896,7 +5092,7 @@ struct MarkdownHandbookEditor: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(AppMotion.inlineTransition)
             }
         }
         .background(Color.white.opacity(0.94), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
@@ -5356,7 +5552,7 @@ struct DailySuggestionCard: View {
                     .foregroundStyle(AppTheme.ink)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(AppMotion.inlineTransition)
             } else {
                 Text("用当前未完成事项生成今天的推进顺序。")
                     .font(.system(size: 12, weight: .semibold))
@@ -5441,7 +5637,7 @@ struct AITraceDisclosure: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(AppTheme.hairline)
                 )
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(AppMotion.inlineTransition)
             }
         }
     }
@@ -5677,7 +5873,7 @@ struct QuickCaptureBar: View {
                     date: parsedPreview.date,
                     isWeekly: parsedPreview.isWeekly
                 )
-                .transition(.opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.985, anchor: .top)))
+                .transition(AppMotion.inlineTransition)
             }
 
             if let aiStatusMessage {
@@ -5693,7 +5889,7 @@ struct QuickCaptureBar: View {
                 }
                 .foregroundStyle(aiStatusMessage.contains("失败") ? TodoPriority.high.displayColor : AppTheme.accent)
                 .padding(.leading, 32)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(AppMotion.inlineTransition)
             } else if isAIEnabled && hasDraft {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
@@ -5703,7 +5899,7 @@ struct QuickCaptureBar: View {
                 }
                 .foregroundStyle(AppTheme.accent)
                 .padding(.leading, 32)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(AppMotion.inlineTransition)
             }
 
             if let aiTrace {
@@ -5721,7 +5917,7 @@ struct QuickCaptureBar: View {
                     AITraceCompactView(trace: aiTrace)
                 }
                 .padding(.leading, 32)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(AppMotion.inlineTransition)
             }
 
             if isExpanded {
@@ -5758,7 +5954,7 @@ struct QuickCaptureBar: View {
                         .disabled(isCreating)
                 }
                 .padding(.leading, 32)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(AppMotion.inlineTransition)
             }
         }
         .padding(.horizontal, 12)
@@ -6178,7 +6374,7 @@ struct TodoFlowRow: View {
                     }
                 )
                 .id("\(todo.id)-editing")
-                .transition(.opacity.combined(with: .scale(scale: 0.988, anchor: .top)))
+                .transition(AppMotion.inlineTransition)
 
             case .compact:
                 TodoBoardEditCard(
@@ -6190,7 +6386,7 @@ struct TodoFlowRow: View {
                     }
                 )
                 .id("\(todo.id)-compact-editing")
-                .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
+                .transition(AppMotion.inlineTransition)
             }
         } else {
             HStack(alignment: hasNotes ? .top : .center, spacing: 8) {
@@ -6303,7 +6499,7 @@ struct TodoFlowRow: View {
             .animation(AppMotion.status, value: todo.progress)
             .animation(AppMotion.complete, value: todo.isDone)
             .animation(AppMotion.hover, value: isHovered)
-            .transition(.opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.992, anchor: .top)))
+            .transition(AppMotion.inlineTransition)
         }
     }
 
@@ -6908,7 +7104,7 @@ struct NotesReadOnlyRow: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(AppMotion.inlineTransition)
                 }
 
                 if let summaryError {
