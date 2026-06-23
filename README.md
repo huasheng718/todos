@@ -59,8 +59,17 @@ build/蚁序.app
 
 ## 发布准备
 
+先从任意 checkout 创建干净发布工作区。该命令只从 `origin/main` 创建新 worktree，不复制当前目录的脏改：
+
 ```bash
-scripts/ship_release.sh --version 1.1.15 --notes "蚁序 1.1.15 更新：..."
+scripts/create_release_worktree.sh --version 1.1.16
+cd /path/to/printed/worktree
+```
+
+功能改动必须在该 worktree 内完成并提交，再执行发布。发布脚本会拒绝脏工作区、`main` 分支、或未包含最新 `origin/main` 的分支，避免发布时再处理迁移和冲突。
+
+```bash
+scripts/ship_release.sh --version 1.1.16 --notes "蚁序 1.1.16 更新：..."
 ```
 
 该命令会更新 `Info.plist` 和 `releases/latest.json`，运行 Swift 构建，生成
@@ -69,7 +78,7 @@ scripts/ship_release.sh --version 1.1.15 --notes "蚁序 1.1.15 更新：..."
 确认无误后可发布：
 
 ```bash
-scripts/ship_release.sh --version 1.1.15 --notes "蚁序 1.1.15 更新：..." --publish --merge-pr
+scripts/ship_release.sh --version 1.1.16 --notes "蚁序 1.1.16 更新：..." --publish --merge-pr
 ```
 
 当前项目用 Swift Package + SwiftUI 实现，不需要联网安装依赖。若要获得完整 Xcode 工程体验，可以安装 Xcode 后用 Xcode 打开该目录或迁移为 `.xcodeproj`。

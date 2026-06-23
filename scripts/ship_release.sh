@@ -76,10 +76,109 @@ fi
 
 cd "$ROOT_DIR"
 
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+
+expected_download_url() {
+  printf 'https://github.com/huasheng718/todos/releases/download/v%s/AntOrder-%s.pkg\n' "$VERSION" "$VERSION"
+}
+
+release_dirty_paths() {
+  git status --short -- Info.plist releases/latest.json
+}
+
+unexpected_dirty_paths() {
+  git status --short -- ':!Info.plist' ':!releases/latest.json'
+}
+
+manifest_matches_release() {
+  python3 - "$ROOT_DIR/releases/latest.json" "$VERSION" "$BUILD" "$(expected_download_url)" "$NOTES" <<'PY'
+import json
+import sys
+
+path, version, build, download_url, notes = sys.argv[1:]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except FileNotFoundError:
+    sys.exit(1)
+
+if str(data.get("version")) != version:
+    sys.exit(1)
+if str(data.get("build")) != str(build):
+    sys.exit(1)
+if data.get("downloadURL") != download_url:
+    sys.exit(1)
+if data.get("releaseNotes") != notes:
+    sys.exit(1)
+PY
+}
+
+release_metadata_matches() {
+  local plist_version plist_build
+
+  plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
+  plist_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")"
+
+  [ "$plist_version" = "$VERSION" ] &&
+    [ "$plist_build" = "$BUILD" ] &&
+    manifest_matches_release
+}
+
+ensure_only_release_metadata_changed() {
+  local dirty
+
+  dirty="$(unexpected_dirty_paths)"
+  if [ -n "$dirty" ]; then
+    echo "Release packaging changed non-release files. Refusing to publish mixed changes." >&2
+    echo "$dirty" >&2
+    exit 1
+  fi
+}
+
+ensure_release_ready() {
+  local branch dirty
+
+  git fetch --prune origin "$DEFAULT_BRANCH" >/dev/null
+
+  branch="$(git branch --show-current)"
+  if [ -z "$branch" ]; then
+    echo "Cannot release from a detached HEAD. Create a release branch first." >&2
+    exit 1
+  fi
+
+  if [ "$branch" = "$DEFAULT_BRANCH" ]; then
+    echo "Cannot release directly from $DEFAULT_BRANCH." >&2
+    echo "Create a clean release worktree first:" >&2
+    echo "  scripts/create_release_worktree.sh --version $VERSION" >&2
+    exit 1
+  fi
+
+  if ! git rev-parse --verify "origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
+    echo "origin/$DEFAULT_BRANCH is not available after fetch." >&2
+    exit 1
+  fi
+
+  if ! git merge-base --is-ancestor "origin/$DEFAULT_BRANCH" HEAD; then
+    echo "Current branch does not contain latest origin/$DEFAULT_BRANCH." >&2
+    echo "Start from a fresh release worktree to avoid merge conflicts:" >&2
+    echo "  scripts/create_release_worktree.sh --version $VERSION" >&2
+    exit 1
+  fi
+
+  dirty="$(unexpected_dirty_paths)"
+  if [ -n "$dirty" ]; then
+    echo "Working tree has non-release changes." >&2
+    echo "Commit feature changes first, then run this script so the release commit contains only version metadata." >&2
+    echo "$dirty" >&2
+    exit 1
+  fi
+}
+
 if [ "$MERGE_PR" -eq 1 ] && [ "$PUBLISH" -ne 1 ]; then
   echo "--merge-pr requires --publish" >&2
   exit 2
 fi
+
+ensure_release_ready
 
 if git rev-parse "v$VERSION" >/dev/null 2>&1; then
   echo "Tag v$VERSION already exists" >&2
@@ -90,9 +189,14 @@ if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1
   exit 1
 fi
 
+CURRENT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
 CURRENT_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")"
 if [ -z "$BUILD" ]; then
-  BUILD=$((CURRENT_BUILD + 1))
+  if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+    BUILD="$CURRENT_BUILD"
+  else
+    BUILD=$((CURRENT_BUILD + 1))
+  fi
 fi
 
 if ! printf '%s' "$BUILD" | grep -Eq '^[0-9]+$'; then
@@ -103,6 +207,11 @@ fi
 echo "Preparing 蚁序 $VERSION (build $BUILD)"
 
 if [ "$DRY_RUN" -eq 1 ]; then
+  if [ -n "$(release_dirty_paths)" ] && ! release_metadata_matches; then
+    echo "Dry run failed: existing release metadata does not match requested version/build/notes." >&2
+    git status --short -- Info.plist releases/latest.json >&2
+    exit 1
+  fi
   echo "Dry run only. No files changed."
   echo "Release notes: $NOTES"
   exit 0
@@ -158,10 +267,8 @@ if [ -z "$BRANCH" ]; then
   exit 1
 fi
 
-git add -u -- .
-while IFS= read -r -d '' path; do
-  git add -- "$path"
-done < <(git ls-files --others --exclude-standard -z)
+ensure_only_release_metadata_changed
+git add -- Info.plist releases/latest.json
 git commit -m "release: ship $VERSION"
 git tag "v$VERSION"
 git push -u origin "$BRANCH"
