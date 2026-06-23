@@ -357,6 +357,7 @@ struct ContentView: View {
     @State private var isAISettingsPresented = false
     @State private var isAppSettingsPresented = false
     @State private var isSecondarySidebarCollapsed = false
+    @State private var isHandbookContentReady = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @FocusState private var focusedField: FocusField?
 
@@ -434,6 +435,17 @@ struct ContentView: View {
         }
         .onChange(of: selectedSkinRawValue) { _, newValue in
             activeAppSkin = AppSkin(rawValue: newValue) ?? .ocean
+        }
+        .onChange(of: activeSection) { _, newValue in
+            guard newValue == .handbook else {
+                isHandbookContentReady = false
+                return
+            }
+
+            isHandbookContentReady = false
+            DispatchQueue.main.async {
+                isHandbookContentReady = true
+            }
         }
         .onChange(of: scope) { _, newValue in
             if case .day(let date) = newValue {
@@ -554,9 +566,11 @@ struct ContentView: View {
 
     private var handbookColumn: some View {
         HandbookContentView(
-            items: filteredHandbookItems,
+            allItems: store.handbookItems,
+            isReady: isHandbookContentReady,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
+            searchText: handbookSearchText,
             onCreate: createHandbookItem,
             onUpdate: updateHandbookItem,
             onDelete: deleteHandbookItem
@@ -564,7 +578,7 @@ struct ContentView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
         .background(AppTheme.workSurface)
-        .animation(AppMotion.list, value: filteredHandbookItems)
+        .animation(AppMotion.list, value: store.handbookItems.count)
         .animation(AppMotion.smooth, value: handbookCategory)
     }
 
@@ -581,14 +595,6 @@ struct ContentView: View {
         case .weekly:
             store.todos(matching: searchText).filter(\.isWeekly)
         }
-    }
-
-    private var filteredHandbookItems: [HandbookItem] {
-        store.handbookItems(in: handbookCategory, folder: handbookFolder, matching: handbookSearchText)
-    }
-
-    private var filteredHandbookFolders: [String] {
-        store.handbookFolders()
     }
 
     private var contentTitle: String {
@@ -2155,13 +2161,15 @@ struct HandbookSidebarView: View {
     @Binding var searchText: String
 
     var body: some View {
+        let metrics = HandbookSidebarMetrics(items: store.handbookItems, selectedCategory: selectedCategory)
+
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header
                     SearchField(text: $searchText)
-                    categoryList
-                    folderList
+                    categoryList(metrics: metrics)
+                    folderList(metrics: metrics)
                 }
                 .padding(.horizontal, 17)
                 .padding(.top, 48)
@@ -2176,7 +2184,7 @@ struct HandbookSidebarView: View {
                 Text("手记")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(AppTheme.ink)
-                Text("共 \(store.handbookItems.count) 条沉淀")
+                Text("共 \(metrics.totalCount) 条沉淀")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
             }
@@ -2198,7 +2206,7 @@ struct HandbookSidebarView: View {
         }
     }
 
-    private var categoryList: some View {
+    private func categoryList(metrics: HandbookSidebarMetrics) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             SidebarSectionLabel("分类")
 
@@ -2206,7 +2214,7 @@ struct HandbookSidebarView: View {
                 title: "全部手记",
                 subtitle: "完整知识池",
                 systemImage: "tray.full",
-                count: store.handbookItems.count,
+                count: metrics.totalCount,
                 isSelected: selectedCategory == nil
             ) {
                 selectedCategory = nil
@@ -2218,7 +2226,7 @@ struct HandbookSidebarView: View {
                     title: category.title,
                     subtitle: category.subtitle,
                     systemImage: category.icon,
-                    count: count(for: category),
+                    count: metrics.categoryCounts[category, default: 0],
                     isSelected: selectedCategory == category
                 ) {
                     selectedCategory = category
@@ -2228,7 +2236,7 @@ struct HandbookSidebarView: View {
         }
     }
 
-    private var folderList: some View {
+    private func folderList(metrics: HandbookSidebarMetrics) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             SidebarSectionLabel("二级目录")
 
@@ -2236,13 +2244,13 @@ struct HandbookSidebarView: View {
                 title: "全部目录",
                 subtitle: "不按目录过滤",
                 systemImage: "folder",
-                count: scopedItems.count,
+                count: metrics.scopedCount,
                 isSelected: selectedFolder == nil
             ) {
                 selectedFolder = nil
             }
 
-            if folders.isEmpty {
+            if metrics.folders.isEmpty {
                 Text("在快记或编辑中填写目录后自动归类")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
@@ -2252,12 +2260,12 @@ struct HandbookSidebarView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.white.opacity(0.34), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else {
-                ForEach(folders, id: \.self) { folder in
+                ForEach(metrics.folders, id: \.self) { folder in
                     HandbookCategoryButton(
                         title: folder,
                         subtitle: "自定义归类",
                         systemImage: "folder.fill",
-                        count: count(forFolder: folder),
+                        count: metrics.folderCounts[folder, default: 0],
                         isSelected: selectedFolder == folder
                     ) {
                         selectedFolder = folder
@@ -2266,24 +2274,36 @@ struct HandbookSidebarView: View {
             }
         }
     }
+}
 
-    private func count(for category: HandbookCategory) -> Int {
-        store.handbookItems.filter { $0.category == category }.count
-    }
+private struct HandbookSidebarMetrics {
+    let totalCount: Int
+    let scopedCount: Int
+    let categoryCounts: [HandbookCategory: Int]
+    let folderCounts: [String: Int]
+    let folders: [String]
 
-    private var scopedItems: [HandbookItem] {
-        store.handbookItems.filter { item in
-            selectedCategory == nil || item.category == selectedCategory
+    init(items: [HandbookItem], selectedCategory: HandbookCategory?) {
+        var categoryCounts: [HandbookCategory: Int] = [:]
+        var folderCounts: [String: Int] = [:]
+        var scopedCount = 0
+
+        for item in items {
+            categoryCounts[item.category, default: 0] += 1
+            guard selectedCategory == nil || item.category == selectedCategory else { continue }
+            scopedCount += 1
+
+            let folder = item.trimmedFolder
+            if !folder.isEmpty {
+                folderCounts[folder, default: 0] += 1
+            }
         }
-    }
 
-    private var folders: [String] {
-        let folders = Set(scopedItems.map(\.trimmedFolder).filter { !$0.isEmpty })
-        return folders.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-    }
-
-    private func count(forFolder folder: String) -> Int {
-        scopedItems.filter { $0.trimmedFolder == folder }.count
+        self.totalCount = items.count
+        self.scopedCount = scopedCount
+        self.categoryCounts = categoryCounts
+        self.folderCounts = folderCounts
+        self.folders = folderCounts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 }
 
@@ -3618,9 +3638,11 @@ enum WorkSectionKind: String, Identifiable {
 }
 
 struct HandbookContentView: View {
-    let items: [HandbookItem]
+    let allItems: [HandbookItem]
+    let isReady: Bool
     let selectedCategory: HandbookCategory?
     let selectedFolder: String?
+    let searchText: String
     let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onDelete: (HandbookItem) -> Void
@@ -3630,6 +3652,7 @@ struct HandbookContentView: View {
     @State private var selectedItemID: UUID?
     @State private var shouldSelectLatestAfterCreate = false
     @State private var activeFilter: HandbookListFilter = .all
+    @State private var isDetailReady = false
     @FocusState private var focusedField: HandbookFocusField?
 
     var body: some View {
@@ -3643,53 +3666,38 @@ struct HandbookContentView: View {
                 onCreate: submit
             )
 
-            if items.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    handbookListCard
-                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                    HandbookEmptyState(category: selectedCategory)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .transition(AppMotion.viewTransition)
-            } else if visibleItems.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    handbookListCard
-                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                    HandbookFilteredEmptyState(filter: activeFilter)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .transition(AppMotion.viewTransition)
-            } else {
-                HStack(alignment: .top, spacing: 10) {
-                    handbookListCard
-                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                    HandbookDetailPanel(
-                        item: selectedItem,
-                        onUpdate: onUpdate,
-                        onDelete: { item in
-                            onDelete(item)
-                            if selectedItemID == item.id {
-                                selectedItemID = nil
-                            }
-                        }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .transition(AppMotion.viewTransition)
-            }
+            contentArea
         }
         .animation(AppMotion.list, value: selectedItemID)
-        .onChange(of: items) { _, newItems in
-            syncSelection(with: activeFilter.filter(newItems))
+        .onChange(of: allItems) { _, newItems in
+            syncSelection(with: visibleItems(from: newItems))
+        }
+        .onChange(of: selectedCategory) { _, _ in
+            syncSelection(with: visibleItems(from: allItems))
+        }
+        .onChange(of: selectedFolder) { _, _ in
+            syncSelection(with: visibleItems(from: allItems))
+        }
+        .onChange(of: searchText) { _, _ in
+            syncSelection(with: visibleItems(from: allItems))
         }
         .onChange(of: activeFilter) { _, _ in
-            syncSelection(with: visibleItems)
+            syncSelection(with: visibleItems(from: allItems))
         }
         .onAppear {
-            syncSelection(with: visibleItems)
+            if isReady {
+                syncSelection(with: visibleItems(from: allItems))
+            }
+        }
+        .onChange(of: isReady) { _, newValue in
+            guard newValue else {
+                isDetailReady = false
+                return
+            }
+            syncSelection(with: visibleItems(from: allItems))
+            DispatchQueue.main.async {
+                isDetailReady = true
+            }
         }
     }
 
@@ -3710,23 +3718,176 @@ struct HandbookContentView: View {
         focusedField = .title
     }
 
-    private var visibleItems: [HandbookItem] {
-        activeFilter.filter(items)
-    }
-
-    private var selectedItem: HandbookItem? {
+    private func selectedItem(in visibleItems: [HandbookItem]) -> HandbookItem? {
         guard let selectedItemID else {
             return visibleItems.first
         }
         return visibleItems.first { $0.id == selectedItemID } ?? visibleItems.first
     }
 
-    private var handbookListCard: some View {
+    private func scopedItems(from sourceItems: [HandbookItem]) -> [HandbookItem] {
+        let cleanedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sourceItems.filter { item in
+            (selectedCategory == nil || item.category == selectedCategory)
+                && matchesFolder(item)
+                && matchesSearch(item, query: cleanedQuery)
+        }
+    }
+
+    private func visibleItems(from sourceItems: [HandbookItem]) -> [HandbookItem] {
+        activeFilter.filter(scopedItems(from: sourceItems))
+    }
+
+    private func matchesFolder(_ item: HandbookItem) -> Bool {
+        guard let selectedFolder, !selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return true
+        }
+        return item.trimmedFolder == selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func matchesSearch(_ item: HandbookItem, query: String) -> Bool {
+        guard !query.isEmpty else { return true }
+        return item.title.localizedCaseInsensitiveContains(query)
+            || item.body.localizedCaseInsensitiveContains(query)
+            || item.folder.localizedCaseInsensitiveContains(query)
+            || item.category.title.localizedCaseInsensitiveContains(query)
+            || item.attachments.contains { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    @ViewBuilder
+    private var contentArea: some View {
+        if !isReady {
+            handbookLoadingShell
+                .transition(AppMotion.inlineTransition)
+        } else {
+            let items = scopedItems(from: allItems)
+            let visibleItems = activeFilter.filter(items)
+            let selectedItem = selectedItem(in: visibleItems)
+
+            if items.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                    HandbookEmptyState(category: selectedCategory)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .transition(AppMotion.viewTransition)
+            } else if visibleItems.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                    HandbookFilteredEmptyState(filter: activeFilter)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .transition(AppMotion.viewTransition)
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
+                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                    if isDetailReady {
+                        HandbookDetailPanel(
+                            item: selectedItem,
+                            onUpdate: onUpdate,
+                            onDelete: { item in
+                                onDelete(item)
+                                if selectedItemID == item.id {
+                                    selectedItemID = nil
+                                }
+                            }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(AppMotion.inlineTransition)
+                    } else {
+                        handbookDetailLoadingPanel
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .transition(AppMotion.inlineTransition)
+                    }
+                }
+                .transition(AppMotion.viewTransition)
+            }
+        }
+    }
+
+    private var handbookLoadingShell: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+                HandbookListCardHeader(
+                    selectedCategory: selectedCategory,
+                    selectedFolder: selectedFolder,
+                    totalCount: allItems.count,
+                    visibleCount: 0,
+                    activeFilter: $activeFilter
+                )
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(0..<6, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(AppTheme.hairline.opacity(index == 0 ? 0.58 : 0.34))
+                            .frame(height: index == 0 ? 72 : 58)
+                    }
+                }
+                .padding(7)
+            }
+            .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity, alignment: .top)
+            .background(AppTheme.panel.opacity(0.66), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(AppTheme.hairline.opacity(0.62))
+            )
+
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(AppTheme.panel.opacity(0.58))
+                .overlay(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(AppTheme.hairline.opacity(0.48))
+                            .frame(width: 220, height: 18)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(AppTheme.hairline.opacity(0.28))
+                            .frame(width: 340, height: 12)
+                    }
+                    .padding(20)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .accessibilityLabel("正在加载手记")
+    }
+
+    private var handbookDetailLoadingPanel: some View {
+        RoundedRectangle(cornerRadius: 13, style: .continuous)
+            .fill(AppTheme.panel.opacity(0.68))
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 10) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AppTheme.hairline.opacity(0.48))
+                        .frame(width: 220, height: 18)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AppTheme.hairline.opacity(0.28))
+                        .frame(width: 340, height: 12)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(AppTheme.hairline.opacity(0.22))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 180)
+                        .padding(.top, 12)
+                }
+                .padding(20)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(AppTheme.hairline.opacity(0.60))
+            )
+            .accessibilityLabel("正在准备手记详情")
+    }
+
+    private func handbookListCard(itemsCount: Int, visibleItems: [HandbookItem], selectedItem: HandbookItem?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HandbookListCardHeader(
                 selectedCategory: selectedCategory,
                 selectedFolder: selectedFolder,
-                totalCount: items.count,
+                totalCount: itemsCount,
                 visibleCount: visibleItems.count,
                 activeFilter: $activeFilter
             )
@@ -4125,6 +4286,9 @@ struct HandbookRow: View {
     @State private var isHovered = false
 
     var body: some View {
+        let lengthKind = item.lengthKind
+        let characterCount = item.bodyCharacterCount
+
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(item.category.accentColor)
@@ -4176,9 +4340,9 @@ struct HandbookRow: View {
                             .lineLimit(1)
                     }
 
-                    Text(item.lengthKind.title)
+                    Text(lengthKind.title)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(item.lengthKind.color)
+                        .foregroundStyle(lengthKind.color)
 
                     if !item.attachments.isEmpty {
                         Image(systemName: "paperclip")
@@ -4189,7 +4353,7 @@ struct HandbookRow: View {
                             .foregroundStyle(AppTheme.mutedInk)
                     }
 
-                    Text("\(item.trimmedBody.count) 字")
+                    Text("\(characterCount) 字")
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AppTheme.mutedInk)
@@ -4384,6 +4548,7 @@ struct HandbookDetailPanel: View {
     @State private var title = ""
     @State private var bodyText = ""
     @State private var attachments: [HandbookAttachment] = []
+    @State private var outline: [MarkdownOutlineEntry] = []
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
     var body: some View {
@@ -4437,7 +4602,6 @@ struct HandbookDetailPanel: View {
                 )
                 .padding(.bottom, 16)
 
-                let outline = MarkdownOutlineEntry.extract(from: bodyText.trimmingCharacters(in: .whitespacesAndNewlines))
                 if !outline.isEmpty {
                     HandbookOutlineStrip(entries: outline)
                         .padding(.bottom, 16)
@@ -4459,6 +4623,9 @@ struct HandbookDetailPanel: View {
                 if oldValue != nil && newValue == nil {
                     submitEdit(for: item)
                 }
+            }
+            .onChange(of: bodyText) { _, newValue in
+                scheduleOutlineUpdate(for: newValue)
             }
             .scrollIndicators(.hidden)
             .padding(.horizontal, 22)
@@ -4503,6 +4670,16 @@ struct HandbookDetailPanel: View {
         title = item.title
         bodyText = item.body
         attachments = item.attachments
+        outline = []
+        scheduleOutlineUpdate(for: item.body)
+    }
+
+    private func scheduleOutlineUpdate(for text: String) {
+        let snapshot = text
+        DispatchQueue.main.async {
+            guard snapshot == bodyText else { return }
+            outline = MarkdownOutlineEntry.extract(from: snapshot.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
     }
 
     private func copyToPasteboard(_ value: String) {

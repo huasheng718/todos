@@ -157,11 +157,19 @@ extension HandbookItem {
     var cardSummary: String? {
         let source = trimmedBody
         guard !source.isEmpty else { return nil }
-        return source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let normalized = source
+            .prefix(180)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    var bodyCharacterCount: Int {
+        trimmedBody.count
     }
 
     var lengthKind: HandbookLengthKind {
-        let characterCount = trimmedBody.count
+        let characterCount = bodyCharacterCount
         if characterCount >= 1200 {
             return .article
         }
