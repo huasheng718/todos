@@ -13,16 +13,16 @@ private let secondarySidebarWidth: CGFloat = 250
 private let collapsedSecondarySidebarWidth: CGFloat = 0
 
 private enum AppMotion {
-    static let press = Animation.easeOut(duration: 0.12)
-    static let quick = Animation.easeInOut(duration: 0.14)
-    static let hover = Animation.easeOut(duration: 0.12)
-    static let smooth = Animation.easeInOut(duration: 0.18)
-    static let reveal = Animation.easeInOut(duration: 0.16)
-    static let list = Animation.easeInOut(duration: 0.16)
-    static let capture = Animation.easeInOut(duration: 0.14)
-    static let status = Animation.easeInOut(duration: 0.16)
-    static let complete = Animation.easeInOut(duration: 0.16)
-    static let modeSwitch = Animation.easeInOut(duration: 0.18)
+    static let press = Animation.easeOut(duration: 0.10)
+    static let quick = Animation.easeInOut(duration: 0.12)
+    static let hover = Animation.easeOut(duration: 0.10)
+    static let smooth = Animation.easeInOut(duration: 0.15)
+    static let reveal = Animation.easeInOut(duration: 0.14)
+    static let list = Animation.easeInOut(duration: 0.12)
+    static let capture = Animation.easeInOut(duration: 0.12)
+    static let status = Animation.easeInOut(duration: 0.14)
+    static let complete = Animation.easeInOut(duration: 0.14)
+    static let modeSwitch = Animation.easeInOut(duration: 0.14)
 
     static var rowTransition: AnyTransition {
         .opacity
@@ -653,6 +653,7 @@ struct ContentView: View {
             themeRefreshCounter += 1
         }
         .onChange(of: scope) { _, newValue in
+            PerformanceMonitor.event("ContentView.todoScope", detail: newValue.analyticsName)
             if case .day(let date) = newValue {
                 newDate = date
             }
@@ -762,7 +763,6 @@ struct ContentView: View {
             )
             .padding(.horizontal, 22)
             .padding(.bottom, 20)
-            .animation(AppMotion.list, value: filteredTodos)
             .animation(AppMotion.smooth, value: scope)
             .animation(AppMotion.smooth, value: allTodosViewMode)
         }
@@ -782,7 +782,6 @@ struct ContentView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
         .background(AppTheme.workSurface)
-        .animation(AppMotion.list, value: store.handbookItems.count)
         .animation(AppMotion.smooth, value: handbookCategory)
     }
 
@@ -1105,75 +1104,6 @@ struct ContentView: View {
         let day = calendar.component(.day, from: date)
         return "\(month)/\(day)\(timeText)"
     }
-}
-
-enum AppSection: String, CaseIterable, Identifiable {
-    case todos
-    case handbook
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .todos: "待办"
-        case .handbook: "手记"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .todos: "checklist"
-        case .handbook: "book.closed"
-        }
-    }
-}
-
-enum TodoScope: Equatable {
-    case dashboard
-    case all
-    case waiting
-    case weekly
-    case day(Date)
-}
-
-enum AllTodosViewMode: String, CaseIterable, Identifiable {
-    case compact
-    case grouped
-    case board
-    case matrix
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .compact: "紧凑"
-        case .grouped: "分组"
-        case .board: "看板"
-        case .matrix: "四象限"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .compact: "text.alignleft"
-        case .grouped: "calendar"
-        case .board: "rectangle.3.group"
-        case .matrix: "square.grid.2x2"
-        }
-    }
-}
-
-enum FocusField: Hashable {
-    case newTitle
-}
-
-struct TodoDraft: Equatable {
-    var title: String
-    var notes: String
-    var priority: TodoPriority
-    var progress: TodoProgress
-    var date: Date
-    var isWeekly: Bool
 }
 
 struct SkinPickerButton: View {
@@ -1954,6 +1884,7 @@ struct PrimarySidebarView: View {
                         section: section,
                         isSelected: activeSection == section
                     ) {
+                        PerformanceMonitor.event("PrimarySidebar.section", detail: section.rawValue)
                         withAnimation(AppMotion.modeSwitch) {
                             activeSection = section
                         }
@@ -2103,6 +2034,7 @@ struct TodoSidebarView: View {
     @EnvironmentObject private var store: TodoStore
     @Binding var scope: TodoScope
     @State private var calendarMonth = Date()
+    @State private var metrics = TodoSidebarMetrics.empty
 
     private let calendar = Calendar.current
 
@@ -2131,11 +2063,18 @@ struct TodoSidebarView: View {
             if let selectedDate {
                 calendarMonth = selectedDate
             }
+            rebuildMetrics()
         }
         .onChange(of: selectedDate) { _, newValue in
             if let newValue {
                 calendarMonth = newValue
             }
+        }
+        .onChange(of: calendarMonth) { _, _ in
+            rebuildMetrics()
+        }
+        .onChange(of: store.todos) { _, _ in
+            rebuildMetrics()
         }
     }
 
@@ -2145,8 +2084,8 @@ struct TodoSidebarView: View {
                 title: "今日推进",
                 subtitle: "风险优先，推进今天",
                 systemImage: "target",
-                count: dashboardCount,
-                alertCount: overdueCount,
+                count: metrics.dashboardCount,
+                alertCount: metrics.overdueCount,
                 isSelected: scope == .dashboard
             ) {
                 scope = .dashboard
@@ -2156,7 +2095,7 @@ struct TodoSidebarView: View {
                 title: "等待反馈",
                 subtitle: "需要别人推进",
                 systemImage: "person.2.fill",
-                count: waitingCount,
+                count: metrics.waitingCount,
                 isSelected: scope == .waiting
             ) {
                 scope = .waiting
@@ -2166,7 +2105,7 @@ struct TodoSidebarView: View {
                 title: "本周固定",
                 subtitle: "重复管理动作",
                 systemImage: "repeat",
-                count: weeklyCount,
+                count: metrics.weeklyCount,
                 isSelected: scope == .weekly
             ) {
                 scope = .weekly
@@ -2176,7 +2115,7 @@ struct TodoSidebarView: View {
                 title: "全部待办",
                 subtitle: "完整任务池",
                 systemImage: "tray.full.fill",
-                count: activeCount,
+                count: metrics.activeCount,
                 isSelected: scope == .all
             ) {
                 scope = .all
@@ -2192,7 +2131,7 @@ struct TodoSidebarView: View {
             QuickDateStrip(
                 dates: quickDates,
                 selectedDate: selectedDate,
-                pendingCount: { store.pendingCount(on: $0) },
+                pendingCount: { metrics.pendingCount(on: $0, calendar: calendar) },
                 onSelect: { date in
                     calendarMonth = date
                     scope = .day(date)
@@ -2204,10 +2143,10 @@ struct TodoSidebarView: View {
     private var miniCalendarGroup: some View {
         TodoMiniCalendar(
             visibleMonth: $calendarMonth,
-            datesWithTodos: store.datesWithTodos(),
+            datesWithTodos: metrics.datesWithTodos,
             selectedDate: selectedDate,
-            todoCount: { store.todos(on: $0).count },
-            pendingCount: { store.pendingCount(on: $0) },
+            todoCount: { metrics.todoCount(on: $0, calendar: calendar) },
+            pendingCount: { metrics.pendingCount(on: $0, calendar: calendar) },
             onSelect: { date in
                 calendarMonth = date
                 scope = .day(date)
@@ -2220,41 +2159,12 @@ struct TodoSidebarView: View {
             Text("待办")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(AppTheme.ink)
-            Text("未完成 \(activeCount) · 逾期 \(overdueCount)")
+            Text("未完成 \(metrics.activeCount) · 逾期 \(metrics.overdueCount)")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
         }
         .padding(.horizontal, 17)
         .padding(.vertical, 13)
-    }
-
-    private var activeCount: Int {
-        store.todos.filter { $0.progress != .done }.count
-    }
-
-    private var overdueCount: Int {
-        let today = calendar.startOfDay(for: Date())
-        return store.todos.filter { todo in
-            todo.progress != .done
-                && todo.progress != .waiting
-                && calendar.startOfDay(for: todo.date) < today
-        }.count
-    }
-
-    private var waitingCount: Int {
-        store.todos.filter { $0.progress == .waiting }.count
-    }
-
-    private var weeklyCount: Int {
-        store.todos.filter { $0.isWeekly && $0.progress != .done }.count
-    }
-
-    private var dashboardCount: Int {
-        let today = calendar.startOfDay(for: Date())
-        return store.todos.filter { todo in
-            todo.progress != .done
-                && (calendar.startOfDay(for: todo.date) <= today || todo.progress == .waiting || todo.isWeekly)
-        }.count
     }
 
     private var quickDates: [Date] {
@@ -2266,6 +2176,12 @@ struct TodoSidebarView: View {
             return nil
         }
         return selectedDate
+    }
+
+    private func rebuildMetrics() {
+        metrics = PerformanceMonitor.measure("TodoSidebar.metrics") {
+            TodoSidebarMetrics(todos: store.todos, calendar: calendar, now: Date())
+        }
     }
 }
 
@@ -2487,61 +2403,9 @@ struct HandbookSidebarView: View {
         }
     }
 
+
     private func rebuildMetrics() {
         metrics = HandbookSidebarMetrics(items: store.handbookItems, selectedCategory: selectedCategory)
-    }
-}
-
-private struct HandbookSidebarMetrics: Equatable {
-    static let empty = HandbookSidebarMetrics(
-        totalCount: 0,
-        scopedCount: 0,
-        categoryCounts: [:],
-        folderCounts: [:],
-        folders: []
-    )
-
-    let totalCount: Int
-    let scopedCount: Int
-    let categoryCounts: [HandbookCategory: Int]
-    let folderCounts: [String: Int]
-    let folders: [String]
-
-    init(
-        totalCount: Int,
-        scopedCount: Int,
-        categoryCounts: [HandbookCategory: Int],
-        folderCounts: [String: Int],
-        folders: [String]
-    ) {
-        self.totalCount = totalCount
-        self.scopedCount = scopedCount
-        self.categoryCounts = categoryCounts
-        self.folderCounts = folderCounts
-        self.folders = folders
-    }
-
-    init(items: [HandbookItem], selectedCategory: HandbookCategory?) {
-        var categoryCounts: [HandbookCategory: Int] = [:]
-        var folderCounts: [String: Int] = [:]
-        var scopedCount = 0
-
-        for item in items {
-            categoryCounts[item.category, default: 0] += 1
-            guard selectedCategory == nil || item.category == selectedCategory else { continue }
-            scopedCount += 1
-
-            let folder = item.trimmedFolder
-            if !folder.isEmpty {
-                folderCounts[folder, default: 0] += 1
-            }
-        }
-
-        self.totalCount = items.count
-        self.scopedCount = scopedCount
-        self.categoryCounts = categoryCounts
-        self.folderCounts = folderCounts
-        self.folders = folderCounts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 }
 
@@ -2691,7 +2555,6 @@ struct QuickDateCell: View {
         .buttonStyle(.tactilePlain)
         .help("\(date.formatted(.dateTime.year().month().day()))：\(count) 个未完成")
         .animation(AppMotion.smooth, value: isSelected)
-        .animation(AppMotion.smooth, value: count)
     }
 
     private var label: String {
@@ -3586,7 +3449,6 @@ struct TodoMatrixQuadrant: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(group.kind.color.opacity(0.16), lineWidth: 1)
         )
-        .animation(AppMotion.list, value: group.todos)
     }
 }
 
@@ -3907,7 +3769,7 @@ struct HandbookContentView: View {
 
             contentArea
         }
-        .animation(AppMotion.list, value: selectedItemID)
+        .animation(AppMotion.smooth, value: selectedItemID)
         .onChange(of: allItems) { _, newItems in
             rebuildVisibleItems(from: newItems)
         }
@@ -4096,15 +3958,17 @@ struct HandbookContentView: View {
 
         selectedItemID = currentItems.first?.id
     }
-
     private func rebuildVisibleItems(from sourceItems: [HandbookItem]? = nil) {
-        let items = sourceItems ?? allItems
-        let scopedItems = scopedItems(from: items)
-        let visibleItems = activeFilter.filter(scopedItems)
-        scopedItemsCache = scopedItems
-        visibleItemsCache = visibleItems
-        visibleItemsCacheKey = listCacheKey(from: items)
-        syncSelection(with: visibleItems)
+        PerformanceMonitor.measure("Handbook.visibleItems") {
+            let items = sourceItems ?? allItems
+            let scopedItems = scopedItems(from: items)
+            let visibleItems = activeFilter.filter(scopedItems)
+            scopedItemsCache = scopedItems
+            visibleItemsCache = visibleItems
+            visibleItemsCacheKey = listCacheKey(from: items)
+            syncSelection(with: visibleItems)
+            PerformanceMonitor.event("Handbook.visibleItems.count", detail: "\(visibleItems.count)")
+        }
     }
 
     private func listCacheKey(from sourceItems: [HandbookItem]) -> HandbookListCacheKey {
@@ -4122,72 +3986,7 @@ struct HandbookContentView: View {
     }
 }
 
-enum HandbookFocusField: Hashable {
-    case title
-    case body
-}
 
-private struct HandbookListCacheKey: Equatable {
-    let itemCount: Int
-    let firstItemID: UUID?
-    let firstUpdatedAt: Date?
-    let lastItemID: UUID?
-    let lastUpdatedAt: Date?
-    let selectedCategory: HandbookCategory?
-    let selectedFolder: String?
-    let searchText: String
-    let activeFilter: HandbookListFilter
-}
-
-enum HandbookListFilter: String, CaseIterable, Identifiable {
-    case all
-    case recent
-    case attached
-    case longform
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .all: "全部"
-        case .recent: "最近"
-        case .attached: "附件"
-        case .longform: "沉淀"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .all: "tray.full"
-        case .recent: "clock"
-        case .attached: "paperclip"
-        case .longform: "doc.richtext"
-        }
-    }
-
-    var emptyText: String {
-        switch self {
-        case .all: "当前没有手记"
-        case .recent: "最近 7 天没有更新的手记"
-        case .attached: "当前范围没有带附件的手记"
-        case .longform: "当前范围还没有中篇或文章"
-        }
-    }
-
-    func filter(_ items: [HandbookItem]) -> [HandbookItem] {
-        switch self {
-        case .all:
-            return items
-        case .recent:
-            let threshold = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? .distantPast
-            return items.filter { $0.updatedAt >= threshold }
-        case .attached:
-            return items.filter { !$0.attachments.isEmpty }
-        case .longform:
-            return items.filter { $0.lengthKind == .medium || $0.lengthKind == .article }
-        }
-    }
-}
 
 struct HandbookListCardHeader: View {
     let selectedCategory: HandbookCategory?
@@ -5136,37 +4935,6 @@ struct HandbookEditableCanvas: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct HandbookBodyMetrics: Equatable {
-    static let empty = HandbookBodyMetrics(text: "")
-
-    let characterCount: Int
-    let lengthKind: HandbookLengthKind
-    let editorHeight: CGFloat
-    let isEmpty: Bool
-
-    init(text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let characterCount = trimmed.count
-        self.characterCount = characterCount
-        self.isEmpty = trimmed.isEmpty
-
-        if characterCount >= 1200 {
-            lengthKind = .article
-        } else if characterCount >= 300 {
-            lengthKind = .medium
-        } else {
-            lengthKind = .snippet
-        }
-
-        let estimatedLines = text
-            .split(separator: "\n", maxSplits: 259, omittingEmptySubsequences: false)
-            .reduce(0) { partialResult, line in
-                partialResult + max(1, (line.count + 58) / 59)
-            }
-        editorHeight = min(2600, max(360, CGFloat(max(12, estimatedLines)) * 24 + 32))
     }
 }
 

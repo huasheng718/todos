@@ -4,7 +4,7 @@
 
 ## 功能
 
-- 默认进入「今日推进」工作台
+- 默认进入「全部待办 / 紧凑模式」，优先阅读完整任务池
 - 自动聚合逾期未完成、今天要推进、等待反馈、本周固定
 - 添加标题、优先级、推进状态、跟进日、备注
 - 支持待处理、推进中、等待他人、已完成状态
@@ -33,6 +33,15 @@
 
 ```bash
 swift run
+```
+
+## 质量检查
+
+当前机器的 Command Line Tools 缺少 XCTest/Testing 模块，项目提供了轻量质量门覆盖快记解析和 SQLite 存储行为：
+
+```bash
+swiftc -parse-as-library Sources/DailyTodos/TodoItem.swift Sources/DailyTodos/HandbookItem.swift Sources/DailyTodos/TodoQuickInputParser.swift Sources/DailyTodos/AppStateModels.swift Sources/DailyTodos/ViewDerivedModels.swift Sources/DailyTodos/PerformanceMonitor.swift Sources/DailyTodos/TodoStore.swift scripts/quality_checks.swift -o /tmp/DailyTodosChecks
+/tmp/DailyTodosChecks
 ```
 
 ## 打包为 macOS App

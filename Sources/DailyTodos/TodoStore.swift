@@ -32,17 +32,19 @@ final class TodoStore: ObservableObject {
 
     func load() {
         do {
-            let shouldSeedIfEmpty = !FileManager.default.fileExists(atPath: databaseURL.path)
-                && !FileManager.default.fileExists(atPath: legacyJSONURL.path)
-            try openDatabase()
-            try createSchema()
-            try migrateLegacyJSONIfNeeded()
+            try PerformanceMonitor.measure("TodoStore.load") {
+                let shouldSeedIfEmpty = !FileManager.default.fileExists(atPath: databaseURL.path)
+                    && !FileManager.default.fileExists(atPath: legacyJSONURL.path)
+                try openDatabase()
+                try createSchema()
+                try migrateLegacyJSONIfNeeded()
 
-            todos = try fetchTodos()
-            handbookItems = try fetchHandbookItems()
-            if todos.isEmpty && shouldSeedIfEmpty {
-                try insertInitialTodo()
                 todos = try fetchTodos()
+                handbookItems = try fetchHandbookItems()
+                if todos.isEmpty && shouldSeedIfEmpty {
+                    try insertInitialTodo()
+                    todos = try fetchTodos()
+                }
             }
             lastError = nil
         } catch {
@@ -71,8 +73,10 @@ final class TodoStore: ObservableObject {
         )
 
         do {
-            try insert(item)
-            todos.insert(item, at: insertionIndex(for: item))
+            try PerformanceMonitor.measure("TodoStore.addTodo") {
+                try insert(item)
+                insertInMemory(item)
+            }
             lastError = nil
         } catch {
             lastError = "保存待办数据失败：\(error.localizedDescription)"
@@ -103,13 +107,15 @@ final class TodoStore: ObservableObject {
         updated.updatedAt = Date()
 
         do {
-            try update(updated)
-            if updated.isWeekly && updated.progress == .done {
-                try ensureNextWeeklyOccurrence(after: updated)
+            try PerformanceMonitor.measure("TodoStore.updateTodo") {
+                try update(updated)
+                todos.remove(at: index)
+                insertInMemory(updated)
+                if updated.isWeekly && updated.progress == .done,
+                   let nextTodo = try ensureNextWeeklyOccurrence(after: updated) {
+                    insertInMemory(nextTodo)
+                }
             }
-            todos[index] = updated
-            todos = try fetchTodos()
-            todos.sort(by: sortTodos)
             lastError = nil
         } catch {
             lastError = "保存待办数据失败：\(error.localizedDescription)"
@@ -125,13 +131,15 @@ final class TodoStore: ObservableObject {
         updated.updatedAt = Date()
 
         do {
-            try update(updated)
-            if updated.isWeekly && updated.progress == .done {
-                try ensureNextWeeklyOccurrence(after: updated)
+            try PerformanceMonitor.measure("TodoStore.toggleTodo") {
+                try update(updated)
+                todos.remove(at: index)
+                insertInMemory(updated)
+                if updated.isWeekly && updated.progress == .done,
+                   let nextTodo = try ensureNextWeeklyOccurrence(after: updated) {
+                    insertInMemory(nextTodo)
+                }
             }
-            todos[index] = updated
-            todos = try fetchTodos()
-            todos.sort(by: sortTodos)
             lastError = nil
         } catch {
             lastError = "保存待办数据失败：\(error.localizedDescription)"
@@ -140,8 +148,10 @@ final class TodoStore: ObservableObject {
 
     func delete(_ todo: TodoItem) {
         do {
-            try delete(id: todo.id)
-            todos.removeAll { $0.id == todo.id }
+            try PerformanceMonitor.measure("TodoStore.deleteTodo") {
+                try delete(id: todo.id)
+                todos.removeAll { $0.id == todo.id }
+            }
             lastError = nil
         } catch {
             lastError = "删除待办失败：\(error.localizedDescription)"
@@ -168,8 +178,10 @@ final class TodoStore: ObservableObject {
         )
 
         do {
-            try insert(item)
-            handbookItems.insert(item, at: handbookInsertionIndex(for: item))
+            try PerformanceMonitor.measure("TodoStore.addHandbookItem") {
+                try insert(item)
+                handbookItems.insert(item, at: handbookInsertionIndex(for: item))
+            }
             lastError = nil
         } catch {
             lastError = "保存手记失败：\(error.localizedDescription)"
@@ -198,9 +210,11 @@ final class TodoStore: ObservableObject {
         updated.updatedAt = Date()
 
         do {
-            try update(updated)
-            handbookItems[index] = updated
-            handbookItems.sort(by: sortHandbookItems)
+            try PerformanceMonitor.measure("TodoStore.updateHandbookItem") {
+                try update(updated)
+                handbookItems.remove(at: index)
+                handbookItems.insert(updated, at: handbookInsertionIndex(for: updated))
+            }
             lastError = nil
         } catch {
             lastError = "保存手记失败：\(error.localizedDescription)"
@@ -209,8 +223,10 @@ final class TodoStore: ObservableObject {
 
     func delete(_ item: HandbookItem) {
         do {
-            try deleteHandbookItem(id: item.id)
-            handbookItems.removeAll { $0.id == item.id }
+            try PerformanceMonitor.measure("TodoStore.deleteHandbookItem") {
+                try deleteHandbookItem(id: item.id)
+                handbookItems.removeAll { $0.id == item.id }
+            }
             lastError = nil
         } catch {
             lastError = "删除手记失败：\(error.localizedDescription)"
@@ -405,8 +421,8 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    private func ensureNextWeeklyOccurrence(after todo: TodoItem) throws {
-        guard let nextDate = calendar.date(byAdding: .day, value: 7, to: todo.date) else { return }
+    private func ensureNextWeeklyOccurrence(after todo: TodoItem) throws -> TodoItem? {
+        guard let nextDate = calendar.date(byAdding: .day, value: 7, to: todo.date) else { return nil }
         let nextDay = calendar.startOfDay(for: nextDate)
         let alreadyExists = todos.contains { candidate in
             candidate.isWeekly
@@ -414,7 +430,7 @@ final class TodoStore: ObservableObject {
                 && calendar.isDate(candidate.date, inSameDayAs: nextDay)
                 && candidate.trimmedTitle == todo.trimmedTitle
         }
-        guard !alreadyExists else { return }
+        guard !alreadyExists else { return nil }
 
         let nextTodo = TodoItem(
             title: todo.title,
@@ -425,6 +441,7 @@ final class TodoStore: ObservableObject {
             isWeekly: true
         )
         try insert(nextTodo)
+        return nextTodo
     }
 
     private func update(_ todo: TodoItem) throws {
@@ -672,6 +689,10 @@ final class TodoStore: ObservableObject {
 
     private func insertionIndex(for item: TodoItem) -> Int {
         todos.firstIndex { sortTodos(item, $0) } ?? todos.endIndex
+    }
+
+    private func insertInMemory(_ item: TodoItem) {
+        todos.insert(item, at: insertionIndex(for: item))
     }
 
     private func handbookInsertionIndex(for item: HandbookItem) -> Int {
