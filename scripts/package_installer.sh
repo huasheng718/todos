@@ -22,7 +22,16 @@ trap cleanup EXIT
 
 cd "$ROOT_DIR"
 
-APP_DIR_OVERRIDE="$APP_DIR" "$ROOT_DIR/scripts/package_app.sh" >/dev/null
+if [ -n "${PREBUILT_APP_DIR:-}" ]; then
+  if [ ! -d "$PREBUILT_APP_DIR" ]; then
+    echo "PREBUILT_APP_DIR does not exist: $PREBUILT_APP_DIR" >&2
+    exit 1
+  fi
+  rm -rf "$APP_DIR"
+  cp -R "$PREBUILT_APP_DIR" "$APP_DIR"
+else
+  APP_DIR_OVERRIDE="$APP_DIR" "$ROOT_DIR/scripts/package_app.sh" >/dev/null
+fi
 xattr -cr "$APP_DIR"
 
 rm -f "$PKG_PATH" "$ASCII_PKG_PATH"
