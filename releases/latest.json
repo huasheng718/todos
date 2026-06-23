@@ -1,6 +1,6 @@
 {
-  "version": "1.1.13",
-  "build": 15,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.13/AntOrder-1.1.13.pkg",
-  "releaseNotes": "蚁序 1.1.13 更新：增加 macOS 夜间模式兼容，现有皮肤会跟随系统明暗外观自动切换，并优化卡片、侧栏、标签、AI 设置和输入区在深色背景下的对比度。"
+  "version": "1.1.14",
+  "build": 16,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.14/AntOrder-1.1.14.pkg",
+  "releaseNotes": "蚁序 1.1.14 更新：优化手记列表和编辑器性能，减少切换时的加载闪烁，新增一键复制全文与标题复制反馈。"
 }

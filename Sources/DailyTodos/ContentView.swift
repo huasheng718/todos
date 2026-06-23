@@ -567,7 +567,6 @@ struct ContentView: View {
     @State private var isAISettingsPresented = false
     @State private var isAppSettingsPresented = false
     @State private var isSecondarySidebarCollapsed = false
-    @State private var isHandbookContentReady = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @State private var themeRefreshCounter = 0
     @FocusState private var focusedField: FocusField?
@@ -652,17 +651,6 @@ struct ContentView: View {
         .onChange(of: colorScheme) { _, newValue in
             activeColorScheme = newValue
             themeRefreshCounter += 1
-        }
-        .onChange(of: activeSection) { _, newValue in
-            guard newValue == .handbook else {
-                isHandbookContentReady = false
-                return
-            }
-
-            isHandbookContentReady = false
-            DispatchQueue.main.async {
-                isHandbookContentReady = true
-            }
         }
         .onChange(of: scope) { _, newValue in
             if case .day(let date) = newValue {
@@ -784,7 +772,6 @@ struct ContentView: View {
     private var handbookColumn: some View {
         HandbookContentView(
             allItems: store.handbookItems,
-            isReady: isHandbookContentReady,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
             searchText: handbookSearchText,
@@ -2376,10 +2363,9 @@ struct HandbookSidebarView: View {
     @Binding var selectedCategory: HandbookCategory?
     @Binding var selectedFolder: String?
     @Binding var searchText: String
+    @State private var metrics = HandbookSidebarMetrics.empty
 
     var body: some View {
-        let metrics = HandbookSidebarMetrics(items: store.handbookItems, selectedCategory: selectedCategory)
-
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -2410,6 +2396,15 @@ struct HandbookSidebarView: View {
         }
         .background(AppTheme.sidebar)
         .foregroundStyle(AppTheme.ink)
+        .onAppear {
+            rebuildMetrics()
+        }
+        .onChange(of: store.handbookItems) { _, _ in
+            rebuildMetrics()
+        }
+        .onChange(of: selectedCategory) { _, _ in
+            rebuildMetrics()
+        }
     }
 
     private var header: some View {
@@ -2491,14 +2486,40 @@ struct HandbookSidebarView: View {
             }
         }
     }
+
+    private func rebuildMetrics() {
+        metrics = HandbookSidebarMetrics(items: store.handbookItems, selectedCategory: selectedCategory)
+    }
 }
 
-private struct HandbookSidebarMetrics {
+private struct HandbookSidebarMetrics: Equatable {
+    static let empty = HandbookSidebarMetrics(
+        totalCount: 0,
+        scopedCount: 0,
+        categoryCounts: [:],
+        folderCounts: [:],
+        folders: []
+    )
+
     let totalCount: Int
     let scopedCount: Int
     let categoryCounts: [HandbookCategory: Int]
     let folderCounts: [String: Int]
     let folders: [String]
+
+    init(
+        totalCount: Int,
+        scopedCount: Int,
+        categoryCounts: [HandbookCategory: Int],
+        folderCounts: [String: Int],
+        folders: [String]
+    ) {
+        self.totalCount = totalCount
+        self.scopedCount = scopedCount
+        self.categoryCounts = categoryCounts
+        self.folderCounts = folderCounts
+        self.folders = folders
+    }
 
     init(items: [HandbookItem], selectedCategory: HandbookCategory?) {
         var categoryCounts: [HandbookCategory: Int] = [:]
@@ -3856,7 +3877,6 @@ enum WorkSectionKind: String, Identifiable {
 
 struct HandbookContentView: View {
     let allItems: [HandbookItem]
-    let isReady: Bool
     let selectedCategory: HandbookCategory?
     let selectedFolder: String?
     let searchText: String
@@ -3869,7 +3889,9 @@ struct HandbookContentView: View {
     @State private var selectedItemID: UUID?
     @State private var shouldSelectLatestAfterCreate = false
     @State private var activeFilter: HandbookListFilter = .all
-    @State private var isDetailReady = false
+    @State private var scopedItemsCache: [HandbookItem] = []
+    @State private var visibleItemsCache: [HandbookItem] = []
+    @State private var visibleItemsCacheKey: HandbookListCacheKey?
     @FocusState private var focusedField: HandbookFocusField?
 
     var body: some View {
@@ -3887,34 +3909,22 @@ struct HandbookContentView: View {
         }
         .animation(AppMotion.list, value: selectedItemID)
         .onChange(of: allItems) { _, newItems in
-            syncSelection(with: visibleItems(from: newItems))
+            rebuildVisibleItems(from: newItems)
         }
         .onChange(of: selectedCategory) { _, _ in
-            syncSelection(with: visibleItems(from: allItems))
+            rebuildVisibleItems()
         }
         .onChange(of: selectedFolder) { _, _ in
-            syncSelection(with: visibleItems(from: allItems))
+            rebuildVisibleItems()
         }
         .onChange(of: searchText) { _, _ in
-            syncSelection(with: visibleItems(from: allItems))
+            rebuildVisibleItems()
         }
         .onChange(of: activeFilter) { _, _ in
-            syncSelection(with: visibleItems(from: allItems))
+            rebuildVisibleItems()
         }
         .onAppear {
-            if isReady {
-                syncSelection(with: visibleItems(from: allItems))
-            }
-        }
-        .onChange(of: isReady) { _, newValue in
-            guard newValue else {
-                isDetailReady = false
-                return
-            }
-            syncSelection(with: visibleItems(from: allItems))
-            DispatchQueue.main.async {
-                isDetailReady = true
-            }
+            rebuildVisibleItems()
         }
     }
 
@@ -3955,6 +3965,15 @@ struct HandbookContentView: View {
         activeFilter.filter(scopedItems(from: sourceItems))
     }
 
+    private var currentListSnapshot: (scopedItems: [HandbookItem], visibleItems: [HandbookItem]) {
+        if visibleItemsCacheKey == listCacheKey(from: allItems) {
+            return (scopedItemsCache, visibleItemsCache)
+        }
+
+        let scopedItems = scopedItems(from: allItems)
+        return (scopedItems, activeFilter.filter(scopedItems))
+    }
+
     private func matchesFolder(_ item: HandbookItem) -> Bool {
         guard let selectedFolder, !selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return true
@@ -3973,130 +3992,49 @@ struct HandbookContentView: View {
 
     @ViewBuilder
     private var contentArea: some View {
-        if !isReady {
-            handbookLoadingShell
-                .transition(AppMotion.inlineTransition)
+        let snapshot = currentListSnapshot
+        let items = snapshot.scopedItems
+        let visibleItems = snapshot.visibleItems
+        let selectedItem = selectedItem(in: visibleItems)
+
+        if items.isEmpty {
+            HStack(alignment: .top, spacing: 10) {
+                handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
+                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                HandbookEmptyState(category: selectedCategory)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .transition(AppMotion.viewTransition)
+        } else if visibleItems.isEmpty {
+            HStack(alignment: .top, spacing: 10) {
+                handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
+                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                HandbookFilteredEmptyState(filter: activeFilter)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .transition(AppMotion.viewTransition)
         } else {
-            let items = scopedItems(from: allItems)
-            let visibleItems = activeFilter.filter(items)
-            let selectedItem = selectedItem(in: visibleItems)
+            HStack(alignment: .top, spacing: 10) {
+                handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
+                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
 
-            if items.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
-                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                    HandbookEmptyState(category: selectedCategory)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .transition(AppMotion.viewTransition)
-            } else if visibleItems.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
-                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                    HandbookFilteredEmptyState(filter: activeFilter)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .transition(AppMotion.viewTransition)
-            } else {
-                HStack(alignment: .top, spacing: 10) {
-                    handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
-                        .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                    if isDetailReady {
-                        HandbookDetailPanel(
-                            item: selectedItem,
-                            onUpdate: onUpdate,
-                            onDelete: { item in
-                                onDelete(item)
-                                if selectedItemID == item.id {
-                                    selectedItemID = nil
-                                }
-                            }
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .transition(AppMotion.inlineTransition)
-                    } else {
-                        handbookDetailLoadingPanel
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .transition(AppMotion.inlineTransition)
+                HandbookDetailPanel(
+                    item: selectedItem,
+                    onUpdate: onUpdate,
+                    onDelete: { item in
+                        onDelete(item)
+                        if selectedItemID == item.id {
+                            selectedItemID = nil
+                        }
                     }
-                }
-                .transition(AppMotion.viewTransition)
-            }
-        }
-    }
-
-    private var handbookLoadingShell: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 10) {
-                HandbookListCardHeader(
-                    selectedCategory: selectedCategory,
-                    selectedFolder: selectedFolder,
-                    totalCount: allItems.count,
-                    visibleCount: 0,
-                    activeFilter: $activeFilter
                 )
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(0..<6, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(AppTheme.hairline.opacity(index == 0 ? 0.58 : 0.34))
-                            .frame(height: index == 0 ? 72 : 58)
-                    }
-                }
-                .padding(7)
-            }
-            .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity, alignment: .top)
-            .background(AppTheme.panel.opacity(0.66), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(AppTheme.hairline.opacity(0.62))
-            )
-
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(AppTheme.panel.opacity(0.58))
-                .overlay(alignment: .topLeading) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(AppTheme.hairline.opacity(0.48))
-                            .frame(width: 220, height: 18)
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(AppTheme.hairline.opacity(0.28))
-                            .frame(width: 340, height: 12)
-                    }
-                    .padding(20)
-                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .accessibilityLabel("正在加载手记")
-    }
-
-    private var handbookDetailLoadingPanel: some View {
-        RoundedRectangle(cornerRadius: 13, style: .continuous)
-            .fill(AppTheme.panel.opacity(0.68))
-            .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 10) {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(AppTheme.hairline.opacity(0.48))
-                        .frame(width: 220, height: 18)
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(AppTheme.hairline.opacity(0.28))
-                        .frame(width: 340, height: 12)
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(AppTheme.hairline.opacity(0.22))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .padding(.top, 12)
-                }
-                .padding(20)
+                .transition(AppMotion.inlineTransition)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(AppTheme.hairline.opacity(0.60))
-            )
-            .accessibilityLabel("正在准备手记详情")
+            .transition(AppMotion.viewTransition)
+        }
     }
 
     private func handbookListCard(itemsCount: Int, visibleItems: [HandbookItem], selectedItem: HandbookItem?) -> some View {
@@ -4158,11 +4096,47 @@ struct HandbookContentView: View {
 
         selectedItemID = currentItems.first?.id
     }
+
+    private func rebuildVisibleItems(from sourceItems: [HandbookItem]? = nil) {
+        let items = sourceItems ?? allItems
+        let scopedItems = scopedItems(from: items)
+        let visibleItems = activeFilter.filter(scopedItems)
+        scopedItemsCache = scopedItems
+        visibleItemsCache = visibleItems
+        visibleItemsCacheKey = listCacheKey(from: items)
+        syncSelection(with: visibleItems)
+    }
+
+    private func listCacheKey(from sourceItems: [HandbookItem]) -> HandbookListCacheKey {
+        HandbookListCacheKey(
+            itemCount: sourceItems.count,
+            firstItemID: sourceItems.first?.id,
+            firstUpdatedAt: sourceItems.first?.updatedAt,
+            lastItemID: sourceItems.last?.id,
+            lastUpdatedAt: sourceItems.last?.updatedAt,
+            selectedCategory: selectedCategory,
+            selectedFolder: selectedFolder?.trimmingCharacters(in: .whitespacesAndNewlines),
+            searchText: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
+            activeFilter: activeFilter
+        )
+    }
 }
 
 enum HandbookFocusField: Hashable {
     case title
     case body
+}
+
+private struct HandbookListCacheKey: Equatable {
+    let itemCount: Int
+    let firstItemID: UUID?
+    let firstUpdatedAt: Date?
+    let lastItemID: UUID?
+    let lastUpdatedAt: Date?
+    let selectedCategory: HandbookCategory?
+    let selectedFolder: String?
+    let searchText: String
+    let activeFilter: HandbookListFilter
 }
 
 enum HandbookListFilter: String, CaseIterable, Identifiable {
@@ -4766,6 +4740,8 @@ struct HandbookDetailPanel: View {
     @State private var bodyText = ""
     @State private var attachments: [HandbookAttachment] = []
     @State private var outline: [MarkdownOutlineEntry] = []
+    @State private var bodyMetrics = HandbookBodyMetrics.empty
+    @State private var outlineUpdateToken = UUID()
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
     var body: some View {
@@ -4797,9 +4773,11 @@ struct HandbookDetailPanel: View {
             HandbookCanvasToolbar(
                 accentColor: category.accentColor,
                 isDirty: isDirty(comparedTo: item),
+                canCopyAll: !copyAllText(for: item).isEmpty,
+                canCopyTitle: !(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && item.displayTitle.isEmpty),
                 onDelete: { onDelete(item) },
+                onCopyAll: { copyToPasteboard(copyAllText(for: item)) },
                 onCopyTitle: { copyToPasteboard(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : title) },
-                onCopyBody: { copyToPasteboard(bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? title : bodyText) },
                 onSave: { submitEdit(for: item) }
             )
 
@@ -4813,7 +4791,10 @@ struct HandbookDetailPanel: View {
                     title: $title,
                     bodyText: $bodyText,
                     focusedField: $canvasFocus,
-                    lengthKind: draftLengthKind,
+                    lengthKind: bodyMetrics.lengthKind,
+                    characterCount: bodyMetrics.characterCount,
+                    editorHeight: bodyMetrics.editorHeight,
+                    isBodyEmpty: bodyMetrics.isEmpty,
                     updatedAt: item.updatedAt,
                     attachmentCount: attachments.count
                 )
@@ -4842,6 +4823,7 @@ struct HandbookDetailPanel: View {
                 }
             }
             .onChange(of: bodyText) { _, newValue in
+                updateBodyMetrics(for: newValue)
                 scheduleOutlineUpdate(for: newValue)
             }
             .scrollIndicators(.hidden)
@@ -4888,15 +4870,28 @@ struct HandbookDetailPanel: View {
         bodyText = item.body
         attachments = item.attachments
         outline = []
+        updateBodyMetrics(for: item.body)
         scheduleOutlineUpdate(for: item.body)
     }
 
     private func scheduleOutlineUpdate(for text: String) {
+        let token = UUID()
+        outlineUpdateToken = token
         let snapshot = text
-        DispatchQueue.main.async {
+        guard snapshot.contains("#") else {
+            outline = []
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            guard outlineUpdateToken == token else { return }
             guard snapshot == bodyText else { return }
             outline = MarkdownOutlineEntry.extract(from: snapshot.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+    }
+
+    private func updateBodyMetrics(for text: String) {
+        bodyMetrics = HandbookBodyMetrics(text: text)
     }
 
     private func copyToPasteboard(_ value: String) {
@@ -4904,8 +4899,19 @@ struct HandbookDetailPanel: View {
         NSPasteboard.general.setString(value, forType: .string)
     }
 
-    private var draftLengthKind: HandbookLengthKind {
-        HandbookItem(category: category, folder: folder, title: title, body: bodyText).lengthKind
+    private func copyAllText(for item: HandbookItem) -> String {
+        let titleText = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? item.displayTitle
+            : title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if titleText.isEmpty {
+            return body
+        }
+        if body.isEmpty {
+            return titleText
+        }
+        return "\(titleText)\n\n\(body)"
     }
 
     private func isDirty(comparedTo item: HandbookItem) -> Bool {
@@ -4925,10 +4931,14 @@ enum HandbookCanvasFocus: Hashable {
 struct HandbookCanvasToolbar: View {
     let accentColor: Color
     let isDirty: Bool
+    let canCopyAll: Bool
+    let canCopyTitle: Bool
     let onDelete: () -> Void
+    let onCopyAll: () -> Void
     let onCopyTitle: () -> Void
-    let onCopyBody: () -> Void
     let onSave: () -> Void
+    @State private var copiedMessage: String?
+    @State private var copyFeedbackToken = UUID()
 
     var body: some View {
         HStack(spacing: 9) {
@@ -4952,28 +4962,44 @@ struct HandbookCanvasToolbar: View {
 
             Spacer(minLength: 0)
 
-            Label(isDirty ? "未保存" : "已保存", systemImage: isDirty ? "circle.dotted" : "checkmark.circle")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(isDirty ? AppTheme.accentWarm : AppTheme.mutedInk)
-                .lineLimit(1)
+            HStack(spacing: 8) {
+                Label(isDirty ? "未保存" : "已保存", systemImage: isDirty ? "circle.dotted" : "checkmark.circle")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(isDirty ? AppTheme.accentWarm : AppTheme.mutedInk)
+                    .lineLimit(1)
 
-            Menu {
-                Button(action: onCopyTitle) {
-                    Label("复制标题", systemImage: "doc.on.doc")
+                if let copiedMessage {
+                    Label(copiedMessage, systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accentColor)
+                        .lineLimit(1)
+                        .transition(.opacity)
                 }
-
-                Button(action: onCopyBody) {
-                    Label("复制正文", systemImage: "text.page")
-                }
-            } label: {
-                Label("复制", systemImage: "doc.on.doc")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 62, height: 30)
             }
-            .menuStyle(.borderlessButton)
-            .buttonStyle(.tactilePlain)
-            .foregroundStyle(AppTheme.mutedInk)
-            .help("复制标题或正文")
+            .frame(minWidth: 110, alignment: .trailing)
+
+            HStack(spacing: 5) {
+                HandbookToolbarCopyButton(
+                    title: "复制全文",
+                    systemImage: "doc.on.doc",
+                    isPrimary: true,
+                    isEnabled: canCopyAll
+                ) {
+                    performCopy(message: "已复制", action: onCopyAll)
+                }
+                .help("复制标题和正文")
+
+                HandbookToolbarCopyButton(
+                    title: "标题",
+                    systemImage: "textformat",
+                    isPrimary: false,
+                    isEnabled: canCopyTitle
+                ) {
+                    performCopy(message: "标题已复制", action: onCopyTitle)
+                }
+                .help("仅复制标题")
+            }
+            .fixedSize(horizontal: true, vertical: false)
 
             Button(action: onSave) {
                 Label("保存", systemImage: "checkmark")
@@ -4993,6 +5019,69 @@ struct HandbookCanvasToolbar: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(AppTheme.panel.opacity(0.96))
+        .animation(AppMotion.quick, value: copiedMessage)
+    }
+
+    private func performCopy(message: String, action: () -> Void) {
+        action()
+        let token = UUID()
+        copyFeedbackToken = token
+        withAnimation(AppMotion.quick) {
+            copiedMessage = message
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
+            guard copyFeedbackToken == token else { return }
+            withAnimation(AppMotion.quick) {
+                copiedMessage = nil
+            }
+        }
+    }
+}
+
+struct HandbookToolbarCopyButton: View {
+    let title: String
+    let systemImage: String
+    let isPrimary: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 12, weight: .bold))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, isPrimary ? 10 : 8)
+                .frame(height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isPrimary ? AppTheme.accent : AppTheme.mutedInk)
+        .background(buttonBackground, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(isPrimary ? AppTheme.accent.opacity(0.22) : AppTheme.hairline.opacity(isHovered ? 0.92 : 0.64))
+        )
+        .interactionHitArea(34)
+        .opacity(isEnabled ? 1 : 0.42)
+        .disabled(!isEnabled)
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
+    }
+
+    private var buttonBackground: Color {
+        guard isEnabled else {
+            return AppTheme.adaptiveBlack(0.18)
+        }
+        if isPrimary {
+            return isHovered ? AppTheme.accentSoft.opacity(0.95) : AppTheme.accentSoft.opacity(0.72)
+        }
+        return isHovered ? AppTheme.adaptiveWhite(0.82) : AppTheme.adaptiveWhite(0.54)
     }
 }
 
@@ -5003,6 +5092,9 @@ struct HandbookEditableCanvas: View {
     @Binding var bodyText: String
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
     let lengthKind: HandbookLengthKind
+    let characterCount: Int
+    let editorHeight: CGFloat
+    let isBodyEmpty: Bool
     let updatedAt: Date
     let attachmentCount: Int
 
@@ -5019,7 +5111,7 @@ struct HandbookEditableCanvas: View {
                 category: $category,
                 folder: $folder,
                 lengthKind: lengthKind,
-                characterCount: bodyText.trimmingCharacters(in: .whitespacesAndNewlines).count,
+                characterCount: characterCount,
                 updatedAt: updatedAt,
                 attachmentCount: attachmentCount
             )
@@ -5031,10 +5123,10 @@ struct HandbookEditableCanvas: View {
                     .lineSpacing(5)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, -4)
-                    .frame(minHeight: max(360, editorHeight), maxHeight: max(360, editorHeight))
+                    .frame(minHeight: editorHeight, maxHeight: editorHeight)
                     .focused(focusedField, equals: .body)
 
-                if bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if isBodyEmpty {
                     Text("从这里开始写手记，支持 Markdown。")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(AppTheme.mutedInk)
@@ -5045,14 +5137,36 @@ struct HandbookEditableCanvas: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    private var editorHeight: CGFloat {
-        let estimatedLines = bodyText
-            .split(separator: "\n", omittingEmptySubsequences: false)
+private struct HandbookBodyMetrics: Equatable {
+    static let empty = HandbookBodyMetrics(text: "")
+
+    let characterCount: Int
+    let lengthKind: HandbookLengthKind
+    let editorHeight: CGFloat
+    let isEmpty: Bool
+
+    init(text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let characterCount = trimmed.count
+        self.characterCount = characterCount
+        self.isEmpty = trimmed.isEmpty
+
+        if characterCount >= 1200 {
+            lengthKind = .article
+        } else if characterCount >= 300 {
+            lengthKind = .medium
+        } else {
+            lengthKind = .snippet
+        }
+
+        let estimatedLines = text
+            .split(separator: "\n", maxSplits: 259, omittingEmptySubsequences: false)
             .reduce(0) { partialResult, line in
                 partialResult + max(1, (line.count + 58) / 59)
             }
-        return CGFloat(max(12, estimatedLines)) * 24 + 32
+        editorHeight = min(2600, max(360, CGFloat(max(12, estimatedLines)) * 24 + 32))
     }
 }
 
