@@ -21,6 +21,7 @@ enum AppMotion {
     static let status = Animation.interactiveSpring(response: 0.26, dampingFraction: 0.84, blendDuration: 0.03)
     static let complete = Animation.interactiveSpring(response: 0.34, dampingFraction: 0.72, blendDuration: 0.04)
     static let modeSwitch = Animation.interactiveSpring(response: 0.30, dampingFraction: 0.90, blendDuration: 0.04)
+    static let sectionSwitch = Animation.easeOut(duration: 0.16)
 
     static var rowTransition: AnyTransition {
         .asymmetric(
@@ -83,6 +84,13 @@ extension View {
     func interactionHitArea(_ minSize: CGFloat = compactHitTargetSize) -> some View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
+    }
+
+    func sectionVisibility(_ isVisible: Bool) -> some View {
+        opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
+            .zIndex(isVisible ? 1 : 0)
     }
 }
 

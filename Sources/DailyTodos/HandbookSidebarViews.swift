@@ -39,7 +39,6 @@ struct HandbookSidebarView: View {
         .background(AppTheme.sidebar)
         .foregroundStyle(AppTheme.ink)
         .onAppear {
-            store.scheduleLoadHandbookItemsIfNeeded()
             rebuildMetrics()
         }
         .onChange(of: store.handbookItems) { _, _ in

@@ -162,7 +162,7 @@ struct PrimarySidebarView: View {
                         isSelected: activeSection == section
                     ) {
                         PerformanceMonitor.event("PrimarySidebar.section", detail: section.rawValue)
-                        withAnimation(AppMotion.modeSwitch) {
+                        withAnimation(AppMotion.sectionSwitch) {
                             activeSection = section
                         }
                     }
