@@ -15,9 +15,13 @@ struct TodoMiniCalendar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            SidebarSectionLabel("有记录")
+            HStack(spacing: 8) {
+                SidebarSectionLabel("有记录")
+                Spacer()
+                yearStepper
+            }
 
-            calendarNavigator
+            monthStepper
 
             LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(weekdayLabels, id: \.self) { label in
@@ -54,24 +58,75 @@ struct TodoMiniCalendar: View {
         }
     }
 
-    private var calendarNavigator: some View {
-        HStack(spacing: 4) {
+    private var yearStepper: some View {
+        HStack(spacing: 2) {
             calendarStepButton(systemImage: "chevron.left.2", help: "上一年") {
                 shiftYear(-1)
             }
 
+            Menu {
+                ForEach(yearOptions, id: \.self) { year in
+                    Button {
+                        setYear(year)
+                    } label: {
+                        HStack {
+                            Text("\(year) 年")
+                            if year == currentYear {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                dropdownLabel(title: yearTitle, font: .system(size: 11, weight: .bold))
+                    .frame(minWidth: 62, minHeight: 28)
+            }
+            .buttonStyle(.plain)
+            .help("选择年份")
+
+            calendarStepButton(systemImage: "chevron.right.2", help: "下一年") {
+                shiftYear(1)
+            }
+        }
+        .padding(.horizontal, 3)
+        .padding(.vertical, 2)
+        .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.hairline.opacity(0.78))
+        )
+    }
+
+    private var monthStepper: some View {
+        HStack(spacing: 4) {
             calendarStepButton(systemImage: "chevron.left", help: "上个月") {
                 shiftMonth(-1)
             }
 
-            monthSelectionMenu
+            Menu {
+                ForEach(monthOptions, id: \.self) { month in
+                    Button {
+                        setMonth(month)
+                    } label: {
+                        HStack {
+                            Text(monthName(for: month))
+                            if month == currentMonth {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                dropdownLabel(title: monthTitle, font: .system(size: 12, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 28)
+            }
+            .buttonStyle(.plain)
+            .help("选择月份")
 
             calendarStepButton(systemImage: "chevron.right", help: "下个月") {
                 shiftMonth(1)
-            }
-
-            calendarStepButton(systemImage: "chevron.right.2", help: "下一年") {
-                shiftYear(1)
             }
         }
         .foregroundStyle(AppTheme.mutedInk)
@@ -84,40 +139,19 @@ struct TodoMiniCalendar: View {
         )
     }
 
-    private var monthSelectionMenu: some View {
-        Menu {
-            ForEach(yearOptions, id: \.self) { year in
-                Section("\(year) 年") {
-                    ForEach(monthOptions, id: \.self) { month in
-                        Button {
-                            setMonth(month, year: year)
-                        } label: {
-                            HStack {
-                                Text(monthName(for: month, year: year))
-                                if year == currentYear && month == currentMonth {
-                                    Spacer()
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Text(monthTitle)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.ink)
-                    .monospacedDigit()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-            .frame(maxWidth: .infinity, minHeight: 28)
-            .contentShape(Rectangle())
+    private func dropdownLabel(title: String, font: Font) -> some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .font(font)
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(1)
+                .monospacedDigit()
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
         }
-        .menuStyle(.borderlessButton)
-        .help("选择月份")
+        .contentShape(Rectangle())
     }
 
     private func calendarStepButton(systemImage: String, help: String, action: @escaping () -> Void) -> some View {
@@ -136,7 +170,7 @@ struct TodoMiniCalendar: View {
     }
 
     private var monthTitle: String {
-        "\(yearTitle) \(visibleMonth.formatted(.dateTime.month(.wide)))"
+        visibleMonth.formatted(.dateTime.month(.wide))
     }
 
     private var currentYear: Int {
@@ -179,11 +213,8 @@ struct TodoMiniCalendar: View {
         }
     }
 
-    private func setMonth(_ month: Int, year: Int? = nil) {
+    private func setMonth(_ month: Int) {
         var components = calendar.dateComponents([.year, .month], from: visibleMonth)
-        if let year {
-            components.year = year
-        }
         components.month = month
         components.day = 1
         if let nextDate = calendar.date(from: components) {
@@ -193,9 +224,9 @@ struct TodoMiniCalendar: View {
         }
     }
 
-    private func monthName(for month: Int, year: Int = 0) -> String {
+    private func monthName(for month: Int) -> String {
         var components = DateComponents()
-        components.year = year == 0 ? currentYear : year
+        components.year = currentYear
         components.month = month
         components.day = 1
         guard let date = calendar.date(from: components) else {
