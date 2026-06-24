@@ -1,6 +1,6 @@
 {
-  "version": "1.1.17",
-  "build": 18,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.17/AntOrder-1.1.17.pkg",
-  "releaseNotes": "蚁序 1.1.17 更新：完成 ContentView 拆分后的交互打磨，修复快记默认时间与下周一、后天等自然语言识别，新增待办操作反馈、撤销和自动定位，优化搜索与视图切换体感。"
+  "version": "1.1.18",
+  "build": 19,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.18/AntOrder-1.1.18.pkg",
+  "releaseNotes": "修复更新检测，确保发现新版本后可以下载。"
 }
