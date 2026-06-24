@@ -276,7 +276,7 @@ struct ContentView: View {
         .background(AppTheme.workSurface)
         .animation(AppMotion.smooth, value: handbookCategory)
         .onAppear {
-            store.loadHandbookItemsIfNeeded()
+            store.scheduleLoadHandbookItemsIfNeeded()
         }
     }
 

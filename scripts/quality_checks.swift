@@ -21,6 +21,7 @@ struct DailyTodosChecks {
                 try checkLazyStartupLoading()
                 try checkTodoStore()
             }
+            try await checkScheduledHandbookLoading()
             print("DailyTodosChecks passed")
         } catch {
             FileHandle.standardError.write(Data("DailyTodosChecks failed: \(error)\n".utf8))
@@ -235,6 +236,37 @@ func checkLazyStartupLoading() throws {
 
     store.loadHandbookItemsIfNeeded()
     try expect(store.didLoadHandbookItems, "按需加载后应标记手记已加载")
+}
+
+@MainActor
+func checkScheduledHandbookLoading() async throws {
+    let (seedStore, databaseURL) = try makeStore()
+    seedStore.loadStartupData()
+    seedStore.addHandbookItem(
+        category: .businessRule,
+        folder: "合同",
+        title: "租赁合同状态",
+        body: "切换手记时不应阻塞主线程"
+    )
+
+    let store = TodoStore(storageURL: databaseURL)
+    store.loadStartupData()
+    try expect(!store.didLoadHandbookItems, "异步调度前不应预加载手记")
+
+    store.scheduleLoadHandbookItemsIfNeeded()
+    try expect(store.isLoadingHandbookItems, "调度手记加载后应进入 loading 状态")
+    try expect(!store.didLoadHandbookItems, "调度手记加载不应同步完成")
+
+    for _ in 0..<50 {
+        if store.didLoadHandbookItems {
+            break
+        }
+        try await Task.sleep(for: .milliseconds(20))
+    }
+
+    try expect(store.didLoadHandbookItems, "后台手记加载最终应完成")
+    try expect(!store.isLoadingHandbookItems, "后台手记加载完成后应退出 loading 状态")
+    try expect(store.handbookItems.contains { $0.title == "租赁合同状态" }, "后台手记加载应返回 SQLite 中的数据")
 }
 
 @MainActor

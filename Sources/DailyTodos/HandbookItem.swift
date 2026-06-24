@@ -1,6 +1,6 @@
 import Foundation
 
-struct HandbookItem: Identifiable, Codable, Equatable {
+struct HandbookItem: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var category: HandbookCategory
     var folder: String
@@ -31,7 +31,7 @@ struct HandbookItem: Identifiable, Codable, Equatable {
     }
 }
 
-struct HandbookAttachment: Identifiable, Codable, Equatable {
+struct HandbookAttachment: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var kind: HandbookAttachmentKind
     var name: String
@@ -53,7 +53,7 @@ struct HandbookAttachment: Identifiable, Codable, Equatable {
     }
 }
 
-enum HandbookAttachmentKind: String, Codable, CaseIterable, Identifiable, Equatable {
+enum HandbookAttachmentKind: String, Codable, CaseIterable, Identifiable, Equatable, Sendable {
     case file
     case image
     case video
@@ -77,7 +77,7 @@ enum HandbookAttachmentKind: String, Codable, CaseIterable, Identifiable, Equata
     }
 }
 
-enum HandbookLengthKind: String, Codable, CaseIterable, Identifiable, Equatable {
+enum HandbookLengthKind: String, Codable, CaseIterable, Identifiable, Equatable, Sendable {
     case snippet
     case medium
     case article
@@ -101,7 +101,7 @@ enum HandbookLengthKind: String, Codable, CaseIterable, Identifiable, Equatable 
     }
 }
 
-enum HandbookCategory: String, Codable, CaseIterable, Identifiable, Equatable {
+enum HandbookCategory: String, Codable, CaseIterable, Identifiable, Equatable, Sendable {
     case businessRule
     case research
     case meeting

@@ -8,11 +8,13 @@ final class TodoStore: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var didLoadTodos = false
     @Published private(set) var didLoadHandbookItems = false
+    @Published private(set) var isLoadingHandbookItems = false
 
     private let databaseURL: URL
     private let legacyJSONURL: URL
     private let calendar = Calendar.current
     private var isDatabasePrepared = false
+    private var handbookLoadGeneration = 0
     nonisolated(unsafe) private var db: OpaquePointer?
 
     init(storageURL: URL? = nil) {
@@ -64,6 +66,42 @@ final class TodoStore: ObservableObject {
                 try loadHandbookItemsIfNeededInternal()
             }
             lastError = nil
+        } catch {
+            lastError = "读取手记数据失败：\(error.localizedDescription)"
+        }
+    }
+
+    func scheduleLoadHandbookItemsIfNeeded() {
+        guard !didLoadHandbookItems, !isLoadingHandbookItems else { return }
+
+        do {
+            try prepareDatabase()
+            isLoadingHandbookItems = true
+            handbookLoadGeneration += 1
+            let generation = handbookLoadGeneration
+            let databaseURL = databaseURL
+
+            Task {
+                await Task.yield()
+
+                do {
+                    let items = try await Task.detached(priority: .userInitiated) {
+                        try PerformanceMonitor.measure("TodoStore.loadHandbookItems.background") {
+                            try HandbookSQLiteBackgroundReader.fetchHandbookItems(databaseURL: databaseURL)
+                        }
+                    }.value
+
+                    guard generation == handbookLoadGeneration, !didLoadHandbookItems else { return }
+                    handbookItems = items
+                    didLoadHandbookItems = true
+                    isLoadingHandbookItems = false
+                    lastError = nil
+                } catch {
+                    guard generation == handbookLoadGeneration, !didLoadHandbookItems else { return }
+                    isLoadingHandbookItems = false
+                    lastError = "读取手记数据失败：\(error.localizedDescription)"
+                }
+            }
         } catch {
             lastError = "读取手记数据失败：\(error.localizedDescription)"
         }
@@ -349,6 +387,8 @@ final class TodoStore: ObservableObject {
     private func loadHandbookItemsIfNeededInternal() throws {
         guard !didLoadHandbookItems else { return }
 
+        handbookLoadGeneration += 1
+        isLoadingHandbookItems = false
         try prepareDatabase()
         handbookItems = try fetchHandbookItems()
         didLoadHandbookItems = true
@@ -822,6 +862,79 @@ private enum SQLiteStoreError: LocalizedError {
         case .decode:
             return "解析 SQLite 数据失败"
         }
+    }
+}
+
+private enum HandbookSQLiteBackgroundReader {
+    static func fetchHandbookItems(databaseURL: URL) throws -> [HandbookItem] {
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+
+        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX
+        guard sqlite3_open_v2(databaseURL.path, &db, flags, nil) == SQLITE_OK else {
+            throw SQLiteStoreError.open(message: databaseErrorMessage(for: db))
+        }
+
+        sqlite3_busy_timeout(db, 2_000)
+
+        let sql =
+            """
+            SELECT id, category, folder, title, body, attachments_json, created_at, updated_at
+            FROM handbook_items
+            ORDER BY updated_at DESC, created_at DESC
+            """
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw SQLiteStoreError.prepare(message: databaseErrorMessage(for: db))
+        }
+
+        var result: [HandbookItem] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(try handbookItem(from: statement))
+        }
+        return result
+    }
+
+    private static func handbookItem(from statement: OpaquePointer?) throws -> HandbookItem {
+        guard
+            let idText = sqlite3_column_text(statement, 0).map({ String(cString: $0) }),
+            let id = UUID(uuidString: idText),
+            let categoryText = sqlite3_column_text(statement, 1).map({ String(cString: $0) }),
+            let folder = sqlite3_column_text(statement, 2).map({ String(cString: $0) }),
+            let title = sqlite3_column_text(statement, 3).map({ String(cString: $0) }),
+            let body = sqlite3_column_text(statement, 4).map({ String(cString: $0) }),
+            let attachmentsJSON = sqlite3_column_text(statement, 5).map({ String(cString: $0) })
+        else {
+            throw SQLiteStoreError.decode
+        }
+
+        return HandbookItem(
+            id: id,
+            category: HandbookCategory(rawValue: categoryText) ?? .inspiration,
+            folder: folder,
+            title: title,
+            body: body,
+            attachments: decodeAttachments(from: attachmentsJSON),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
+        )
+    }
+
+    private static func decodeAttachments(from json: String) -> [HandbookAttachment] {
+        guard let data = json.data(using: .utf8),
+              let attachments = try? JSONDecoder.todoDecoder.decode([HandbookAttachment].self, from: data) else {
+            return []
+        }
+        return attachments
+    }
+
+    private static func databaseErrorMessage(for db: OpaquePointer?) -> String {
+        guard let message = sqlite3_errmsg(db) else {
+            return "unknown SQLite error"
+        }
+        return String(cString: message)
     }
 }
 
