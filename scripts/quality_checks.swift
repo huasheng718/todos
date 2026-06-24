@@ -16,6 +16,7 @@ struct DailyTodosChecks {
         do {
             try await MainActor.run {
                 try checkUpdateAvailability()
+                try checkUpdateDownloadProgress()
                 try checkQuickInputParser()
                 try checkLazyStartupLoading()
                 try checkTodoStore()
@@ -88,6 +89,18 @@ func checkUpdateAvailability() throws {
         AppUpdateAvailability.compareVersions("1.10.0", "1.2.9") == .orderedDescending,
         "版本号比较应按数字段比较，而不是字符串字典序"
     )
+}
+
+func checkUpdateDownloadProgress() throws {
+    let progress = AppUpdateDownloadProgress(receivedBytes: 256, expectedBytes: 1_024)
+    try expect(progress.fractionCompleted == 0.25, "下载进度应按已下载字节和总字节计算")
+    try expect(progress.percentText == "25%", "下载进度应显示整数百分比")
+    try expect(progress.detailText.contains("256"), "下载详情应包含已下载大小")
+
+    let unknownSizeProgress = AppUpdateDownloadProgress(receivedBytes: 512, expectedBytes: nil)
+    try expect(unknownSizeProgress.fractionCompleted == nil, "未知总大小时不应伪造确定进度")
+    try expect(unknownSizeProgress.percentText == nil, "未知总大小时不应显示百分比")
+    try expect(unknownSizeProgress.statusText.contains("已下载"), "未知总大小时仍应显示已下载大小")
 }
 
 func checkQuickInputParser() throws {

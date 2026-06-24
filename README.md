@@ -40,8 +40,9 @@ swift run
 当前机器的 Command Line Tools 缺少 XCTest/Testing 模块，项目提供了轻量质量门覆盖快记解析和 SQLite 存储行为：
 
 ```bash
-swiftc -parse-as-library Sources/DailyTodos/TodoItem.swift Sources/DailyTodos/HandbookItem.swift Sources/DailyTodos/TodoQuickInputParser.swift Sources/DailyTodos/AppStateModels.swift Sources/DailyTodos/ViewDerivedModels.swift Sources/DailyTodos/PerformanceMonitor.swift Sources/DailyTodos/TodoStore.swift Sources/DailyTodos/AppUpdateAvailability.swift scripts/quality_checks.swift -o /tmp/DailyTodosChecks
+swiftc -parse-as-library Sources/DailyTodos/TodoItem.swift Sources/DailyTodos/HandbookItem.swift Sources/DailyTodos/TodoQuickInputParser.swift Sources/DailyTodos/AppStateModels.swift Sources/DailyTodos/ViewDerivedModels.swift Sources/DailyTodos/PerformanceMonitor.swift Sources/DailyTodos/TodoStore.swift Sources/DailyTodos/AppUpdateAvailability.swift Sources/DailyTodos/AppUpdateDownloadProgress.swift scripts/quality_checks.swift -o /tmp/DailyTodosChecks
 /tmp/DailyTodosChecks
+python3 scripts/release_version_guard.py --self-test
 ```
 
 ## 打包为 macOS App
