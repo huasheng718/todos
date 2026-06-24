@@ -82,6 +82,27 @@ expected_download_url() {
   printf 'https://github.com/huasheng718/todos/releases/download/v%s/AntOrder-%s.pkg\n' "$VERSION" "$VERSION"
 }
 
+compare_versions() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+
+def parts(version):
+    return [int(part) for part in version.split(".")]
+
+left, right = parts(sys.argv[1]), parts(sys.argv[2])
+length = max(len(left), len(right))
+left += [0] * (length - len(left))
+right += [0] * (length - len(right))
+
+if left < right:
+    print("-1")
+elif left > right:
+    print("1")
+else:
+    print("0")
+PY
+}
+
 release_dirty_paths() {
   git status --short -- Info.plist releases/latest.json
 }
@@ -201,6 +222,13 @@ fi
 
 if ! printf '%s' "$BUILD" | grep -Eq '^[0-9]+$'; then
   echo "Build must be an integer: $BUILD" >&2
+  exit 2
+fi
+
+VERSION_COMPARISON="$(compare_versions "$VERSION" "$CURRENT_VERSION")"
+if [ "$VERSION_COMPARISON" -gt 0 ] && [ "$BUILD" -le "$CURRENT_BUILD" ]; then
+  echo "Build must increase when releasing a newer version." >&2
+  echo "Current: $CURRENT_VERSION ($CURRENT_BUILD); requested: $VERSION ($BUILD)" >&2
   exit 2
 fi
 

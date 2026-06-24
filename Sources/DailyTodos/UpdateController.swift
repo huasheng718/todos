@@ -11,6 +11,7 @@ final class UpdateController: ObservableObject {
 
     private let lastAutoCheckKey = "dailyTodos.update.lastAutoCheck"
     private let lastPromptedBuildKey = "dailyTodos.update.lastPromptedBuild"
+    private let lastPromptedVersionKey = "dailyTodos.update.lastPromptedVersion"
     private let lastPromptedAtKey = "dailyTodos.update.lastPromptedAt"
     private let autoCheckInterval: TimeInterval = 24 * 60 * 60
     private let updatePromptReminderInterval: TimeInterval = 12 * 60 * 60
@@ -80,7 +81,12 @@ final class UpdateController: ObservableObject {
                 let manifest = try await fetchManifest()
                 let currentBuild = Int(AppVersion.build) ?? 0
 
-                if manifest.build > currentBuild {
+                if AppUpdateAvailability.isAvailable(
+                    currentVersion: AppVersion.shortVersion,
+                    currentBuild: currentBuild,
+                    manifestVersion: manifest.version,
+                    manifestBuild: manifest.build
+                ) {
                     availableUpdate = manifest
                     statusMessage = "发现新版本 \(manifest.version) (\(manifest.build))"
                     if isManual || shouldPresentUpdatePrompt(for: manifest) {
@@ -142,7 +148,8 @@ final class UpdateController: ObservableObject {
 
     private func shouldPresentUpdatePrompt(for manifest: AppUpdateManifest) -> Bool {
         let lastPromptedBuild = UserDefaults.standard.integer(forKey: lastPromptedBuildKey)
-        guard lastPromptedBuild == manifest.build else {
+        let lastPromptedVersion = UserDefaults.standard.string(forKey: lastPromptedVersionKey)
+        guard lastPromptedVersion == manifest.version, lastPromptedBuild == manifest.build else {
             return true
         }
 
@@ -156,6 +163,7 @@ final class UpdateController: ObservableObject {
     private func recordUpdatePrompt(for manifest: AppUpdateManifest) {
         let now = Date()
         UserDefaults.standard.set(manifest.build, forKey: lastPromptedBuildKey)
+        UserDefaults.standard.set(manifest.version, forKey: lastPromptedVersionKey)
         UserDefaults.standard.set(now, forKey: lastPromptedAtKey)
         lastPromptedAt = now
     }
