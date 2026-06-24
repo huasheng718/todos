@@ -72,6 +72,14 @@ final class TodoStore: ObservableObject {
     }
 
     func scheduleLoadHandbookItemsIfNeeded() {
+        scheduleLoadHandbookItemsIfNeeded(after: nil)
+    }
+
+    func prefetchHandbookItemsAfterStartup() {
+        scheduleLoadHandbookItemsIfNeeded(after: .milliseconds(350))
+    }
+
+    private func scheduleLoadHandbookItemsIfNeeded(after delay: Duration?) {
         guard !didLoadHandbookItems, !isLoadingHandbookItems else { return }
 
         do {
@@ -82,7 +90,11 @@ final class TodoStore: ObservableObject {
             let databaseURL = databaseURL
 
             Task {
-                await Task.yield()
+                if let delay {
+                    try? await Task.sleep(for: delay)
+                } else {
+                    await Task.yield()
+                }
 
                 do {
                     let items = try await Task.detached(priority: .userInitiated) {

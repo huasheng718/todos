@@ -140,6 +140,10 @@ struct ContentView: View {
                 newDate = Date()
             }
         }
+        .onChange(of: activeSection) { _, newValue in
+            guard newValue == .handbook else { return }
+            store.scheduleLoadHandbookItemsIfNeeded()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
             focusQuickCapture()
         }
@@ -159,18 +163,19 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
     private var secondarySidebar: some View {
-        switch activeSection {
-        case .todos:
+        ZStack(alignment: .topLeading) {
             TodoSidebarView(scope: $scope)
-        case .handbook:
+                .sectionVisibility(activeSection == .todos)
+
             HandbookSidebarView(
                 selectedCategory: $handbookCategory,
                 selectedFolder: $handbookFolder,
                 searchText: $handbookSearchText
             )
+            .sectionVisibility(activeSection == .handbook)
         }
+        .animation(AppMotion.sectionSwitch, value: activeSection)
     }
 
     private var secondarySidebarContainer: some View {
@@ -186,16 +191,15 @@ struct ContentView: View {
         isSecondarySidebarCollapsed ? collapsedSecondarySidebarWidth : secondarySidebarWidth
     }
 
-    @ViewBuilder
     private var contentColumn: some View {
-        switch activeSection {
-        case .todos:
+        ZStack(alignment: .topLeading) {
             taskColumn
-                .transition(AppMotion.viewTransition)
-        case .handbook:
+                .sectionVisibility(activeSection == .todos)
+
             handbookColumn
-                .transition(AppMotion.viewTransition)
+                .sectionVisibility(activeSection == .handbook)
         }
+        .animation(AppMotion.sectionSwitch, value: activeSection)
     }
 
     private var taskColumn: some View {
@@ -275,9 +279,6 @@ struct ContentView: View {
         .padding(.vertical, 16)
         .background(AppTheme.workSurface)
         .animation(AppMotion.smooth, value: handbookCategory)
-        .onAppear {
-            store.scheduleLoadHandbookItemsIfNeeded()
-        }
     }
 
     private var filteredTodos: [TodoItem] {

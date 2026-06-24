@@ -15,6 +15,7 @@ struct HandbookContentView: View {
     @State private var selectedItemID: UUID?
     @State private var shouldSelectLatestAfterCreate = false
     @State private var activeFilter: HandbookListFilter = .all
+    @State private var showsLoadingState = false
     @State private var scopedItemsCache: [HandbookItem] = []
     @State private var visibleItemsCache: [HandbookItem] = []
     @State private var visibleItemsCacheKey: HandbookListCacheKey?
@@ -49,8 +50,16 @@ struct HandbookContentView: View {
         .onChange(of: activeFilter) { _, _ in
             rebuildVisibleItems()
         }
+        .onChange(of: isLoaded) { _, newValue in
+            if newValue {
+                showsLoadingState = false
+            } else {
+                scheduleLoadingStateIfNeeded()
+            }
+        }
         .onAppear {
             rebuildVisibleItems()
+            scheduleLoadingStateIfNeeded()
         }
     }
 
@@ -123,7 +132,7 @@ struct HandbookContentView: View {
         let visibleItems = snapshot.visibleItems
         let selectedItem = selectedItem(in: visibleItems)
 
-        if !isLoaded {
+        if !isLoaded && showsLoadingState {
             HStack(alignment: .top, spacing: 10) {
                 handbookListCard(itemsCount: 0, visibleItems: [], selectedItem: nil)
                     .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
@@ -132,6 +141,14 @@ struct HandbookContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .transition(AppMotion.viewTransition)
+        } else if !isLoaded {
+            HStack(alignment: .top, spacing: 10) {
+                handbookListCard(itemsCount: 0, visibleItems: [], selectedItem: nil)
+                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
+
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         } else if items.isEmpty {
             HStack(alignment: .top, spacing: 10) {
                 handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
@@ -169,6 +186,22 @@ struct HandbookContentView: View {
                 .transition(AppMotion.inlineTransition)
             }
             .transition(AppMotion.viewTransition)
+        }
+    }
+
+    private func scheduleLoadingStateIfNeeded() {
+        guard !isLoaded else {
+            showsLoadingState = false
+            return
+        }
+
+        let delay: Duration = .milliseconds(120)
+        Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            guard !isLoaded else { return }
+            withAnimation(AppMotion.quick) {
+                showsLoadingState = true
+            }
         }
     }
 
