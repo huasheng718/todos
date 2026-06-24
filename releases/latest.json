@@ -1,6 +1,6 @@
 {
-  "version": "1.1.18",
-  "build": 19,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.18/AntOrder-1.1.18.pkg",
-  "releaseNotes": "修复更新检测，确保发现新版本后可以下载。"
+  "version": "1.1.19",
+  "build": 20,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.19/AntOrder-1.1.19.pkg",
+  "releaseNotes": "显示更新下载进度，并强化发布版本号与 build 防呆。"
 }
