@@ -1,6 +1,6 @@
 {
-  "version": "1.1.20",
-  "build": 21,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.20/AntOrder-1.1.20.pkg",
-  "releaseNotes": "修复迷你日历重复下拉，合并年月选择入口。"
+  "version": "1.1.21",
+  "build": 22,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.21/AntOrder-1.1.21.pkg",
+  "releaseNotes": "蚁序 1.1.21 更新：手记切换加载改为后台读取，减少从待办进入手记时的卡顿；迷你日历恢复年份和月份分离选择，并修正下拉图标重复显示。"
 }
