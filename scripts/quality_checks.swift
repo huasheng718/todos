@@ -15,6 +15,7 @@ struct DailyTodosChecks {
     static func main() async {
         do {
             try await MainActor.run {
+                try checkUpdateAvailability()
                 try checkQuickInputParser()
                 try checkLazyStartupLoading()
                 try checkTodoStore()
@@ -44,6 +45,49 @@ func makeDate(_ components: DateComponents, calendar: Calendar) throws -> Date {
         throw CheckFailure.failed("无法创建测试日期：\(components)")
     }
     return date
+}
+
+func checkUpdateAvailability() throws {
+    try expect(
+        AppUpdateAvailability.isAvailable(
+            currentVersion: "1.1.16",
+            currentBuild: 18,
+            manifestVersion: "1.1.17",
+            manifestBuild: 18
+        ),
+        "版本号升高时，即使 build 相同也应允许更新"
+    )
+    try expect(
+        AppUpdateAvailability.isAvailable(
+            currentVersion: "1.1.17",
+            currentBuild: 18,
+            manifestVersion: "1.1.17",
+            manifestBuild: 19
+        ),
+        "同版本 build 升高时应允许更新"
+    )
+    try expect(
+        !AppUpdateAvailability.isAvailable(
+            currentVersion: "1.1.17",
+            currentBuild: 18,
+            manifestVersion: "1.1.17",
+            manifestBuild: 18
+        ),
+        "同版本同 build 不应重复更新"
+    )
+    try expect(
+        !AppUpdateAvailability.isAvailable(
+            currentVersion: "1.1.17",
+            currentBuild: 19,
+            manifestVersion: "1.1.16",
+            manifestBuild: 20
+        ),
+        "远端版本号回退时不应仅因 build 较高触发更新"
+    )
+    try expect(
+        AppUpdateAvailability.compareVersions("1.10.0", "1.2.9") == .orderedDescending,
+        "版本号比较应按数字段比较，而不是字符串字典序"
+    )
 }
 
 func checkQuickInputParser() throws {
