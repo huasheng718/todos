@@ -1,0 +1,201 @@
+import SwiftUI
+import AppKit
+
+struct HandbookDetailPanel: View {
+    let item: HandbookItem?
+    let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
+    let onDelete: (HandbookItem) -> Void
+
+    @State private var category: HandbookCategory = .businessRule
+    @State private var folder = ""
+    @State private var title = ""
+    @State private var bodyText = ""
+    @State private var attachments: [HandbookAttachment] = []
+    @State private var outline: [MarkdownOutlineEntry] = []
+    @State private var bodyMetrics = HandbookBodyMetrics.empty
+    @State private var outlineUpdateToken = UUID()
+    @FocusState private var canvasFocus: HandbookCanvasFocus?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let item {
+                canvasPanel(for: item)
+                    .transition(AppMotion.inlineTransition)
+            } else {
+                detailPlaceholder
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.panel.opacity(0.86), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(item?.category.accentColor.opacity(0.22) ?? AppTheme.hairline)
+        )
+        .shadow(color: AppTheme.rowShadow.opacity(0.30), radius: 6, x: 0, y: 2)
+        .onChange(of: item) { _, newValue in
+            syncDraft(with: newValue)
+        }
+        .onAppear {
+            syncDraft(with: item)
+        }
+    }
+
+    private func canvasPanel(for item: HandbookItem) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HandbookCanvasToolbar(
+                accentColor: category.accentColor,
+                isDirty: isDirty(comparedTo: item),
+                canCopyAll: !copyAllText(for: item).isEmpty,
+                canCopyTitle: !(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && item.displayTitle.isEmpty),
+                onDelete: { onDelete(item) },
+                onCopyAll: { copyToPasteboard(copyAllText(for: item)) },
+                onCopyTitle: { copyToPasteboard(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : title) },
+                onSave: { submitEdit(for: item) }
+            )
+
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.56))
+
+            ScrollView {
+                HandbookEditableCanvas(
+                    category: $category,
+                    folder: $folder,
+                    title: $title,
+                    bodyText: $bodyText,
+                    focusedField: $canvasFocus,
+                    lengthKind: bodyMetrics.lengthKind,
+                    characterCount: bodyMetrics.characterCount,
+                    editorHeight: bodyMetrics.editorHeight,
+                    isBodyEmpty: bodyMetrics.isEmpty,
+                    updatedAt: item.updatedAt,
+                    attachmentCount: attachments.count
+                )
+                .padding(.bottom, 16)
+
+                if !outline.isEmpty {
+                    HandbookOutlineStrip(entries: outline)
+                        .padding(.bottom, 16)
+                }
+
+                HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
+                    .padding(.top, 8)
+                    .onChange(of: attachments) { _, _ in
+                        submitEdit(for: item)
+                    }
+            }
+            .onChange(of: category) { _, _ in
+                submitEdit(for: item)
+            }
+            .onChange(of: folder) { _, _ in
+                submitEdit(for: item)
+            }
+            .onChange(of: canvasFocus) { oldValue, newValue in
+                if oldValue != nil && newValue == nil {
+                    submitEdit(for: item)
+                }
+            }
+            .onChange(of: bodyText) { _, newValue in
+                updateBodyMetrics(for: newValue)
+                scheduleOutlineUpdate(for: newValue)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 22)
+        }
+    }
+
+    private var detailPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Image(systemName: "book.closed")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 38, height: 38)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Text("选择一条手记阅读")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+
+            Text("左侧列表用于扫描，右侧用于完整阅读和编辑。")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+        }
+        .padding(18)
+    }
+
+    private var canSubmit: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func submitEdit(for item: HandbookItem) {
+        guard canSubmit else { return }
+        onUpdate(item, category, folder, title, bodyText, attachments)
+    }
+
+    private func syncDraft(with item: HandbookItem?) {
+        guard let item else { return }
+        category = item.category
+        folder = item.folder
+        title = item.title
+        bodyText = item.body
+        attachments = item.attachments
+        outline = []
+        updateBodyMetrics(for: item.body)
+        scheduleOutlineUpdate(for: item.body)
+    }
+
+    private func scheduleOutlineUpdate(for text: String) {
+        let token = UUID()
+        outlineUpdateToken = token
+        let snapshot = text
+        guard snapshot.contains("#") else {
+            outline = []
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            guard outlineUpdateToken == token else { return }
+            guard snapshot == bodyText else { return }
+            outline = MarkdownOutlineEntry.extract(from: snapshot.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
+    private func updateBodyMetrics(for text: String) {
+        bodyMetrics = HandbookBodyMetrics(text: text)
+    }
+
+    private func copyToPasteboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    private func copyAllText(for item: HandbookItem) -> String {
+        let titleText = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? item.displayTitle
+            : title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if titleText.isEmpty {
+            return body
+        }
+        if body.isEmpty {
+            return titleText
+        }
+        return "\(titleText)\n\n\(body)"
+    }
+
+    private func isDirty(comparedTo item: HandbookItem) -> Bool {
+        category != item.category
+            || folder.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedFolder
+            || title.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedTitle
+            || bodyText.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedBody
+            || attachments != item.attachments
+    }
+}
+
+enum HandbookCanvasFocus: Hashable {
+    case title
+    case body
+}

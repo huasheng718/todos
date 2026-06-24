@@ -67,8 +67,20 @@ enum TodoQuickInputParser {
         let datePatterns: [(String, (NSTextCheckingResult, String) -> Date?)] = [
             (#"(今天|今日)"#, { _, _ in now }),
             (#"(明天|明日)"#, { _, _ in calendar.date(byAdding: .day, value: 1, to: now) }),
+            (#"(大后天)"#, { _, _ in calendar.date(byAdding: .day, value: 3, to: now) }),
             (#"(后天)"#, { _, _ in calendar.date(byAdding: .day, value: 2, to: now) }),
             (#"(昨天|昨日)"#, { _, _ in calendar.date(byAdding: .day, value: -1, to: now) }),
+            (#"((?:下|本|这)?(?:周|星期|礼拜)([一二三四五六日天]))"#, { match, source in
+                guard let weekdayText = stringCapture(match, in: source, at: 2),
+                      let targetWeekday = weekdayNumber(from: weekdayText),
+                      let matched = stringCapture(match, in: source, at: 1) else { return nil }
+                return resolveWeekday(
+                    targetWeekday,
+                    modifier: weekdayModifier(from: matched),
+                    calendar: calendar,
+                    now: now
+                )
+            }),
             (#"(\d{1,2})[月/.-](\d{1,2})[日号]?"#, { match, source in
                 guard let month = intCapture(match, in: source, at: 1),
                       let day = intCapture(match, in: source, at: 2) else { return nil }
@@ -102,6 +114,50 @@ enum TodoQuickInputParser {
         }
 
         return (date, normalize(remaining))
+    }
+
+    private static func resolveWeekday(
+        _ targetWeekday: Int,
+        modifier: String?,
+        calendar: Calendar,
+        now: Date
+    ) -> Date? {
+        let today = calendar.startOfDay(for: now)
+        let currentWeekday = chineseWeekdayIndex(for: calendar.component(.weekday, from: today))
+        let targetWeekday = chineseWeekdayIndex(for: targetWeekday)
+        let daysToAdd: Int
+
+        if modifier == "下" {
+            daysToAdd = (7 - currentWeekday) + targetWeekday
+        } else if modifier == "本" || modifier == "这" {
+            daysToAdd = targetWeekday - currentWeekday
+        } else {
+            let nextOffset = targetWeekday - currentWeekday
+            daysToAdd = nextOffset >= 0 ? nextOffset : nextOffset + 7
+        }
+
+        return calendar.date(byAdding: .day, value: daysToAdd, to: today)
+    }
+
+    private static func chineseWeekdayIndex(for calendarWeekday: Int) -> Int {
+        calendarWeekday == 1 ? 7 : calendarWeekday - 1
+    }
+
+    private static func weekdayNumber(from text: String) -> Int? {
+        switch text {
+        case "日", "天": 1
+        case "一": 2
+        case "二": 3
+        case "三": 4
+        case "四": 5
+        case "五": 6
+        case "六": 7
+        default: nil
+        }
+    }
+
+    private static func weekdayModifier(from text: String) -> String? {
+        ["下", "本", "这"].first { text.hasPrefix($0) }
     }
 
     private static func parseTime(

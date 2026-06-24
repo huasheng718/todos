@@ -6,10 +6,13 @@ final class TodoStore: ObservableObject {
     @Published private(set) var todos: [TodoItem] = []
     @Published private(set) var handbookItems: [HandbookItem] = []
     @Published private(set) var lastError: String?
+    @Published private(set) var didLoadTodos = false
+    @Published private(set) var didLoadHandbookItems = false
 
     private let databaseURL: URL
     private let legacyJSONURL: URL
     private let calendar = Calendar.current
+    private var isDatabasePrepared = false
     nonisolated(unsafe) private var db: OpaquePointer?
 
     init(storageURL: URL? = nil) {
@@ -33,18 +36,8 @@ final class TodoStore: ObservableObject {
     func load() {
         do {
             try PerformanceMonitor.measure("TodoStore.load") {
-                let shouldSeedIfEmpty = !FileManager.default.fileExists(atPath: databaseURL.path)
-                    && !FileManager.default.fileExists(atPath: legacyJSONURL.path)
-                try openDatabase()
-                try createSchema()
-                try migrateLegacyJSONIfNeeded()
-
-                todos = try fetchTodos()
-                handbookItems = try fetchHandbookItems()
-                if todos.isEmpty && shouldSeedIfEmpty {
-                    try insertInitialTodo()
-                    todos = try fetchTodos()
-                }
+                try loadStartupDataInternal()
+                try loadHandbookItemsIfNeededInternal()
             }
             lastError = nil
         } catch {
@@ -52,6 +45,31 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    func loadStartupData() {
+        do {
+            try PerformanceMonitor.measure("TodoStore.loadStartupData") {
+                try loadStartupDataInternal()
+            }
+            lastError = nil
+        } catch {
+            lastError = "读取待办数据失败：\(error.localizedDescription)"
+        }
+    }
+
+    func loadHandbookItemsIfNeeded() {
+        guard !didLoadHandbookItems else { return }
+
+        do {
+            try PerformanceMonitor.measure("TodoStore.loadHandbookItems") {
+                try loadHandbookItemsIfNeededInternal()
+            }
+            lastError = nil
+        } catch {
+            lastError = "读取手记数据失败：\(error.localizedDescription)"
+        }
+    }
+
+    @discardableResult
     func add(
         title: String,
         notes: String,
@@ -59,9 +77,9 @@ final class TodoStore: ObservableObject {
         date: Date,
         progress: TodoProgress = .pending,
         isWeekly: Bool = false
-    ) {
+    ) -> TodoItem? {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanedTitle.isEmpty else { return }
+        guard !cleanedTitle.isEmpty else { return nil }
 
         let item = TodoItem(
             title: cleanedTitle,
@@ -78,8 +96,10 @@ final class TodoStore: ObservableObject {
                 insertInMemory(item)
             }
             lastError = nil
+            return item
         } catch {
             lastError = "保存待办数据失败：\(error.localizedDescription)"
+            return nil
         }
     }
 
@@ -158,6 +178,19 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    func restore(_ todo: TodoItem) {
+        do {
+            try PerformanceMonitor.measure("TodoStore.restoreTodo") {
+                try insert(todo)
+                todos.removeAll { $0.id == todo.id }
+                insertInMemory(todo)
+            }
+            lastError = nil
+        } catch {
+            lastError = "恢复待办失败：\(error.localizedDescription)"
+        }
+    }
+
     func addHandbookItem(
         category: HandbookCategory,
         folder: String = "",
@@ -179,6 +212,7 @@ final class TodoStore: ObservableObject {
 
         do {
             try PerformanceMonitor.measure("TodoStore.addHandbookItem") {
+                try loadHandbookItemsIfNeededInternal()
                 try insert(item)
                 handbookItems.insert(item, at: handbookInsertionIndex(for: item))
             }
@@ -211,6 +245,7 @@ final class TodoStore: ObservableObject {
 
         do {
             try PerformanceMonitor.measure("TodoStore.updateHandbookItem") {
+                try loadHandbookItemsIfNeededInternal()
                 try update(updated)
                 handbookItems.remove(at: index)
                 handbookItems.insert(updated, at: handbookInsertionIndex(for: updated))
@@ -224,6 +259,7 @@ final class TodoStore: ObservableObject {
     func delete(_ item: HandbookItem) {
         do {
             try PerformanceMonitor.measure("TodoStore.deleteHandbookItem") {
+                try loadHandbookItemsIfNeededInternal()
                 try deleteHandbookItem(id: item.id)
                 handbookItems.removeAll { $0.id == item.id }
             }
@@ -234,10 +270,11 @@ final class TodoStore: ObservableObject {
     }
 
     func handbookItems(in category: HandbookCategory?, folder: String? = nil, matching query: String = "") -> [HandbookItem] {
-        handbookItems.filter { item in
+        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return handbookItems.filter { item in
             (category == nil || item.category == category)
                 && matchesFolder(item, folder: folder)
-                && matches(item, query: query)
+                && matches(item, cleanedQuery: cleanedQuery)
         }
     }
 
@@ -248,13 +285,16 @@ final class TodoStore: ObservableObject {
 
     func todos(on date: Date, matching query: String = "") -> [TodoItem] {
         let day = calendar.startOfDay(for: date)
+        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return todos.filter { todo in
-            calendar.isDate(todo.date, inSameDayAs: day) && matches(todo, query: query)
+            calendar.isDate(todo.date, inSameDayAs: day) && matches(todo, cleanedQuery: cleanedQuery)
         }
     }
 
     func todos(matching query: String = "") -> [TodoItem] {
-        todos.filter { matches($0, query: query) }
+        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedQuery.isEmpty else { return todos }
+        return todos.filter { matches($0, cleanedQuery: cleanedQuery) }
     }
 
     func pendingCount(on date: Date) -> Int {
@@ -282,6 +322,36 @@ final class TodoStore: ObservableObject {
 
         try execute("PRAGMA foreign_keys = ON")
         try execute("PRAGMA journal_mode = WAL")
+    }
+
+    private func prepareDatabase() throws {
+        try openDatabase()
+        guard !isDatabasePrepared else { return }
+
+        try createSchema()
+        try migrateLegacyJSONIfNeeded()
+        isDatabasePrepared = true
+    }
+
+    private func loadStartupDataInternal() throws {
+        let shouldSeedIfEmpty = !FileManager.default.fileExists(atPath: databaseURL.path)
+            && !FileManager.default.fileExists(atPath: legacyJSONURL.path)
+        try prepareDatabase()
+
+        todos = try fetchTodos()
+        if todos.isEmpty && shouldSeedIfEmpty {
+            try insertInitialTodo()
+            todos = try fetchTodos()
+        }
+        didLoadTodos = true
+    }
+
+    private func loadHandbookItemsIfNeededInternal() throws {
+        guard !didLoadHandbookItems else { return }
+
+        try prepareDatabase()
+        handbookItems = try fetchHandbookItems()
+        didLoadHandbookItems = true
     }
 
     private func createSchema() throws {
@@ -649,15 +719,13 @@ final class TodoStore: ObservableObject {
         return String(cString: message)
     }
 
-    private func matches(_ todo: TodoItem, query: String) -> Bool {
-        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func matches(_ todo: TodoItem, cleanedQuery: String) -> Bool {
         guard !cleanedQuery.isEmpty else { return true }
         return todo.title.localizedCaseInsensitiveContains(cleanedQuery)
             || todo.notes.localizedCaseInsensitiveContains(cleanedQuery)
     }
 
-    private func matches(_ item: HandbookItem, query: String) -> Bool {
-        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func matches(_ item: HandbookItem, cleanedQuery: String) -> Bool {
         guard !cleanedQuery.isEmpty else { return true }
         return item.title.localizedCaseInsensitiveContains(cleanedQuery)
             || item.body.localizedCaseInsensitiveContains(cleanedQuery)

@@ -16,6 +16,7 @@ struct DailyTodosChecks {
         do {
             try await MainActor.run {
                 try checkQuickInputParser()
+                try checkLazyStartupLoading()
                 try checkTodoStore()
             }
             print("DailyTodosChecks passed")
@@ -86,6 +87,97 @@ func checkQuickInputParser() throws {
     try expect(weekly.progress == .inProgress, "推进中应解析为推进中状态")
     try expect(weekly.isWeekly, "每周一次应解析为固定周期")
     try expect(weekly.notes == "同步给团队", "外部备注应被保留")
+
+    let nextMonday = TodoQuickInputParser.parse(
+        title: "下周一上午10点 召开项目评审",
+        notes: "",
+        priority: .medium,
+        date: fallback,
+        progress: .pending,
+        isWeekly: false,
+        calendar: calendar,
+        now: now
+    )
+    let nextMondayComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: nextMonday.date)
+    try expect(nextMondayComponents.year == 2026, "下周一年份解析错误")
+    try expect(nextMondayComponents.month == 6, "下周一月份解析错误")
+    try expect(nextMondayComponents.day == 29, "下周一日期解析错误")
+    try expect(nextMondayComponents.hour == 10, "下周一上午10点小时解析错误")
+    try expect(nextMondayComponents.minute == 0, "下周一上午10点分钟应为 0")
+
+    let weekday = TodoQuickInputParser.parse(
+        title: "周五 复核合同台账",
+        notes: "",
+        priority: .medium,
+        date: fallback,
+        progress: .pending,
+        isWeekly: false,
+        calendar: calendar,
+        now: now
+    )
+    let weekdayComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: weekday.date)
+    try expect(weekdayComponents.year == 2026, "周五年份解析错误")
+    try expect(weekdayComponents.month == 6, "周五月份解析错误")
+    try expect(weekdayComponents.day == 26, "周五日期解析错误")
+    try expect(weekdayComponents.hour == 10, "解析相对日期未指定时间时应沿用 fallback 时间")
+    try expect(weekdayComponents.minute == 0, "解析相对日期未指定时间时分钟应沿用 fallback 时间")
+
+    let threeDaysLater = TodoQuickInputParser.parse(
+        title: "大后天 提交月度复盘",
+        notes: "",
+        priority: .medium,
+        date: fallback,
+        progress: .pending,
+        isWeekly: false,
+        calendar: calendar,
+        now: now
+    )
+    let threeDaysLaterComponents = calendar.dateComponents([.year, .month, .day], from: threeDaysLater.date)
+    try expect(threeDaysLaterComponents.year == 2026, "大后天年份解析错误")
+    try expect(threeDaysLaterComponents.month == 6, "大后天月份解析错误")
+    try expect(threeDaysLaterComponents.day == 26, "大后天日期解析错误")
+
+    let noDate = TodoQuickInputParser.parse(
+        title: "补充部门周报",
+        notes: "",
+        priority: .medium,
+        date: now,
+        progress: .pending,
+        isWeekly: false,
+        calendar: calendar,
+        now: now
+    )
+    try expect(noDate.date == now, "未指定日期时间时应使用当前时间作为默认时间")
+
+    let weekdayWithCurrentFallback = TodoQuickInputParser.parse(
+        title: "后天 复盘客户问题",
+        notes: "",
+        priority: .medium,
+        date: now,
+        progress: .pending,
+        isWeekly: false,
+        calendar: calendar,
+        now: now
+    )
+    let currentFallbackComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: weekdayWithCurrentFallback.date)
+    try expect(currentFallbackComponents.year == 2026, "当前 fallback 年份应保留")
+    try expect(currentFallbackComponents.month == 6, "当前 fallback 月份应保留")
+    try expect(currentFallbackComponents.day == 25, "后天日期解析错误")
+    try expect(currentFallbackComponents.hour == 9, "未指定时间时应保留当前 fallback 小时")
+    try expect(currentFallbackComponents.minute == 0, "未指定时间时应保留当前 fallback 分钟")
+}
+
+@MainActor
+func checkLazyStartupLoading() throws {
+    let (store, _) = try makeStore()
+
+    store.loadStartupData()
+    try expect(store.didLoadTodos, "首屏加载后应标记待办已加载")
+    try expect(!store.didLoadHandbookItems, "首屏加载不应同步加载手记")
+    try expect(store.handbookItems.isEmpty, "首屏加载时手记列表应保持空集合")
+
+    store.loadHandbookItemsIfNeeded()
+    try expect(store.didLoadHandbookItems, "按需加载后应标记手记已加载")
 }
 
 @MainActor
@@ -104,7 +196,7 @@ func checkTodoStore() throws {
         isWeekly: false
     )
 
-    guard let todo = store.todos.first else {
+    guard let todo = store.todos.first(where: { $0.title == "参加供应商对接会" }) else {
         throw CheckFailure.failed("新增待办后未找到数据")
     }
     try expect(todo.title == "参加供应商对接会", "待办标题应去除首尾空白")
@@ -114,13 +206,24 @@ func checkTodoStore() throws {
 
     let reloadedStore = TodoStore(storageURL: databaseURL)
     reloadedStore.load()
-    guard let reloadedTodo = reloadedStore.todos.first else {
+    guard let reloadedTodo = reloadedStore.todos.first(where: { $0.title == "参加供应商对接会" }) else {
         throw CheckFailure.failed("重载 SQLite 后未找到待办")
     }
     try expect(reloadedTodo.title == "参加供应商对接会", "SQLite 重载后标题错误")
     try expect(reloadedTodo.notes == "带笔记本", "SQLite 重载后备注错误")
     try expect(reloadedTodo.priority == .high, "SQLite 重载后优先级错误")
     try expect(reloadedTodo.progress == .inProgress, "SQLite 重载后状态错误")
+
+    store.delete(todo)
+    try expect(!store.todos.contains(where: { $0.id == todo.id }), "删除后内存中不应保留待办")
+    store.restore(todo)
+    guard let restoredTodo = store.todos.first(where: { $0.id == todo.id }) else {
+        throw CheckFailure.failed("恢复删除后未找到原待办")
+    }
+    try expect(restoredTodo.id == todo.id, "恢复删除应保留原始 ID")
+    let restoredReloadStore = TodoStore(storageURL: databaseURL)
+    restoredReloadStore.load()
+    try expect(restoredReloadStore.todos.contains(where: { $0.id == todo.id }), "恢复删除应写回 SQLite")
 
     let weeklyDate = try makeDate(DateComponents(year: 2026, month: 6, day: 30, hour: 9, minute: 30), calendar: calendar)
     store.add(

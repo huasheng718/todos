@@ -16,8 +16,9 @@ struct DailyTodosApp: App {
                 .frame(minWidth: 1100, idealWidth: 1280, minHeight: 760, idealHeight: 860)
                 .background(WindowChromeConfigurator())
                 .task {
-                    store.load()
+                    store.loadStartupData()
                     updateController.startMonitoring()
+                    try? await Task.sleep(for: .milliseconds(900))
                     updateController.checkForUpdatesIfNeeded()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
