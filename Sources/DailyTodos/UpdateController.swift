@@ -6,6 +6,8 @@ final class UpdateController: ObservableObject {
     @Published private(set) var isChecking = false
     @Published private(set) var statusMessage: String?
     @Published private(set) var availableUpdate: AppUpdateManifest?
+    @Published private(set) var isDownloading = false
+    @Published private(set) var downloadProgress: AppUpdateDownloadProgress?
     @Published private(set) var lastCheckedAt: Date?
     @Published private(set) var lastPromptedAt: Date?
 
@@ -59,6 +61,7 @@ final class UpdateController: ObservableObject {
     }
 
     func downloadAvailableUpdate() {
+        guard !isDownloading else { return }
         guard let availableUpdate else {
             checkForUpdates()
             return
@@ -70,7 +73,7 @@ final class UpdateController: ObservableObject {
     }
 
     private func runUpdateCheck(isManual: Bool) {
-        guard !isChecking else { return }
+        guard !isChecking, !isDownloading else { return }
 
         isChecking = true
         statusMessage = nil
@@ -169,25 +172,27 @@ final class UpdateController: ObservableObject {
     }
 
     private func downloadAndOpenInstaller(for manifest: AppUpdateManifest) async {
-        guard let url = URL(string: manifest.downloadURL) else { return }
+        guard let url = URL(string: manifest.downloadURL) else {
+            statusMessage = "下载地址无效"
+            return
+        }
 
+        isDownloading = true
+        downloadProgress = AppUpdateDownloadProgress(receivedBytes: 0, expectedBytes: nil)
         do {
-            statusMessage = "正在下载 v\(manifest.version)..."
-            let (temporaryURL, response) = try await URLSession.shared.download(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode) else {
-                let statusCode = (response as? HTTPURLResponse)?.statusCode
-                throw UpdateError.invalidResponse(statusCode: statusCode)
-            }
-
+            statusMessage = "正在下载 v\(manifest.version)... 0%"
             let installerURL = try installerDestinationURL(for: manifest)
-            try? FileManager.default.removeItem(at: installerURL)
-            try FileManager.default.moveItem(at: temporaryURL, to: installerURL)
+            try await UpdateDownloadClient.download(from: url, to: installerURL) { [self] progress in
+                self.downloadProgress = progress
+                self.statusMessage = "正在下载 v\(manifest.version)... \(progress.statusText)"
+            }
             statusMessage = "安装包已下载"
             NSWorkspace.shared.open(installerURL)
         } catch {
+            downloadProgress = nil
             statusMessage = "下载更新失败：\(error.localizedDescription)"
         }
+        isDownloading = false
     }
 
     private func installerDestinationURL(for manifest: AppUpdateManifest) throws -> URL {
@@ -204,7 +209,7 @@ final class UpdateController: ObservableObject {
     }
 
     private var shouldRunAutoCheck: Bool {
-        guard !isChecking else { return false }
+        guard !isChecking, !isDownloading else { return false }
         guard let lastCheck = UserDefaults.standard.object(forKey: lastAutoCheckKey) as? Date else {
             return true
         }
@@ -219,6 +224,70 @@ final class UpdateController: ObservableObject {
             return "更新信息格式不正确，暂时无法检查。"
         }
         return "检查更新失败：\(error.localizedDescription)"
+    }
+}
+
+struct UpdateDownloadClient {
+    static func download(
+        from url: URL,
+        to destinationURL: URL,
+        progressHandler: @escaping @MainActor (AppUpdateDownloadProgress) -> Void
+    ) async throws {
+        let (bytes, response) = try await URLSession.shared.bytes(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            throw UpdateError.invalidResponse(statusCode: statusCode)
+        }
+
+        let expectedBytes = response.expectedContentLength > 0 ? response.expectedContentLength : nil
+        let temporaryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AntOrder-\(UUID().uuidString).pkg")
+        FileManager.default.createFile(atPath: temporaryURL.path, contents: nil)
+
+        var didMoveToDestination = false
+        do {
+            let fileHandle = try FileHandle(forWritingTo: temporaryURL)
+            defer {
+                try? fileHandle.close()
+            }
+
+            var receivedBytes: Int64 = 0
+            var lastReportedBytes: Int64 = 0
+            var buffer = Data()
+            buffer.reserveCapacity(64 * 1024)
+
+            await progressHandler(AppUpdateDownloadProgress(receivedBytes: 0, expectedBytes: expectedBytes))
+
+            for try await byte in bytes {
+                buffer.append(byte)
+                receivedBytes += 1
+
+                if buffer.count >= 64 * 1024 {
+                    try fileHandle.write(contentsOf: buffer)
+                    buffer.removeAll(keepingCapacity: true)
+                }
+
+                if receivedBytes - lastReportedBytes >= 128 * 1024 || receivedBytes == expectedBytes {
+                    lastReportedBytes = receivedBytes
+                    await progressHandler(AppUpdateDownloadProgress(receivedBytes: receivedBytes, expectedBytes: expectedBytes))
+                }
+            }
+
+            if !buffer.isEmpty {
+                try fileHandle.write(contentsOf: buffer)
+            }
+
+            await progressHandler(AppUpdateDownloadProgress(receivedBytes: receivedBytes, expectedBytes: expectedBytes))
+            try? FileManager.default.removeItem(at: destinationURL)
+            try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
+            didMoveToDestination = true
+        } catch {
+            if !didMoveToDestination {
+                try? FileManager.default.removeItem(at: temporaryURL)
+            }
+            throw error
+        }
     }
 }
 

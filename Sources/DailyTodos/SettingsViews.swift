@@ -107,7 +107,7 @@ struct AppSettingsSheet: View {
 
                                 Text(updateStatusText)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(updateController.isChecking ? AppTheme.ink : AppTheme.mutedInk)
+                                    .foregroundStyle(updateController.isChecking || updateController.isDownloading ? AppTheme.ink : AppTheme.mutedInk)
                                     .lineLimit(2)
 
                                 if let lastCheckedAt = updateController.lastCheckedAt {
@@ -123,17 +123,18 @@ struct AppSettingsSheet: View {
                                 Button {
                                     updateController.downloadAvailableUpdate()
                                 } label: {
-                                    Label("下载", systemImage: "arrow.down.to.line")
+                                    Label(updateController.isDownloading ? "下载中" : "下载", systemImage: updateController.isDownloading ? "arrow.down.circle.fill" : "arrow.down.to.line")
                                         .font(.system(size: 12, weight: .semibold))
                                         .frame(width: 78, height: 32)
                                 }
                                 .buttonStyle(.tactilePlain)
                                 .foregroundStyle(.white)
-                                .background(AppTheme.accentWarm, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .background(updateController.isDownloading ? AppTheme.mutedInk : AppTheme.accentWarm, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .stroke(AppTheme.adaptiveWhite(0.28))
                                 )
+                                .disabled(updateController.isDownloading)
                                 .help("下载当前发现的新版本")
                             }
 
@@ -151,8 +152,12 @@ struct AppSettingsSheet: View {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(0.26))
                             )
-                            .disabled(updateController.isChecking)
+                            .disabled(updateController.isChecking || updateController.isDownloading)
                             .help("检查更新")
+                        }
+
+                        if updateController.isDownloading {
+                            updateDownloadProgressView
                         }
 
                         updateReminderNote
@@ -169,6 +174,12 @@ struct AppSettingsSheet: View {
         if updateController.isChecking {
             return "正在检查远程版本..."
         }
+        if updateController.isDownloading {
+            if let progress = updateController.downloadProgress {
+                return "正在下载更新 \(progress.statusText)"
+            }
+            return "正在连接下载服务..."
+        }
         if let update = updateController.availableUpdate {
             return "可更新到 v\(update.version) (\(update.build))，设置入口会持续显示红点。"
         }
@@ -179,6 +190,9 @@ struct AppSettingsSheet: View {
         if updateController.isChecking {
             return AppTheme.accentWarm
         }
+        if updateController.isDownloading {
+            return AppTheme.accentWarm
+        }
         if updateController.availableUpdate != nil {
             return AppTheme.accent
         }
@@ -186,6 +200,42 @@ struct AppSettingsSheet: View {
             return TodoPriority.medium.displayColor
         }
         return AppTheme.success
+    }
+
+    @ViewBuilder
+    private var updateDownloadProgressView: some View {
+        let progress = updateController.downloadProgress
+
+        VStack(alignment: .leading, spacing: 7) {
+            if let fraction = progress?.fractionCompleted {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .tint(AppTheme.accentWarm)
+            } else {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .tint(AppTheme.accentWarm)
+            }
+
+            HStack(spacing: 8) {
+                Text(progress?.percentText ?? "下载中")
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.ink)
+                Text(progress?.detailText ?? "正在获取文件大小")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(AppTheme.adaptiveWhite(0.70), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AppTheme.accentWarm.opacity(0.24))
+        )
     }
 
     private var updateReminderNote: some View {
