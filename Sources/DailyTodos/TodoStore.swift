@@ -76,7 +76,7 @@ final class TodoStore: ObservableObject {
     }
 
     func prefetchHandbookItemsAfterStartup() {
-        scheduleLoadHandbookItemsIfNeeded(after: .milliseconds(350))
+        scheduleLoadHandbookItemsIfNeeded(after: nil)
     }
 
     private func scheduleLoadHandbookItemsIfNeeded(after delay: Duration?) {

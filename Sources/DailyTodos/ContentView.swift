@@ -142,7 +142,7 @@ struct ContentView: View {
         }
         .onChange(of: activeSection) { _, newValue in
             guard newValue == .handbook else { return }
-            store.scheduleLoadHandbookItemsIfNeeded()
+            store.loadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
             focusQuickCapture()
