@@ -243,23 +243,28 @@ struct TodoMiniCalendar: View {
 
         let firstWeekday = calendar.component(.weekday, from: monthInterval.start)
         let leadingBlanks = (firstWeekday + 5) % 7
-        var days = Array(repeating: MiniCalendarDay(date: nil, isInCurrentMonth: false), count: leadingBlanks)
+        var days: [MiniCalendarDay] = []
+        for index in 0..<leadingBlanks {
+            days.append(MiniCalendarDay(id: "blank-leading-\(index)", date: nil, isInCurrentMonth: false))
+        }
 
         for day in monthRange {
             var components = calendar.dateComponents([.year, .month], from: visibleMonth)
             components.day = day
-            days.append(MiniCalendarDay(date: calendar.date(from: components), isInCurrentMonth: true))
+            days.append(MiniCalendarDay(id: "day-\(day)", date: calendar.date(from: components), isInCurrentMonth: true))
         }
 
+        var trailingIndex = 0
         while days.count % 7 != 0 {
-            days.append(MiniCalendarDay(date: nil, isInCurrentMonth: false))
+            days.append(MiniCalendarDay(id: "blank-trailing-\(trailingIndex)", date: nil, isInCurrentMonth: false))
+            trailingIndex += 1
         }
         return days
     }
 }
 
 struct MiniCalendarDay: Identifiable {
-    let id = UUID()
+    let id: String
     let date: Date?
     let isInCurrentMonth: Bool
 }

@@ -67,7 +67,7 @@ struct TodoListView: View {
         }
         .animation(isSearching ? AppMotion.quick : AppMotion.modeSwitch, value: scope)
         .animation(isSearching ? AppMotion.quick : AppMotion.modeSwitch, value: allTodosViewMode)
-        .animation(isSearching ? AppMotion.quick : AppMotion.list, value: todos.map(\.id))
+        .animation(isSearching ? AppMotion.quick : AppMotion.list, value: todos.count)
     }
 
     @ViewBuilder

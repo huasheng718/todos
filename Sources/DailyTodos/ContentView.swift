@@ -33,7 +33,7 @@ struct ContentView: View {
     @State private var highlightedTodoID: TodoItem.ID?
     @State private var scrollTargetTodoID: TodoItem.ID?
     @State private var todoFeedback: TodoActionFeedback?
-    @State private var themeRefreshCounter = 0
+    @State private var filteredTodosCache: [TodoItem] = []
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
@@ -120,17 +120,17 @@ struct ContentView: View {
         .onAppear {
             activeAppSkin = AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
             activeColorScheme = colorScheme
-            themeRefreshCounter += 1
+            rebuildFilteredTodos()
         }
         .onChange(of: selectedSkinRawValue) { _, newValue in
             activeAppSkin = AppSkin(rawValue: newValue) ?? .ocean
         }
         .onChange(of: colorScheme) { _, newValue in
             activeColorScheme = newValue
-            themeRefreshCounter += 1
         }
         .onChange(of: scope) { _, newValue in
             PerformanceMonitor.event("ContentView.todoScope", detail: newValue.analyticsName)
+            rebuildFilteredTodos()
             guard !didCustomizeNewDate else {
                 return
             }
@@ -153,6 +153,12 @@ struct ContentView: View {
         .onChange(of: handbookSearchText) { _, newValue in
             debounceHandbookSearchText(newValue)
         }
+        .onChange(of: debouncedSearchText) { _, _ in
+            rebuildFilteredTodos()
+        }
+        .onChange(of: store.todos) { _, _ in
+            rebuildFilteredTodos()
+        }
         .sheet(isPresented: $isAISettingsPresented) {
             AISettingsSheet()
                 .environmentObject(aiSettings)
@@ -164,16 +170,18 @@ struct ContentView: View {
     }
 
     private var secondarySidebar: some View {
-        ZStack(alignment: .topLeading) {
-            TodoSidebarView(scope: $scope)
-                .sectionVisibility(activeSection == .todos)
-
-            HandbookSidebarView(
-                selectedCategory: $handbookCategory,
-                selectedFolder: $handbookFolder,
-                searchText: $handbookSearchText
-            )
-            .sectionVisibility(activeSection == .handbook)
+        Group {
+            if activeSection == .todos {
+                TodoSidebarView(scope: $scope)
+                    .transition(AppMotion.viewTransition)
+            } else {
+                HandbookSidebarView(
+                    selectedCategory: $handbookCategory,
+                    selectedFolder: $handbookFolder,
+                    searchText: $handbookSearchText
+                )
+                .transition(AppMotion.viewTransition)
+            }
         }
         .animation(AppMotion.sectionSwitch, value: activeSection)
     }
@@ -192,12 +200,14 @@ struct ContentView: View {
     }
 
     private var contentColumn: some View {
-        ZStack(alignment: .topLeading) {
-            taskColumn
-                .sectionVisibility(activeSection == .todos)
-
-            handbookColumn
-                .sectionVisibility(activeSection == .handbook)
+        Group {
+            if activeSection == .todos {
+                taskColumn
+                    .transition(AppMotion.viewTransition)
+            } else {
+                handbookColumn
+                    .transition(AppMotion.viewTransition)
+            }
         }
         .animation(AppMotion.sectionSwitch, value: activeSection)
     }
@@ -246,7 +256,7 @@ struct ContentView: View {
             .padding(.bottom, 10)
 
             TodoListView(
-                todos: filteredTodos,
+                todos: filteredTodosCache,
                 scope: scope,
                 allTodosViewMode: allTodosViewMode,
                 onUpdate: updateTodo,
@@ -281,18 +291,18 @@ struct ContentView: View {
         .animation(AppMotion.smooth, value: handbookCategory)
     }
 
-    private var filteredTodos: [TodoItem] {
+    private func rebuildFilteredTodos() {
         switch scope {
         case .dashboard:
-            store.todos(matching: debouncedSearchText)
+            filteredTodosCache = store.todos(matching: debouncedSearchText)
         case .all:
-            store.todos(matching: debouncedSearchText)
+            filteredTodosCache = store.todos(matching: debouncedSearchText)
         case .day(let date):
-            store.todos(on: date, matching: debouncedSearchText)
+            filteredTodosCache = store.todos(on: date, matching: debouncedSearchText)
         case .waiting:
-            store.todos(matching: debouncedSearchText).filter { $0.progress == .waiting }
+            filteredTodosCache = store.todos(matching: debouncedSearchText).filter { $0.progress == .waiting }
         case .weekly:
-            store.todos(matching: debouncedSearchText).filter(\.isWeekly)
+            filteredTodosCache = store.todos(matching: debouncedSearchText).filter(\.isWeekly)
         }
     }
 
@@ -362,7 +372,7 @@ struct ContentView: View {
     }
 
     private var overdueTodos: [TodoItem] {
-        filteredTodos.filter { todo in
+        filteredTodosCache.filter { todo in
             todo.progress != .done
                 && todo.progress != .waiting
                 && calendar.startOfDay(for: todo.date) < calendar.startOfDay(for: Date())
@@ -370,7 +380,7 @@ struct ContentView: View {
     }
 
     private var todayActiveTodos: [TodoItem] {
-        filteredTodos.filter { todo in
+        filteredTodosCache.filter { todo in
             todo.progress != .done
                 && todo.progress != .waiting
                 && calendar.isDateInToday(todo.date)

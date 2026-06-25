@@ -19,6 +19,7 @@ struct HandbookContentView: View {
     @State private var scopedItemsCache: [HandbookItem] = []
     @State private var visibleItemsCache: [HandbookItem] = []
     @State private var visibleItemsCacheKey: HandbookListCacheKey?
+    @State private var rebuildTask: Task<Void, Never>?
     @FocusState private var focusedField: HandbookFocusField?
 
     var body: some View {
@@ -110,13 +111,21 @@ struct HandbookContentView: View {
     }
 
     private func matchesFolder(_ item: HandbookItem) -> Bool {
-        guard let selectedFolder, !selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return true
-        }
-        return item.trimmedFolder == selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.matchesFolderStatic(item, folder: selectedFolder?.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private func matchesSearch(_ item: HandbookItem, query: String) -> Bool {
+        Self.matchesSearchStatic(item, query: query)
+    }
+
+    nonisolated private static func matchesFolderStatic(_ item: HandbookItem, folder: String?) -> Bool {
+        guard let folder, !folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return true
+        }
+        return item.trimmedFolder == folder.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated private static func matchesSearchStatic(_ item: HandbookItem, query: String) -> Bool {
         guard !query.isEmpty else { return true }
         return item.title.localizedCaseInsensitiveContains(query)
             || item.body.localizedCaseInsensitiveContains(query)
@@ -222,7 +231,12 @@ struct HandbookContentView: View {
                 LazyVStack(spacing: 7) {
                     ForEach(visibleItems) { item in
                         HandbookRow(
-                            item: item,
+                            displayData: HandbookRowDisplayData(
+                                item: item,
+                                cardSummary: item.cardSummary,
+                                bodyCharacterCount: item.bodyCharacterCount,
+                                lengthKind: item.lengthKind
+                            ),
                             isSelected: selectedItem?.id == item.id,
                             onSelect: {
                                 withAnimation(AppMotion.smooth) {
@@ -264,20 +278,61 @@ struct HandbookContentView: View {
 
         selectedItemID = currentItems.first?.id
     }
+
     private func rebuildVisibleItems(from sourceItems: [HandbookItem]? = nil) {
-        PerformanceMonitor.measure("Handbook.visibleItems") {
-            let items = sourceItems ?? allItems
-            let scopedItems = scopedItems(from: items)
-            let visibleItems = activeFilter.filter(scopedItems)
-            scopedItemsCache = scopedItems
-            visibleItemsCache = visibleItems
-            visibleItemsCacheKey = listCacheKey(from: items)
-            syncSelection(with: visibleItems)
-            PerformanceMonitor.event("Handbook.visibleItems.count", detail: "\(visibleItems.count)")
+        rebuildTask?.cancel()
+        let items = sourceItems ?? allItems
+        let category = selectedCategory
+        let folder = selectedFolder?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filter = activeFilter
+
+        rebuildTask = Task {
+            let scoped = await Task.detached(priority: .userInitiated) {
+                let cleanedQuery = query
+                return items.filter { item in
+                    (category == nil || item.category == category)
+                        && HandbookContentView.matchesFolderStatic(item, folder: folder)
+                        && HandbookContentView.matchesSearchStatic(item, query: cleanedQuery)
+                }
+            }.value
+
+            let visible = filter.filter(scoped)
+            let cacheKey = HandbookContentView.listCacheKeyStatic(
+                from: items,
+                selectedCategory: category,
+                selectedFolder: folder,
+                searchText: query,
+                activeFilter: filter
+            )
+
+            await MainActor.run {
+                scopedItemsCache = scoped
+                visibleItemsCache = visible
+                visibleItemsCacheKey = cacheKey
+                syncSelection(with: visible)
+                PerformanceMonitor.event("Handbook.visibleItems.count", detail: "\(visible.count)")
+            }
         }
     }
 
     private func listCacheKey(from sourceItems: [HandbookItem]) -> HandbookListCacheKey {
+        Self.listCacheKeyStatic(
+            from: sourceItems,
+            selectedCategory: selectedCategory,
+            selectedFolder: selectedFolder?.trimmingCharacters(in: .whitespacesAndNewlines),
+            searchText: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
+            activeFilter: activeFilter
+        )
+    }
+
+    nonisolated private static func listCacheKeyStatic(
+        from sourceItems: [HandbookItem],
+        selectedCategory: HandbookCategory?,
+        selectedFolder: String?,
+        searchText: String,
+        activeFilter: HandbookListFilter
+    ) -> HandbookListCacheKey {
         HandbookListCacheKey(
             itemCount: sourceItems.count,
             firstItemID: sourceItems.first?.id,
@@ -285,8 +340,8 @@ struct HandbookContentView: View {
             lastItemID: sourceItems.last?.id,
             lastUpdatedAt: sourceItems.last?.updatedAt,
             selectedCategory: selectedCategory,
-            selectedFolder: selectedFolder?.trimmingCharacters(in: .whitespacesAndNewlines),
-            searchText: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
+            selectedFolder: selectedFolder,
+            searchText: searchText,
             activeFilter: activeFilter
         )
     }
@@ -574,16 +629,25 @@ struct HandbookInferenceBadge: View {
     }
 }
 
-struct HandbookRow: View {
+struct HandbookRowDisplayData: Equatable {
     let item: HandbookItem
+    let cardSummary: String?
+    let bodyCharacterCount: Int
+    let lengthKind: HandbookLengthKind
+}
+
+struct HandbookRow: View {
+    let displayData: HandbookRowDisplayData
     let isSelected: Bool
     let onSelect: () -> Void
 
     @State private var isHovered = false
 
+    private var item: HandbookItem { displayData.item }
+
     var body: some View {
-        let lengthKind = item.lengthKind
-        let characterCount = item.bodyCharacterCount
+        let lengthKind = displayData.lengthKind
+        let characterCount = displayData.bodyCharacterCount
 
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -616,7 +680,7 @@ struct HandbookRow: View {
                     .lineSpacing(1)
                     .lineLimit(2)
 
-                if let summary = item.cardSummary {
+                if let summary = displayData.cardSummary {
                     Text(summary)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.mutedInk)

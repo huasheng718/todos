@@ -14,6 +14,8 @@ struct HandbookDetailPanel: View {
     @State private var outline: [MarkdownOutlineEntry] = []
     @State private var bodyMetrics = HandbookBodyMetrics.empty
     @State private var outlineUpdateToken = UUID()
+    @State private var isDirty = false
+    @State private var bodyMetricsTask: Task<Void, Never>?
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
     var body: some View {
@@ -34,6 +36,7 @@ struct HandbookDetailPanel: View {
         .shadow(color: AppTheme.rowShadow.opacity(0.30), radius: 6, x: 0, y: 2)
         .onChange(of: item) { _, newValue in
             syncDraft(with: newValue)
+            isDirty = false
         }
         .onAppear {
             syncDraft(with: item)
@@ -44,7 +47,7 @@ struct HandbookDetailPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HandbookCanvasToolbar(
                 accentColor: category.accentColor,
-                isDirty: isDirty(comparedTo: item),
+                isDirty: isDirty,
                 canCopyAll: !copyAllText(for: item).isEmpty,
                 canCopyTitle: !(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && item.displayTitle.isEmpty),
                 onDelete: { onDelete(item) },
@@ -80,13 +83,16 @@ struct HandbookDetailPanel: View {
                 HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
                     .padding(.top, 8)
                     .onChange(of: attachments) { _, _ in
+                        isDirty = computeIsDirty(comparedTo: item)
                         submitEdit(for: item)
                     }
             }
             .onChange(of: category) { _, _ in
+                isDirty = computeIsDirty(comparedTo: item)
                 submitEdit(for: item)
             }
             .onChange(of: folder) { _, _ in
+                isDirty = computeIsDirty(comparedTo: item)
                 submitEdit(for: item)
             }
             .onChange(of: canvasFocus) { oldValue, newValue in
@@ -94,9 +100,14 @@ struct HandbookDetailPanel: View {
                     submitEdit(for: item)
                 }
             }
+            .onChange(of: title) { _, _ in
+                isDirty = computeIsDirty(comparedTo: item)
+            }
+            .onChange(of: bodyText) { _, _ in
+                isDirty = computeIsDirty(comparedTo: item)
+            }
             .onChange(of: bodyText) { _, newValue in
-                updateBodyMetrics(for: newValue)
-                scheduleOutlineUpdate(for: newValue)
+                scheduleBodyMetricsUpdate(for: newValue)
             }
             .scrollIndicators(.hidden)
             .padding(.horizontal, 22)
@@ -132,6 +143,7 @@ struct HandbookDetailPanel: View {
     private func submitEdit(for item: HandbookItem) {
         guard canSubmit else { return }
         onUpdate(item, category, folder, title, bodyText, attachments)
+        isDirty = false
     }
 
     private func syncDraft(with item: HandbookItem?) {
@@ -142,28 +154,34 @@ struct HandbookDetailPanel: View {
         bodyText = item.body
         attachments = item.attachments
         outline = []
-        updateBodyMetrics(for: item.body)
-        scheduleOutlineUpdate(for: item.body)
+        bodyMetrics = HandbookBodyMetrics(text: item.body)
+        scheduleBodyMetricsUpdate(for: item.body)
     }
 
-    private func scheduleOutlineUpdate(for text: String) {
-        let token = UUID()
-        outlineUpdateToken = token
-        let snapshot = text
-        guard snapshot.contains("#") else {
-            outline = []
-            return
-        }
+    private func scheduleBodyMetricsUpdate(for text: String) {
+        bodyMetricsTask?.cancel()
+        bodyMetricsTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            guard outlineUpdateToken == token else { return }
-            guard snapshot == bodyText else { return }
-            outline = MarkdownOutlineEntry.extract(from: snapshot.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-    }
+            let metrics = await Task.detached(priority: .userInitiated) {
+                HandbookBodyMetrics(text: text)
+            }.value
 
-    private func updateBodyMetrics(for text: String) {
-        bodyMetrics = HandbookBodyMetrics(text: text)
+            let newOutline: [MarkdownOutlineEntry]
+            if text.contains("#") {
+                newOutline = await Task.detached(priority: .userInitiated) {
+                    MarkdownOutlineEntry.extract(from: text.trimmingCharacters(in: .whitespacesAndNewlines))
+                }.value
+            } else {
+                newOutline = []
+            }
+
+            await MainActor.run {
+                bodyMetrics = metrics
+                outline = newOutline
+            }
+        }
     }
 
     private func copyToPasteboard(_ value: String) {
@@ -186,7 +204,7 @@ struct HandbookDetailPanel: View {
         return "\(titleText)\n\n\(body)"
     }
 
-    private func isDirty(comparedTo item: HandbookItem) -> Bool {
+    private func computeIsDirty(comparedTo item: HandbookItem) -> Bool {
         category != item.category
             || folder.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedFolder
             || title.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedTitle
