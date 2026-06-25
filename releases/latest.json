@@ -1,6 +1,6 @@
 {
-  "version": "1.1.22",
-  "build": 23,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.22/AntOrder-1.1.22.pkg",
-  "releaseNotes": "蚁序 1.1.22 更新：优化待办切换到手记的响应速度，减少整页重建和短加载闪烁。"
+  "version": "1.1.23",
+  "build": 24,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.23/AntOrder-1.1.23.pkg",
+  "releaseNotes": "蚁序 1.1.23 更新：8项关键性能优化，解决待办列表、手记输入、栏目切换的卡顿问题。"
 }
