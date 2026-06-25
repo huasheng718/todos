@@ -235,7 +235,10 @@ struct HandbookContentView: View {
                                 item: item,
                                 cardSummary: item.cardSummary,
                                 bodyCharacterCount: item.bodyCharacterCount,
-                                lengthKind: item.lengthKind
+                                lengthKind: item.lengthKind,
+                                formattedDate: item.updatedAt.formatted(.dateTime.month().day().hour().minute()),
+                                displayTitle: item.displayTitle,
+                                trimmedFolder: item.trimmedFolder
                             ),
                             isSelected: selectedItem?.id == item.id,
                             onSelect: {
@@ -280,8 +283,22 @@ struct HandbookContentView: View {
     }
 
     private func rebuildVisibleItems(from sourceItems: [HandbookItem]? = nil) {
-        rebuildTask?.cancel()
         let items = sourceItems ?? allItems
+
+        // 首次构建同步执行，避免空状态闪烁
+        if visibleItemsCacheKey == nil {
+            let scoped = scopedItems(from: items)
+            let visible = activeFilter.filter(scoped)
+            scopedItemsCache = scoped
+            visibleItemsCache = visible
+            visibleItemsCacheKey = listCacheKey(from: items)
+            syncSelection(with: visible)
+            PerformanceMonitor.event("Handbook.visibleItems.count", detail: "\(visible.count)")
+            return
+        }
+
+        // 后续走 async
+        rebuildTask?.cancel()
         let category = selectedCategory
         let folder = selectedFolder?.trimmingCharacters(in: .whitespacesAndNewlines)
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -634,6 +651,9 @@ struct HandbookRowDisplayData: Equatable {
     let cardSummary: String?
     let bodyCharacterCount: Int
     let lengthKind: HandbookLengthKind
+    let formattedDate: String
+    let displayTitle: String
+    let trimmedFolder: String
 }
 
 struct HandbookRow: View {
@@ -668,13 +688,13 @@ struct HandbookRow: View {
 
                     Spacer(minLength: 8)
 
-                    Text(item.updatedAt.formatted(.dateTime.month().day().hour().minute()))
+                    Text(displayData.formattedDate)
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(AppTheme.mutedInk)
                 }
 
-                Text(item.displayTitle)
+                Text(displayData.displayTitle)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppTheme.ink)
                     .lineSpacing(1)
@@ -690,11 +710,11 @@ struct HandbookRow: View {
                 }
 
                 HStack(spacing: 6) {
-                    if !item.trimmedFolder.isEmpty {
+                    if !displayData.trimmedFolder.isEmpty {
                         Image(systemName: "folder")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(AppTheme.mutedInk)
-                        Text(item.trimmedFolder)
+                        Text(displayData.trimmedFolder)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(AppTheme.mutedInk)
                             .lineLimit(1)
