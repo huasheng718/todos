@@ -6,6 +6,7 @@ struct HandbookSidebarView: View {
     @Binding var selectedFolder: String?
     @Binding var searchText: String
     @State private var metrics = HandbookSidebarMetrics.empty
+    @State private var metricsTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -131,7 +132,19 @@ struct HandbookSidebarView: View {
 
 
     private func rebuildMetrics() {
-        metrics = HandbookSidebarMetrics(items: store.handbookItems, selectedCategory: selectedCategory)
+        metricsTask?.cancel()
+        let items = store.handbookItems
+        let category = selectedCategory
+
+        metricsTask = Task {
+            let newMetrics = await Task.detached(priority: .userInitiated) {
+                HandbookSidebarMetrics(items: items, selectedCategory: category)
+            }.value
+
+            await MainActor.run {
+                metrics = newMetrics
+            }
+        }
     }
 }
 

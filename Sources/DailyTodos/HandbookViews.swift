@@ -105,9 +105,9 @@ struct HandbookContentView: View {
         if visibleItemsCacheKey == listCacheKey(from: allItems) {
             return (scopedItemsCache, visibleItemsCache)
         }
-
-        let scopedItems = scopedItems(from: allItems)
-        return (scopedItems, activeFilter.filter(scopedItems))
+        // 缓存未命中时返回缓存值（可能是空的），让 async rebuildVisibleItems 来填充
+        // 避免在 body 中同步过滤阻塞主线程
+        return (scopedItemsCache, visibleItemsCache)
     }
 
     private func matchesFolder(_ item: HandbookItem) -> Bool {

@@ -31,10 +31,7 @@ enum AppMotion {
     }
 
     static var viewTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .scale(scale: 0.992, anchor: .topLeading)),
-            removal: .opacity.combined(with: .scale(scale: 0.998, anchor: .topLeading))
-        )
+        .opacity
     }
 
     static var inlineTransition: AnyTransition {

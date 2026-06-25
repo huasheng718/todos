@@ -154,14 +154,14 @@ struct HandbookDetailPanel: View {
         bodyText = item.body
         attachments = item.attachments
         outline = []
-        bodyMetrics = HandbookBodyMetrics(text: item.body)
+        bodyMetrics = .empty
         scheduleBodyMetricsUpdate(for: item.body)
     }
 
     private func scheduleBodyMetricsUpdate(for text: String) {
         bodyMetricsTask?.cancel()
         bodyMetricsTask = Task {
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
 
             let metrics = await Task.detached(priority: .userInitiated) {
