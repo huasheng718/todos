@@ -22,6 +22,7 @@ struct DailyTodosChecks {
                 try checkTodoStore()
             }
             try await checkScheduledHandbookLoading()
+            try await checkHandbookLoadingStateConflict()
             print("DailyTodosChecks passed")
         } catch {
             FileHandle.standardError.write(Data("DailyTodosChecks failed: \(error)\n".utf8))
@@ -232,6 +233,7 @@ func checkLazyStartupLoading() throws {
     store.loadStartupData()
     try expect(store.didLoadTodos, "首屏加载后应标记待办已加载")
     try expect(!store.didLoadHandbookItems, "首屏加载不应同步加载手记")
+    try expect(!store.isLoadingHandbookItems, "首屏加载不应进入手记加载状态")
     try expect(store.handbookItems.isEmpty, "首屏加载时手记列表应保持空集合")
 
     store.loadHandbookItemsIfNeeded()
@@ -267,6 +269,32 @@ func checkScheduledHandbookLoading() async throws {
     try expect(store.didLoadHandbookItems, "后台手记加载最终应完成")
     try expect(!store.isLoadingHandbookItems, "后台手记加载完成后应退出 loading 状态")
     try expect(store.handbookItems.contains { $0.title == "租赁合同状态" }, "后台手记加载应返回 SQLite 中的数据")
+}
+
+@MainActor
+func checkHandbookLoadingStateConflict() async throws {
+    let (seedStore, databaseURL) = try makeStore()
+    seedStore.loadStartupData()
+    seedStore.addHandbookItem(
+        category: .inspiration,
+        folder: "性能",
+        title: "按需加载优先",
+        body: "同步加载应取消后台预热结果"
+    )
+
+    let store = TodoStore(storageURL: databaseURL)
+    store.loadStartupData()
+    store.scheduleLoadHandbookItemsIfNeeded()
+    try expect(store.isLoadingHandbookItems, "调度后应记录后台手记加载状态")
+
+    store.loadHandbookItemsIfNeeded()
+    try expect(store.didLoadHandbookItems, "同步按需加载应完成手记加载")
+    try expect(!store.isLoadingHandbookItems, "同步按需加载完成后不应残留后台 loading 状态")
+
+    try await Task.sleep(for: .milliseconds(80))
+    try expect(store.didLoadHandbookItems, "后台预热返回后不应回退已加载状态")
+    try expect(!store.isLoadingHandbookItems, "后台预热返回后不应重新进入 loading 状态")
+    try expect(store.handbookItems.contains { $0.title == "按需加载优先" }, "竞态后手记数据应保持可用")
 }
 
 @MainActor
@@ -370,6 +398,23 @@ func checkTodoStore() throws {
     try expect(item.category == .meeting, "手记分类应持久化")
     try expect(item.trimmedFolder == "供应商", "手记二级目录应持久化")
     try expect(item.attachments == [attachment], "手记附件应持久化")
+
+    Thread.sleep(forTimeInterval: 0.01)
+    guard store.addHandbookItem(category: .research, folder: "竞品", title: "竞品资料", body: "后创建") != nil else {
+        throw CheckFailure.failed("新增第二条手记失败")
+    }
+    guard let olderItem = store.handbookItems.last(where: { $0.id == item.id }) else {
+        throw CheckFailure.failed("未找到待更新的旧手记")
+    }
+    store.update(
+        olderItem,
+        category: olderItem.category,
+        folder: olderItem.folder,
+        title: olderItem.title,
+        body: "会议纪要更新后不应跳到顶部",
+        attachments: olderItem.attachments
+    )
+    try expect(store.handbookItems.last?.id == item.id, "实时保存正文不应改变手记列表位置")
 }
 
 @MainActor

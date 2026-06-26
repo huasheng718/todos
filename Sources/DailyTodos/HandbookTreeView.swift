@@ -36,6 +36,7 @@ struct HandbookTreeView: View {
     let onDelete: (HandbookItem) -> Void
 
     @State private var expandedNodeIDs: Set<String> = []
+    @State private var snapshot = HandbookTreeSnapshot.empty
     @State private var draftTitle = ""
     @State private var draftBody = ""
     @FocusState private var focusField: HandbookFocusField?
@@ -63,10 +64,13 @@ struct HandbookTreeView: View {
         }
         .background(AppTheme.sidebar)
         .onAppear {
-            expandAllVisibleNodes()
+            rebuildSnapshot(expandInitialNodes: true)
         }
         .onChange(of: items) { _, _ in
-            expandAllVisibleNodes()
+            rebuildSnapshot()
+        }
+        .onChange(of: searchText) { _, _ in
+            rebuildSnapshot()
         }
     }
 
@@ -137,8 +141,8 @@ struct HandbookTreeView: View {
                 treeAllItemsNode
 
                 // 按分类展开
-                ForEach(HandbookCategory.allCases) { category in
-                    treeCategoryNode(category)
+                ForEach(snapshot.sections) { section in
+                    treeCategoryNode(section)
                 }
             }
             .padding(.horizontal, 12)
@@ -153,14 +157,14 @@ struct HandbookTreeView: View {
         HandbookTreeRow(
             title: "全部手记",
             icon: "tray.full",
-            count: items.count,
+            count: snapshot.totalCount,
             level: 0,
             variant: .summary,
             accentColor: AppTheme.accent,
             isSelected: selectedItemID == nil && selectedCategory == nil && selectedFolder == nil,
             isExpandable: false,
-            isExpanded: expandedNodeIDs.contains("all"),
-            onToggle: { toggleExpand("all") },
+            isExpanded: expandedNodeIDs.contains(HandbookTreeNodeID.all),
+            onToggle: { toggleExpand(HandbookTreeNodeID.all) },
             onSelect: {
                 selectedItemID = nil
                 selectedCategory = nil
@@ -171,9 +175,9 @@ struct HandbookTreeView: View {
     }
 
     // 分类节点
-    private func treeCategoryNode(_ category: HandbookCategory) -> some View {
-        let categoryItems = items.filter { $0.category == category }
-        let nodeID = "cat-\(category.rawValue)"
+    private func treeCategoryNode(_ section: HandbookTreeSection) -> some View {
+        let category = section.category
+        let nodeID = section.nodeID
         let isExpanded = expandedNodeIDs.contains(nodeID)
         let isSelected = selectedItemID == nil && selectedCategory == category && selectedFolder == nil
 
@@ -181,12 +185,12 @@ struct HandbookTreeView: View {
             HandbookTreeRow(
                 title: category.title,
                 icon: category.icon,
-                count: categoryItems.count,
+                count: section.items.count,
                 level: 0,
                 variant: .category,
                 accentColor: category.accentColor,
                 isSelected: isSelected,
-                isExpandable: !categoryItems.isEmpty,
+                isExpandable: !section.items.isEmpty,
                 isExpanded: isExpanded,
                 onToggle: { toggleExpand(nodeID) },
                 onSelect: {
@@ -201,49 +205,46 @@ struct HandbookTreeView: View {
 
             if isExpanded {
                 // 文件夹子节点
-                let folders = uniqueFolders(in: categoryItems)
-                ForEach(folders, id: \.self) { folder in
-                    treeFolderNode(folder, category: category, items: categoryItems)
+                ForEach(section.folders) { folder in
+                    treeFolderNode(folder, category: category)
                 }
 
                 // 未归档的手记（没有文件夹的）
-                let unfiledItems = categoryItems.filter { $0.trimmedFolder.isEmpty }
-                if !unfiledItems.isEmpty {
-                    treeUnfiledNode(items: unfiledItems, category: category)
+                if !section.unfiledItems.isEmpty {
+                    treeUnfiledNode(items: section.unfiledItems, category: category)
                 }
             }
         }
     }
 
     // 文件夹节点
-    private func treeFolderNode(_ folder: String, category: HandbookCategory, items: [HandbookItem]) -> some View {
-        let folderItems = items.filter { $0.trimmedFolder == folder }
-        let nodeID = "folder-\(category.rawValue)-\(folder)"
+    private func treeFolderNode(_ folder: HandbookTreeFolder, category: HandbookCategory) -> some View {
+        let nodeID = folder.id
         let isExpanded = expandedNodeIDs.contains(nodeID)
-        let isSelected = selectedItemID == nil && selectedCategory == category && selectedFolder == folder
+        let isSelected = selectedItemID == nil && selectedCategory == category && selectedFolder == folder.name
 
         return VStack(alignment: .leading, spacing: 0) {
             HandbookTreeRow(
-                title: folder,
+                title: folder.name,
                 icon: "folder",
-                count: folderItems.count,
+                count: folder.items.count,
                 level: 1,
                 variant: .folder,
                 accentColor: category.accentColor,
                 isSelected: isSelected,
-                isExpandable: !folderItems.isEmpty,
+                isExpandable: !folder.items.isEmpty,
                 isExpanded: isExpanded,
                 onToggle: { toggleExpand(nodeID) },
                 onSelect: {
                     selectedItemID = nil
                     selectedCategory = category
-                    selectedFolder = folder
+                    selectedFolder = folder.name
                 },
                 onDrop: { _ in false }
             )
 
             if isExpanded {
-                ForEach(folderItems) { item in
+                ForEach(folder.items) { item in
                     treeItemNode(item, level: 2)
                 }
             }
@@ -252,7 +253,7 @@ struct HandbookTreeView: View {
 
     // 未归档节点
     private func treeUnfiledNode(items: [HandbookItem], category: HandbookCategory) -> some View {
-        let nodeID = "unfiled-\(category.rawValue)"
+        let nodeID = HandbookTreeNodeID.unfiled(category)
         let isExpanded = expandedNodeIDs.contains(nodeID)
         let isSelected = selectedItemID == nil && selectedCategory == category && selectedFolder == ""
 
@@ -358,46 +359,40 @@ struct HandbookTreeView: View {
         }
     }
 
-    private func uniqueFolders(in items: [HandbookItem]) -> [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        for item in items {
-            let folder = item.trimmedFolder
-            if !folder.isEmpty && !seen.contains(folder) {
-                seen.insert(folder)
-                result.append(folder)
-            }
+    private func rebuildSnapshot(expandInitialNodes: Bool = false) {
+        let newSnapshot = PerformanceMonitor.measure("HandbookTreeSnapshot.build") {
+            HandbookTreeSnapshot(items: items, searchText: searchText)
         }
-        return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-    }
+        guard newSnapshot.cacheKey != snapshot.cacheKey else {
+            if expandInitialNodes {
+                expandedNodeIDs.formUnion(newSnapshot.structureNodeIDs)
+            }
+            return
+        }
 
-    private func expandAllVisibleNodes() {
-        var ids = Set(["all"])
-        for category in HandbookCategory.allCases {
-            let categoryItems = items.filter { $0.category == category }
-            ids.insert("cat-\(category.rawValue)")
-            for folder in uniqueFolders(in: categoryItems) {
-                ids.insert(folderNodeID(category: category, folder: folder))
-            }
-            if categoryItems.contains(where: { $0.trimmedFolder.isEmpty }) {
-                ids.insert("unfiled-\(category.rawValue)")
-            }
+        let previousNodeIDs = snapshot.structureNodeIDs
+        let previousSignature = snapshot.structureSignature
+        snapshot = newSnapshot
+
+        if expandInitialNodes || previousSignature.isEmpty {
+            expandedNodeIDs.formUnion(newSnapshot.structureNodeIDs)
+        } else if previousSignature != newSnapshot.structureSignature {
+            expandedNodeIDs.formUnion(newSnapshot.structureNodeIDs.subtracting(previousNodeIDs))
         }
-        expandedNodeIDs.formUnion(ids)
     }
 
     private func expandPath(to item: HandbookItem) {
-        expandedNodeIDs.insert("all")
-        expandedNodeIDs.insert("cat-\(item.category.rawValue)")
+        expandedNodeIDs.insert(HandbookTreeNodeID.all)
+        expandedNodeIDs.insert(HandbookTreeNodeID.category(item.category))
         if item.trimmedFolder.isEmpty {
-            expandedNodeIDs.insert("unfiled-\(item.category.rawValue)")
+            expandedNodeIDs.insert(HandbookTreeNodeID.unfiled(item.category))
         } else {
             expandedNodeIDs.insert(folderNodeID(category: item.category, folder: item.trimmedFolder))
         }
     }
 
     private func folderNodeID(category: HandbookCategory, folder: String) -> String {
-        "folder-\(category.rawValue)-\(folder)"
+        HandbookTreeNodeID.folder(category: category, folder: folder)
     }
 
     private func move(_ item: HandbookItem, to category: HandbookCategory, folder: String?) {
@@ -408,9 +403,9 @@ struct HandbookTreeView: View {
             selectedItemID = item.id
             selectedCategory = category
             selectedFolder = targetFolder.isEmpty ? "" : targetFolder
-            expandedNodeIDs.insert("cat-\(category.rawValue)")
+            expandedNodeIDs.insert(HandbookTreeNodeID.category(category))
             if targetFolder.isEmpty {
-                expandedNodeIDs.insert("unfiled-\(category.rawValue)")
+                expandedNodeIDs.insert(HandbookTreeNodeID.unfiled(category))
             } else {
                 expandedNodeIDs.insert(folderNodeID(category: category, folder: targetFolder))
             }

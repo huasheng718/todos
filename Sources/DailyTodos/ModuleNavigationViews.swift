@@ -411,10 +411,11 @@ struct HandbookModuleView: View {
     let onDelete: (HandbookItem) -> Void
 
     @State private var selectedItemID: UUID?
+    @State private var selectedItemCache: HandbookItem?
 
     private var selectedItem: HandbookItem? {
-        guard let selectedItemID else { return nil }
-        return store.handbookItems.first { $0.id == selectedItemID } ?? store.handbookItems.first
+        guard selectedItemID != nil else { return nil }
+        return selectedItemCache
     }
 
     var body: some View {
@@ -471,6 +472,30 @@ struct HandbookModuleView: View {
             }
             .animation(AppMotion.smooth, value: selectedItemID)
         }
+        .onAppear {
+            syncSelectedItemCache(from: store.handbookItems)
+        }
+        .onChange(of: selectedItemID) { _, _ in
+            syncSelectedItemCache(from: store.handbookItems)
+        }
+        .onChange(of: store.handbookItems) { _, newItems in
+            syncSelectedItemCache(from: newItems)
+        }
+    }
+
+    private func syncSelectedItemCache(from items: [HandbookItem]) {
+        guard let selectedItemID else {
+            selectedItemCache = nil
+            return
+        }
+
+        if let selectedItem = items.first(where: { $0.id == selectedItemID }) {
+            selectedItemCache = selectedItem
+            return
+        }
+
+        selectedItemCache = items.first
+        self.selectedItemID = items.first?.id
     }
 
     @ViewBuilder
