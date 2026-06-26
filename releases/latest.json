@@ -1,6 +1,6 @@
 {
-  "version": "1.2.4",
-  "build": 33,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.4/AntOrder-1.2.4.pkg",
-  "releaseNotes": "蚁序 1.2.4 更新：移除待办左二头部的汇总计数，保留各分类自己的数量提示，让侧栏更简洁。"
+  "version": "1.2.5",
+  "build": 34,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.5/AntOrder-1.2.5.pkg",
+  "releaseNotes": "蚁序 1.2.5 更新：手记支持实时自动保存，新增后立即定位；侧栏目录默认展开并支持分类菜单和拖拽移动；修复新建标题被默认成分类名的问题，移除编辑区手动保存工具栏并优化元信息卡片。"
 }
