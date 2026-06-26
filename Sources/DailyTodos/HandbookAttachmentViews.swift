@@ -34,29 +34,9 @@ struct HandbookAttachmentStrip: View {
 
                 Spacer()
 
-                if isEditing {
-                    Button {
-                        addAttachments()
-                    } label: {
-                        Label("添加", systemImage: "plus")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 62, height: 28)
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(AppTheme.accent)
-                    .background(AppTheme.accentSoft.opacity(0.62), in: Capsule())
-                }
             }
 
-            if attachments.isEmpty {
-                if isEditing {
-                    Text("可添加文件、图片或视频；当前仅记录本地路径，便于后续工程化扩展。")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 2)
-                }
-            } else {
+            if !attachments.isEmpty {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 7)], alignment: .leading, spacing: 7) {
                     ForEach(attachments) { attachment in
                         HandbookAttachmentChip(
@@ -75,26 +55,6 @@ struct HandbookAttachmentStrip: View {
                 .fill(AppTheme.hairline.opacity(0.62))
                 .frame(height: 1)
         }
-    }
-
-    private func addAttachments() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.item]
-        panel.prompt = "添加"
-
-        guard panel.runModal() == .OK else { return }
-
-        let newAttachments = panel.urls.map { url in
-            HandbookAttachment(
-                kind: HandbookAttachmentKind(fileURL: url),
-                name: url.lastPathComponent,
-                path: url.path
-            )
-        }
-        attachments.append(contentsOf: newAttachments)
     }
 
     private func open(_ attachment: HandbookAttachment) {
@@ -159,6 +119,28 @@ struct HandbookAttachmentChip: View {
             withAnimation(AppMotion.hover) {
                 isHovered = hovered
             }
+        }
+    }
+}
+
+enum HandbookAttachmentPicker {
+    @MainActor
+    static func pick() -> [HandbookAttachment] {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.item]
+        panel.prompt = "添加"
+
+        guard panel.runModal() == .OK else { return [] }
+
+        return panel.urls.map { url in
+            HandbookAttachment(
+                kind: HandbookAttachmentKind(fileURL: url),
+                name: url.lastPathComponent,
+                path: url.path
+            )
         }
     }
 }

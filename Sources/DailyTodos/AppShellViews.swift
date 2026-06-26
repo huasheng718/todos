@@ -50,9 +50,6 @@ struct SkinPickerButton: View {
 struct AppTopBar: View {
     let title: String
     let subtitle: String
-    @Binding var isSecondarySidebarCollapsed: Bool
-    let isAIEnabled: Bool
-    let onOpenAISettings: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -71,12 +68,6 @@ struct AppTopBar: View {
             }
 
             Spacer(minLength: 24)
-
-            HStack(spacing: 8) {
-                SecondarySidebarCollapseButton(isCollapsed: $isSecondarySidebarCollapsed)
-                AISettingsButton(isEnabled: isAIEnabled, action: onOpenAISettings)
-            }
-            .padding(.trailing, 16)
         }
         .padding(.leading, 20)
         .background(topBarBackground)
@@ -84,35 +75,6 @@ struct AppTopBar: View {
 
     private var topBarBackground: some View {
         Color.clear
-    }
-}
-
-struct AISettingsButton: View {
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 11, weight: .bold))
-                Text("AI")
-                    .font(.caption.weight(.semibold))
-                Circle()
-                    .fill(isEnabled ? Color(red: 0.18, green: 0.70, blue: 0.40) : AppTheme.mutedInk.opacity(0.45))
-                    .frame(width: 6, height: 6)
-            }
-            .foregroundStyle(isEnabled ? AppTheme.accent : AppTheme.mutedInk)
-            .frame(width: 64, height: 30)
-            .background(isEnabled ? AppTheme.accentSoft : AppTheme.adaptiveWhite(0.58), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(isEnabled ? AppTheme.accent.opacity(0.24) : AppTheme.hairline)
-            )
-            .interactionHitArea()
-        }
-        .buttonStyle(.tactilePlain)
-        .help("AI 设置")
     }
 }
 
@@ -261,6 +223,36 @@ struct SecondarySidebarCollapseButton: View {
             return AppTheme.adaptiveWhite(0.82)
         }
         return AppTheme.adaptiveWhite(0.58)
+    }
+}
+
+struct CollapsedSecondarySidebarRail: View {
+    let title: String
+    @Binding var isCollapsed: Bool
+
+    var body: some View {
+        VStack(spacing: 10) {
+            SecondarySidebarCollapseButton(isCollapsed: $isCollapsed)
+                .padding(.top, 9)
+
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .lineLimit(1)
+                .rotationEffect(.degrees(-90))
+                .fixedSize()
+                .frame(width: collapsedSecondarySidebarWidth, height: 72)
+
+            Spacer(minLength: 0)
+        }
+        .frame(width: collapsedSecondarySidebarWidth)
+        .frame(maxHeight: .infinity)
+        .background(AppTheme.sidebar)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(AppTheme.hairline)
+                .frame(width: 1)
+        }
     }
 }
 

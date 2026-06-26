@@ -240,7 +240,6 @@ struct TodoScopeButton: View {
 /// 由 ContentView 分发，通过 Binding 访问 ContentView 的状态
 struct TodoModuleView: View {
     @EnvironmentObject private var store: TodoStore
-    @EnvironmentObject private var aiSettings: AISettingsStore
 
     // 导航
     @Binding var scope: TodoScope
@@ -275,7 +274,6 @@ struct TodoModuleView: View {
     let contentTitle: String
     let contentSubtitle: String
     @Binding var isSecondarySidebarCollapsed: Bool
-    let onOpenAISettings: () -> Void
 
     // 回调
     let onActivate: () -> Void
@@ -289,18 +287,17 @@ struct TodoModuleView: View {
     var body: some View {
         HStack(spacing: 0) {
             // 导航树（左侧）
-            TodoSidebarView(scope: $scope)
-                .frame(width: secondarySidebarWidth)
-                .background(AppTheme.sidebar)
+            secondarySidebar {
+                TodoSidebarView(scope: $scope, isCollapsed: $isSecondarySidebarCollapsed)
+            } collapsed: {
+                CollapsedSecondarySidebarRail(title: "待办", isCollapsed: $isSecondarySidebarCollapsed)
+            }
 
             // 详情（右侧）
             VStack(spacing: 0) {
                 AppTopBar(
                     title: contentTitle,
-                    subtitle: contentSubtitle,
-                    isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                    isAIEnabled: isAIEnabled,
-                    onOpenAISettings: onOpenAISettings
+                    subtitle: contentSubtitle
                 )
                 .frame(height: 48)
 
@@ -314,6 +311,23 @@ struct TodoModuleView: View {
                 AppTheme.workSurface
                     .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
             }
+        }
+    }
+
+    @ViewBuilder
+    private func secondarySidebar<Content: View, Collapsed: View>(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder collapsed: () -> Collapsed
+    ) -> some View {
+        if isSecondarySidebarCollapsed {
+            collapsed()
+                .frame(width: collapsedSecondarySidebarWidth)
+                .transition(.opacity)
+        } else {
+            content()
+                .frame(width: secondarySidebarWidth)
+                .background(AppTheme.sidebar)
+                .transition(.move(edge: .leading).combined(with: .opacity))
         }
     }
 
@@ -383,19 +397,13 @@ struct TodoModuleView: View {
 /// 手记模块完整视图：目录树 + 详情面板
 struct HandbookModuleView: View {
     @EnvironmentObject private var store: TodoStore
-    @EnvironmentObject private var aiSettings: AISettingsStore
 
     @Binding var handbookCategory: HandbookCategory?
     @Binding var handbookFolder: String?
     @Binding var handbookSearchText: String
     let debouncedHandbookSearchText: String
 
-    // 顶栏
-    let contentTitle: String
-    let contentSubtitle: String
     @Binding var isSecondarySidebarCollapsed: Bool
-    let isAIEnabled: Bool
-    let onOpenAISettings: () -> Void
 
     // 回调
     let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
@@ -414,19 +422,7 @@ struct HandbookModuleView: View {
     var body: some View {
         HStack(spacing: 0) {
             // 目录树（左侧）- 替代 HandbookSidebarView + HandbookContentView 的列表
-            VStack(spacing: 0) {
-                AppTopBar(
-                    title: contentTitle,
-                    subtitle: contentSubtitle,
-                    isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                    isAIEnabled: isAIEnabled,
-                    onOpenAISettings: onOpenAISettings
-                )
-                .frame(height: 48)
-
-                Divider()
-                    .overlay(AppTheme.hairline)
-
+            secondarySidebar {
                 HandbookTreeView(
                     items: store.handbookItems,
                     selectedCategory: $handbookCategory,
@@ -434,6 +430,7 @@ struct HandbookModuleView: View {
                     selectedItemID: $selectedItemID,
                     searchText: debouncedHandbookSearchText,
                     isLoaded: store.didLoadHandbookItems,
+                    isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
                     onSelect: { item in
                         selectedItemID = item.id
                     },
@@ -441,10 +438,9 @@ struct HandbookModuleView: View {
                         onCreate(category, folder, title, body, attachments)
                     }
                 )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } collapsed: {
+                CollapsedSecondarySidebarRail(title: "手记", isCollapsed: $isSecondarySidebarCollapsed)
             }
-            .frame(width: secondarySidebarWidth)
-            .background(AppTheme.sidebar)
 
             // 详情面板（右侧）
             HandbookDetailPanel(
@@ -465,6 +461,23 @@ struct HandbookModuleView: View {
                     .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
             }
             .animation(AppMotion.smooth, value: selectedItemID)
+        }
+    }
+
+    @ViewBuilder
+    private func secondarySidebar<Content: View, Collapsed: View>(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder collapsed: () -> Collapsed
+    ) -> some View {
+        if isSecondarySidebarCollapsed {
+            collapsed()
+                .frame(width: collapsedSecondarySidebarWidth)
+                .transition(.opacity)
+        } else {
+            content()
+                .frame(width: secondarySidebarWidth)
+                .background(AppTheme.sidebar)
+                .transition(.move(edge: .leading).combined(with: .opacity))
         }
     }
 }

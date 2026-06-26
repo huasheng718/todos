@@ -60,6 +60,7 @@ struct HandbookDetailPanel: View {
                     folder: $folder,
                     title: $title,
                     bodyText: $bodyText,
+                    attachments: $attachments,
                     focusedField: $canvasFocus,
                     lengthKind: bodyMetrics.lengthKind,
                     characterCount: bodyMetrics.characterCount,
@@ -75,12 +76,14 @@ struct HandbookDetailPanel: View {
                         .padding(.bottom, 16)
                 }
 
-                HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
-                    .padding(.top, 8)
-                    .onChange(of: attachments) { _, _ in
-                        isDirty = computeIsDirty(comparedTo: item)
-                        submitEdit(for: item)
-                    }
+                if !attachments.isEmpty {
+                    HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
+                        .padding(.top, 8)
+                }
+            }
+            .onChange(of: attachments) { _, _ in
+                isDirty = computeIsDirty(comparedTo: item)
+                submitEdit(for: item)
             }
             .onChange(of: category) { _, _ in
                 isDirty = computeIsDirty(comparedTo: item)
