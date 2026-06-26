@@ -1,6 +1,6 @@
 {
-  "version": "1.1.26",
-  "build": 27,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.26/AntOrder-1.1.26.pkg",
-  "releaseNotes": "蚁序 1.1.26 更新：去掉手记数据加载的350ms启动延迟，切换到手记时同步加载确保数据已就绪，消除透明白屏等待。"
+  "version": "1.1.27",
+  "build": 28,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.27/AntOrder-1.1.27.pkg",
+  "releaseNotes": "蚁序 1.1.27 更新:13 项性能优化全量落地(P0/P1/P2),包括 SQLite PRAGMA、Set O(1) 查找、Equatable 短路 diff、TodoStore/HandbookStore 拆分、DateFormatter 缓存等;补齐可访问性(accessibilityLabel/Value、liveRegion、prefers-reduced-motion)。"
 }
