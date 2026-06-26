@@ -676,51 +676,56 @@ struct HandbookTreeItemRow: View {
     let onSelect: () -> Void
 
     @State private var isHovered = false
-    @State private var showsPreview = false
 
     var body: some View {
-        HStack(spacing: 7) {
-            Circle()
-                .fill(item.category.accentColor)
-                .frame(width: isSelected ? 7 : 6, height: isSelected ? 7 : 6)
+        Button(action: onSelect) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(item.category.accentColor)
+                    .frame(width: isSelected ? 7 : 6, height: isSelected ? 7 : 6)
+                    .draggable(item.id.uuidString)
+                    .help("拖拽移动手记")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.displayTitle)
-                    .font(.system(size: 12.5, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? AppTheme.ink : AppTheme.ink.opacity(0.92))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.displayTitle)
+                        .font(.system(size: 12.5, weight: isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? AppTheme.ink : AppTheme.ink.opacity(0.92))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+
+                    if !item.attachments.isEmpty {
+                        HStack(spacing: 3) {
+                            Image(systemName: "paperclip")
+                                .font(.system(size: 9))
+                            Text("\(item.attachments.count)")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundStyle(AppTheme.mutedInk.opacity(0.86))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 0)
 
                 if !item.attachments.isEmpty {
-                    HStack(spacing: 3) {
-                        Image(systemName: "paperclip")
-                            .font(.system(size: 9))
-                        Text("\(item.attachments.count)")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.86))
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk.opacity(0.70))
                 }
+
+                Text(item.updatedAt.formatted(.dateTime.month().day()))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.mutedInk.opacity(isSelected ? 0.88 : 0.74))
+                    .frame(width: 54, alignment: .trailing)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 0)
-
-            if !item.attachments.isEmpty {
-                Image(systemName: "paperclip")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.70))
-            }
-
-            Text(item.updatedAt.formatted(.dateTime.month().day()))
-                .font(.system(size: 10.5, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(AppTheme.mutedInk.opacity(isSelected ? 0.88 : 0.74))
-                .frame(width: 54, alignment: .trailing)
+            .padding(.leading, leadingPadding)
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
-        .padding(.leading, leadingPadding)
-        .padding(.trailing, 8)
-        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(rowBackground)
@@ -729,20 +734,15 @@ struct HandbookTreeItemRow: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .stroke(isSelected ? item.category.accentColor.opacity(AppTheme.isDark ? 0.34 : 0.22) : .clear, lineWidth: 1)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .onTapGesture(perform: onSelect)
-        .draggable(item.id.uuidString)
         .contextMenu {
             moveMenu
+            Divider()
+            HandbookTreeItemPreview(item: item)
         }
         .onHover { hovered in
             withAnimation(AppMotion.hover) {
                 isHovered = hovered
-                showsPreview = hovered
             }
-        }
-        .popover(isPresented: $showsPreview, arrowEdge: .trailing) {
-            HandbookTreeItemPreview(item: item)
         }
     }
 
