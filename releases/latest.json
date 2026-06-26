@@ -1,6 +1,6 @@
 {
-  "version": "1.2.6",
-  "build": 35,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.6/AntOrder-1.2.6.pkg",
-  "releaseNotes": "蚁序 1.2.6 更新：重新设计手记目录树为轻量大纲样式，优化整行点击命中、层级缩进、选中状态和日期对齐，让手记侧栏更适合阅读和定位。"
+  "version": "1.2.7",
+  "build": 36,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.7/AntOrder-1.2.7.pkg",
+  "releaseNotes": "优化手记加载、目录树和编辑体验，修复末级手记选中稳定性。"
 }
