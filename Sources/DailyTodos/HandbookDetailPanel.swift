@@ -28,12 +28,7 @@ struct HandbookDetailPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.panel.opacity(0.86), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(item?.category.accentColor.opacity(0.22) ?? AppTheme.hairline)
-        )
-        .shadow(color: AppTheme.rowShadow.opacity(0.30), radius: 6, x: 0, y: 2)
+        .background(AppTheme.workSurface)
         .onChange(of: item) { _, newValue in
             syncDraft(with: newValue)
             isDirty = false
@@ -110,9 +105,9 @@ struct HandbookDetailPanel: View {
                 scheduleBodyMetricsUpdate(for: newValue)
             }
             .scrollIndicators(.hidden)
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 22)
+            .padding(.horizontal, 34)
+            .padding(.top, 22)
+            .padding(.bottom, 28)
         }
     }
 
@@ -132,7 +127,7 @@ struct HandbookDetailPanel: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
         }
-        .padding(18)
+        .padding(34)
     }
 
     private var canSubmit: Bool {

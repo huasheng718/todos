@@ -54,9 +54,7 @@ struct HandbookAttachmentStrip: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.mutedInk)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.adaptiveWhite(0.56), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .padding(.vertical, 2)
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 7)], alignment: .leading, spacing: 7) {
@@ -71,12 +69,12 @@ struct HandbookAttachmentStrip: View {
                 }
             }
         }
-        .padding(10)
-        .background(AppTheme.workSurface.opacity(0.56), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(AppTheme.hairline.opacity(0.70))
-        )
+        .padding(.top, 12)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.hairline.opacity(0.62))
+                .frame(height: 1)
+        }
     }
 
     private func addAttachments() {

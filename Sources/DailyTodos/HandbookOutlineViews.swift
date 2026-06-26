@@ -53,11 +53,11 @@ struct HandbookOutlineStrip: View {
                 }
             }
         }
-        .padding(10)
-        .background(AppTheme.workSurface.opacity(0.56), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(AppTheme.hairline.opacity(0.62))
-        )
+        .padding(.top, 12)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.hairline.opacity(0.62))
+                .frame(height: 1)
+        }
     }
 }

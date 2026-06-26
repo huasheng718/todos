@@ -65,7 +65,7 @@ struct ContentView: View {
             Rectangle()
                 .fill(AppTheme.hairline)
                 .frame(width: 1)
-                .offset(x: 60)
+                .offset(x: primarySidebarWidth)
                 .ignoresSafeArea(.container, edges: .vertical)
         }
         .overlay(alignment: .bottom) {
@@ -75,7 +75,7 @@ struct ContentView: View {
                     onUndo: performTodoUndo,
                     onDismiss: dismissTodoFeedback
                 )
-                .padding(.leading, 60)
+                .padding(.leading, primarySidebarWidth)
                 .padding(.bottom, 18)
                 .transition(AppMotion.inlineTransition)
             }

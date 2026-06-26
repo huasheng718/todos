@@ -53,12 +53,7 @@ struct HandbookTreeView: View {
                 handbookListSkeleton
             }
         }
-        .background(AppTheme.panel.opacity(0.74), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(AppTheme.hairline.opacity(0.72))
-        )
-        .shadow(color: AppTheme.rowShadow.opacity(0.22), radius: 5, x: 0, y: 2)
+        .background(AppTheme.sidebar)
     }
 
     // 快记输入栏
@@ -92,7 +87,7 @@ struct HandbookTreeView: View {
                 .lineLimit(1...4)
                 .focused($focusField, equals: .body)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
@@ -108,7 +103,8 @@ struct HandbookTreeView: View {
                     treeCategoryNode(category)
                 }
             }
-            .padding(7)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
         .scrollIndicators(.hidden)
     }
@@ -165,7 +161,7 @@ struct HandbookTreeView: View {
                 }
             }
         }
-        .padding(.leading, 14)
+        .padding(.leading, 8)
     }
 
     // 文件夹节点
@@ -195,7 +191,7 @@ struct HandbookTreeView: View {
                 }
             }
         }
-        .padding(.leading, 14)
+        .padding(.leading, 8)
     }
 
     // 未归档节点
@@ -220,7 +216,7 @@ struct HandbookTreeView: View {
                 }
             }
         }
-        .padding(.leading, 14)
+        .padding(.leading, 8)
     }
 
     // 手记条目节点（叶子节点）
@@ -246,7 +242,8 @@ struct HandbookTreeView: View {
                     .frame(height: 32)
             }
         }
-        .padding(7)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
     }
 
     // 工具方法
