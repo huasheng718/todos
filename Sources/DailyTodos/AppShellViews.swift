@@ -306,3 +306,105 @@ struct PrimarySidebarButton: View {
         return Color.clear
     }
 }
+
+
+// MARK: - Module Switcher
+
+/// 模块切换栏：显示已安装模块的图标，点击切换激活模块
+/// 替代原 PrimarySidebarView 在三栏布局中的角色
+struct ModuleSwitcherBar: View {
+    @Binding var activeModuleID: String
+    let installedModules: [any AppModule]
+    let onOpenSettings: () -> Void
+    let hasUpdate: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 10) {
+                ForEach(installedModules, id: \.id) { module in
+                    ModuleButton(
+                        module: module,
+                        isSelected: activeModuleID == module.id
+                    ) {
+                        PerformanceMonitor.event("ModuleSwitcher.activate", detail: module.id)
+                        withAnimation(AppMotion.sectionSwitch) {
+                            activeModuleID = module.id
+                        }
+                    }
+                }
+            }
+            .padding(.top, 52)
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 10) {
+                AppLogoImage()
+                    .frame(width: 42, height: 42)
+
+                Text("蚁序")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+
+                Button(action: onOpenSettings) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.adaptiveWhite(0.34), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        if hasUpdate {
+                            UpdateDot(size: 8)
+                                .offset(x: -6, y: 7)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help(hasUpdate ? "有新版本，打开设置查看" : "应用设置")
+            }
+            .padding(.bottom, 14)
+        }
+        .frame(width: 60)
+        .frame(maxHeight: .infinity)
+        .background(AppTheme.sidebar)
+    }
+}
+
+/// 模块按钮：单个模块的图标 + 名称
+struct ModuleButton: View {
+    let module: any AppModule
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: module.icon)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(isSelected ? AppTheme.accentSoft : (isHovered ? AppTheme.adaptiveWhite(0.4) : .clear))
+                    )
+
+                Text(module.displayName)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
+            .frame(width: 52)
+        }
+        .buttonStyle(.plain)
+        .help(module.displayName)
+        .onHover { hovered in
+            withAnimation(AppMotion.hover) {
+                isHovered = hovered
+            }
+        }
+    }
+}

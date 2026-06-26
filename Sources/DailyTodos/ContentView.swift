@@ -5,8 +5,8 @@ struct ContentView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
     @AppStorage(AppSkin.storageKey) private var selectedSkinRawValue = AppSkin.ocean.rawValue
-    @State private var activeSection: AppSection = .todos
     @State private var scope: TodoScope = .all
     @State private var handbookCategory: HandbookCategory? = nil
     @State private var handbookFolder: String? = nil
@@ -38,51 +38,26 @@ struct ContentView: View {
 
     private let calendar = Calendar.current
 
+    private var activeSection: AppSection {
+        switch moduleRegistry.activeModuleID {
+        case "handbook": return .handbook
+        default: return .todos
+        }
+    }
+
     var body: some View {
-        ZStack(alignment: .leading) {
-            PrimarySidebarView(
-                activeSection: $activeSection,
-                hasUpdate: updateController.hasAvailableUpdate,
-                onOpenSettings: { isAppSettingsPresented = true }
+        HStack(spacing: 0) {
+            ModuleSwitcherBar(
+                activeModuleID: Binding(
+                    get: { moduleRegistry.activeModuleID },
+                    set: { moduleRegistry.activate($0) }
+                ),
+                installedModules: moduleRegistry.installedModules,
+                onOpenSettings: { isAppSettingsPresented = true },
+                hasUpdate: updateController.hasAvailableUpdate
             )
-            .frame(width: primarySidebarWidth)
-            .frame(maxHeight: .infinity)
-            .zIndex(2)
 
-            HStack(spacing: 0) {
-                secondarySidebarContainer
-                    .frame(
-                        minWidth: currentSecondarySidebarWidth,
-                        idealWidth: currentSecondarySidebarWidth,
-                        maxWidth: currentSecondarySidebarWidth,
-                        maxHeight: .infinity
-                    )
-
-                VStack(spacing: 0) {
-                    AppTopBar(
-                        title: contentTitle,
-                        subtitle: contentSubtitle,
-                        isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                        isAIEnabled: aiSettings.canUseAI,
-                        onOpenAISettings: { isAISettingsPresented = true }
-                    )
-                    .frame(height: 48)
-
-                    Divider()
-                        .overlay(AppTheme.hairline)
-
-                    contentColumn
-                        .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background {
-                    AppTheme.workSurface
-                        .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.leading, primarySidebarWidth)
-            .layoutPriority(1)
+            activeModuleView
         }
         .background(AppTheme.sidebar.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
@@ -90,17 +65,8 @@ struct ContentView: View {
             Rectangle()
                 .fill(AppTheme.hairline)
                 .frame(width: 1)
-                .offset(x: primarySidebarWidth)
+                .offset(x: 60)
                 .ignoresSafeArea(.container, edges: .vertical)
-        }
-        .overlay(alignment: .leading) {
-            if !isSecondarySidebarCollapsed {
-                Rectangle()
-                    .fill(AppTheme.hairline)
-                    .frame(width: 1)
-                    .offset(x: primarySidebarWidth + currentSecondarySidebarWidth)
-                    .ignoresSafeArea(.container, edges: .vertical)
-            }
         }
         .overlay(alignment: .bottom) {
             if let todoFeedback {
@@ -109,7 +75,7 @@ struct ContentView: View {
                     onUndo: performTodoUndo,
                     onDismiss: dismissTodoFeedback
                 )
-                .padding(.leading, primarySidebarWidth + currentSecondarySidebarWidth)
+                .padding(.leading, 60)
                 .padding(.bottom, 18)
                 .transition(AppMotion.inlineTransition)
             }
@@ -140,8 +106,8 @@ struct ContentView: View {
                 newDate = Date()
             }
         }
-        .onChange(of: activeSection) { _, newValue in
-            guard newValue == .handbook else { return }
+        .onChange(of: moduleRegistry.activeModuleID) { _, newValue in
+            guard newValue == "handbook" else { return }
             store.loadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
@@ -169,126 +135,63 @@ struct ContentView: View {
         }
     }
 
-    private var secondarySidebar: some View {
-        Group {
-            if activeSection == .todos {
-                TodoSidebarView(scope: $scope)
-                    .transition(AppMotion.viewTransition)
-            } else {
-                HandbookSidebarView(
-                    selectedCategory: $handbookCategory,
-                    selectedFolder: $handbookFolder,
-                    searchText: $handbookSearchText
-                )
-                .transition(AppMotion.viewTransition)
-            }
-        }
-        .animation(AppMotion.sectionSwitch, value: activeSection)
-    }
-
-    private var secondarySidebarContainer: some View {
-        secondarySidebar
-            .opacity(isSecondarySidebarCollapsed ? 0 : 1)
-            .allowsHitTesting(!isSecondarySidebarCollapsed)
-            .background(AppTheme.sidebar)
-            .clipped()
-            .animation(AppMotion.modeSwitch, value: isSecondarySidebarCollapsed)
-    }
-
-    private var currentSecondarySidebarWidth: CGFloat {
-        isSecondarySidebarCollapsed ? collapsedSecondarySidebarWidth : secondarySidebarWidth
-    }
-
-    private var contentColumn: some View {
-        Group {
-            if activeSection == .todos {
-                taskColumn
-                    .transition(AppMotion.viewTransition)
-            } else {
-                handbookColumn
-                    .transition(AppMotion.viewTransition)
-            }
-        }
-        .animation(AppMotion.sectionSwitch, value: activeSection)
-    }
-
-    private var taskColumn: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer()
-                .frame(height: 16)
-
-            if let error = store.lastError {
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 10)
-            }
-
-            QuickCaptureBar(
-                title: $newTitle,
-                priority: $newPriority,
-                progress: $newProgress,
-                date: quickCaptureDateBinding,
+    @ViewBuilder
+    private var activeModuleView: some View {
+        switch moduleRegistry.activeModuleID {
+        case "todos":
+            TodoModuleView(
+                scope: $scope,
+                searchText: $searchText,
+                allTodosViewMode: $allTodosViewMode,
+                filteredTodosCache: filteredTodosCache,
+                debouncedSearchText: debouncedSearchText,
+                highlightedTodoID: highlightedTodoID,
+                scrollTargetTodoID: $scrollTargetTodoID,
+                newTitle: $newTitle,
+                newPriority: $newPriority,
+                newProgress: $newProgress,
+                newDate: quickCaptureDateBinding,
                 previewDate: quickCaptureFallbackDate(),
-                notes: $newNotes,
-                isWeekly: $newIsWeekly,
-                isExpanded: $isQuickCaptureExpanded,
+                newNotes: $newNotes,
+                newIsWeekly: $newIsWeekly,
+                isQuickCaptureExpanded: $isQuickCaptureExpanded,
                 focusedField: $focusedField,
+                isCreatingTodo: isCreatingTodo,
+                aiStatusMessage: aiStatusMessage,
+                quickCaptureAITrace: quickCaptureAITrace,
+                quickCaptureAIResultSummary: quickCaptureAIResultSummary,
+                isAIEnabled: aiSettings.canUseAI,
+                contentTitle: contentTitle,
+                contentSubtitle: contentSubtitle,
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+                isAISettingsPresented: $isAISettingsPresented,
                 onActivate: focusQuickCapture,
                 onCreate: createTodo,
                 onClear: cancelCreate,
-                isCreating: isCreatingTodo,
-                aiStatusMessage: aiStatusMessage,
-                aiTrace: quickCaptureAITrace,
-                aiResultSummary: quickCaptureAIResultSummary,
-                isAIEnabled: aiSettings.canUseAI
-            )
-            .padding(.horizontal, 28)
-            .padding(.bottom, 8)
-
-            ListToolbar(
-                searchText: $searchText,
-                allTodosViewMode: $allTodosViewMode,
-                scope: scope
-            )
-            .padding(.horizontal, 28)
-            .padding(.bottom, 10)
-
-            TodoListView(
-                todos: filteredTodosCache,
-                scope: scope,
-                allTodosViewMode: allTodosViewMode,
                 onUpdate: updateTodo,
                 onProgressChange: updateProgress,
                 onToggle: toggleTodo,
-                onDelete: deleteTodo,
-                highlightedTodoID: highlightedTodoID,
-                scrollTargetTodoID: $scrollTargetTodoID,
-                isSearching: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || !debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                onDelete: deleteTodo
             )
-            .padding(.horizontal, 22)
-            .padding(.bottom, 20)
+        case "handbook":
+            HandbookModuleView(
+                handbookCategory: $handbookCategory,
+                handbookFolder: $handbookFolder,
+                handbookSearchText: $handbookSearchText,
+                debouncedHandbookSearchText: debouncedHandbookSearchText,
+                contentTitle: contentTitle,
+                contentSubtitle: contentSubtitle,
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+                isAISettingsPresented: $isAISettingsPresented,
+                isAIEnabled: aiSettings.canUseAI,
+                onCreate: createHandbookItem,
+                onUpdate: updateHandbookItem,
+                onDelete: deleteHandbookItem
+            )
+        default:
+            Text("未知模块")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(AppTheme.workSurface)
-    }
-
-    private var handbookColumn: some View {
-        HandbookContentView(
-            allItems: store.handbookItems,
-            isLoaded: store.didLoadHandbookItems,
-            selectedCategory: handbookCategory,
-            selectedFolder: handbookFolder,
-            searchText: debouncedHandbookSearchText,
-            onCreate: createHandbookItem,
-            onUpdate: updateHandbookItem,
-            onDelete: deleteHandbookItem
-        )
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-        .background(AppTheme.workSurface)
-        .animation(AppMotion.smooth, value: handbookCategory)
     }
 
     private func rebuildFilteredTodos() {

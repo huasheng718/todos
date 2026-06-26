@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppSettingsSheet: View {
     @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedSkinRawValue: String
 
@@ -89,6 +90,24 @@ struct AppSettingsSheet: View {
                             }
                             .buttonStyle(.tactilePlain)
                         }
+                    }
+                }
+
+                settingsSection(title: "模块", icon: "puzzlepiece.extension.fill") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(moduleRegistry.registeredModules, id: \.id) { module in
+                            ModuleManagementRow(
+                                module: module,
+                                isInstalled: moduleRegistry.isInstalled(module.id),
+                                onInstall: { moduleRegistry.install(module.id) },
+                                onUninstall: { moduleRegistry.uninstall(module.id) }
+                            )
+                        }
+
+                        Text("卸载模块不会删除已保存的数据，重新安装后数据会恢复。")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.mutedInk)
+                            .padding(.top, 4)
                     }
                 }
 
@@ -666,6 +685,78 @@ struct AIUsageRow: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.hairline)
+        )
+    }
+}
+
+
+struct ModuleManagementRow: View {
+    let module: any AppModule
+    let isInstalled: Bool
+    let onInstall: () -> Void
+    let onUninstall: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // 模块图标
+            Image(systemName: module.icon)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 32, height: 32)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            // 模块信息
+            VStack(alignment: .leading, spacing: 2) {
+                Text(module.displayName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+
+                Text(module.description)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            // 安装/卸载按钮
+            if isInstalled {
+                Button(action: onUninstall) {
+                    Text(module.isDefault ? "内置" : "卸载")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(module.isDefault ? AppTheme.mutedInk : Color.red)
+                        .padding(.horizontal, 12)
+                        .frame(height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(module.isDefault ? AppTheme.adaptiveWhite(0.3) : Color.red.opacity(0.08))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(module.isDefault)
+
+                // 已安装标记
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.success)
+            } else {
+                Button(action: onInstall) {
+                    Text("安装")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: 28)
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppTheme.adaptiveWhite(0.34))
         )
     }
 }

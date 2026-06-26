@@ -5,6 +5,7 @@ struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
     @StateObject private var aiSettings = AISettingsStore()
     @StateObject private var updateController = UpdateController()
+    @StateObject private var moduleRegistry = AppModuleRegistry()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -13,6 +14,7 @@ struct DailyTodosApp: App {
                 .environmentObject(store)
                 .environmentObject(aiSettings)
                 .environmentObject(updateController)
+                .environmentObject(moduleRegistry)
                 .frame(minWidth: 1100, idealWidth: 1280, minHeight: 760, idealHeight: 860)
                 .background(WindowChromeConfigurator())
                 .task {
