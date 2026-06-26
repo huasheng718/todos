@@ -275,7 +275,7 @@ struct TodoModuleView: View {
     let contentTitle: String
     let contentSubtitle: String
     @Binding var isSecondarySidebarCollapsed: Bool
-    @Binding var isAISettingsPresented: Bool
+    let onOpenAISettings: () -> Void
 
     // 回调
     let onActivate: () -> Void
@@ -300,7 +300,7 @@ struct TodoModuleView: View {
                     subtitle: contentSubtitle,
                     isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
                     isAIEnabled: isAIEnabled,
-                    onOpenAISettings: { isAISettingsPresented = true }
+                    onOpenAISettings: onOpenAISettings
                 )
                 .frame(height: 48)
 
@@ -394,8 +394,8 @@ struct HandbookModuleView: View {
     let contentTitle: String
     let contentSubtitle: String
     @Binding var isSecondarySidebarCollapsed: Bool
-    @Binding var isAISettingsPresented: Bool
     let isAIEnabled: Bool
+    let onOpenAISettings: () -> Void
 
     // 回调
     let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
@@ -420,7 +420,7 @@ struct HandbookModuleView: View {
                     subtitle: contentSubtitle,
                     isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
                     isAIEnabled: isAIEnabled,
-                    onOpenAISettings: { isAISettingsPresented = true }
+                    onOpenAISettings: onOpenAISettings
                 )
                 .frame(height: 48)
 
