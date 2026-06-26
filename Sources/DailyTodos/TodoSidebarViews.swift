@@ -67,24 +67,6 @@ struct TodoSidebarView: View {
             Spacer(minLength: 12)
 
             SecondarySidebarCollapseButton(isCollapsed: $isCollapsed)
-
-            if metrics.overdueCount > 0 {
-                Text("\(metrics.overdueCount)")
-                    .font(.system(size: 11, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                    .frame(minWidth: 22, minHeight: 20)
-                    .background(TodoPriority.high.displayColor, in: Capsule())
-                    .help("逾期未完成")
-            } else {
-                Text("\(metrics.activeCount)")
-                    .font(.system(size: 11, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(minWidth: 22, minHeight: 20)
-                    .background(AppTheme.accentSoft, in: Capsule())
-                    .help("未完成事项")
-            }
         }
         .padding(.leading, 20)
         .padding(.trailing, 16)
