@@ -5,7 +5,7 @@ enum TodoFlowRowEditStyle {
     case compact
 }
 
-struct TodoFlowRow: View {
+struct TodoFlowRow: View, Equatable {
     let todo: TodoItem
     let onToggle: () -> Void
     let onProgressChange: (TodoProgress) -> Void
@@ -13,6 +13,15 @@ struct TodoFlowRow: View {
     let onDelete: () -> Void
     var editStyle: TodoFlowRowEditStyle = .full
     var isHighlighted = false
+
+    // 性能优化:SwiftUI ForEach diff 时只比较数据字段,跳过闭包。
+    // 当 toggle 单条 todo 时,其余 999 行 todo + isHighlighted 不变,
+    // SwiftUI 通过 Equatable 短路跳过这些行的 body 重算。
+    nonisolated static func == (lhs: TodoFlowRow, rhs: TodoFlowRow) -> Bool {
+        lhs.todo == rhs.todo
+            && lhs.isHighlighted == rhs.isHighlighted
+            && lhs.editStyle == rhs.editStyle
+    }
 
     @State private var isEditing = false
     @State private var isHovered = false
@@ -66,6 +75,8 @@ struct TodoFlowRow: View {
                 .help(todo.isDone ? "标记为待处理" : "标记为完成")
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(todo.isDone ? TodoProgress.done.displayColor : AppTheme.mutedInk)
+                .accessibilityLabel("完成状态")
+                .accessibilityValue(todo.isDone ? "已完成" : "未完成")
                 .padding(.top, hasNotes ? 1 : 0)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -115,7 +126,7 @@ struct TodoFlowRow: View {
                         .frame(width: 88, alignment: .leading)
 
                     Button {
-                        withAnimation(AppMotion.reveal) {
+                        withAnimation(AppMotion.revealAware) {
                             isEditing = true
                         }
                     } label: {
@@ -126,6 +137,7 @@ struct TodoFlowRow: View {
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(AppTheme.mutedInk)
                     .help("编辑")
+                    .accessibilityLabel("编辑待办")
                 }
                 .padding(.top, hasNotes ? -3 : 0)
                 .fixedSize()
@@ -155,14 +167,14 @@ struct TodoFlowRow: View {
             )
             .opacity(rowOpacity)
             .onHover { hovered in
-                withAnimation(AppMotion.hover) {
+                withAnimation(AppMotion.hoverAware) {
                     isHovered = hovered
                 }
             }
-            .animation(AppMotion.status, value: todo.progress)
-            .animation(AppMotion.complete, value: todo.isDone)
-            .animation(AppMotion.hover, value: isHovered)
-            .animation(AppMotion.reveal, value: isHighlighted)
+            .animation(AppMotion.statusAware, value: todo.progress)
+            .animation(AppMotion.completeAware, value: todo.isDone)
+            .animation(AppMotion.hoverAware, value: isHovered)
+            .animation(AppMotion.revealAware, value: isHighlighted)
             .transition(AppMotion.inlineTransition)
         }
     }
@@ -181,14 +193,14 @@ struct TodoFlowRow: View {
         if calendar.isDateInToday(todo.date) { return "今天\(timeText)" }
         if calendar.isDateInTomorrow(todo.date) { return "明天\(timeText)" }
         if calendar.isDateInYesterday(todo.date) { return "昨天\(timeText)" }
-        let month = calendar.component(.month, from: todo.date)
-        let day = calendar.component(.day, from: todo.date)
+        // 性能优化:用缓存的 DateFormatter 替代每次 .formatted() 调用,
+        // 避免 1000 行列表每次 body 重算都构造新的 DateFormatter。
         let year = calendar.component(.year, from: todo.date)
         let currentYear = calendar.component(.year, from: Date())
         if year == currentYear {
-            return "\(month)/\(day)\(timeText)"
+            return CachedDateFormatter.monthDay.string(from: todo.date) + timeText
         }
-        return "\(year % 100)/\(month)/\(day)\(timeText)"
+        return CachedDateFormatter.yearMonthDay.string(from: todo.date) + timeText
     }
 
     private var isOverdue: Bool {
@@ -304,6 +316,7 @@ struct TodoBoardEditCard: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(AppTheme.mutedInk)
                 .help("取消编辑")
+                .accessibilityLabel("取消编辑")
             }
 
             InlineTextField("待办", text: $title, isEmphasized: true)

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var handbookStore: HandbookStore
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var updateController: UpdateController
     @AppStorage(AppSkin.storageKey) private var selectedSkinRawValue = AppSkin.ocean.rawValue
@@ -34,13 +35,17 @@ struct ContentView: View {
     @State private var scrollTargetTodoID: TodoItem.ID?
     @State private var todoFeedback: TodoActionFeedback?
     @State private var filteredTodosCache: [TodoItem] = []
+    @State private var handbookItemPendingDeletion: HandbookItem?
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
 
     var body: some View {
         ZStack(alignment: .leading) {
-            PrimarySidebarView(
+            // 皮肤切换时只重建主内容区(让 AppTheme.* 静态颜色查询生效),
+            // 不重建外层 sheet / confirmationDialog / banner 等独立状态。
+            HStack(spacing: 0) {
+                PrimarySidebarView(
                 activeSection: $activeSection,
                 hasUpdate: updateController.hasAvailableUpdate,
                 onOpenSettings: { isAppSettingsPresented = true }
@@ -83,6 +88,8 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.leading, primarySidebarWidth)
             .layoutPriority(1)
+            }
+            .id(selectedSkinRawValue)
         }
         .background(AppTheme.sidebar.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
@@ -116,7 +123,6 @@ struct ContentView: View {
         }
         .foregroundStyle(AppTheme.ink)
         .font(.system(size: 13, weight: .regular, design: .default))
-        .id(selectedSkinRawValue)
         .onAppear {
             activeAppSkin = AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
             activeColorScheme = colorScheme
@@ -142,7 +148,7 @@ struct ContentView: View {
         }
         .onChange(of: activeSection) { _, newValue in
             guard newValue == .handbook else { return }
-            store.loadHandbookItemsIfNeeded()
+            handbookStore.loadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
             focusQuickCapture()
@@ -167,6 +173,24 @@ struct ContentView: View {
             AppSettingsSheet(selectedSkinRawValue: $selectedSkinRawValue)
                 .environmentObject(updateController)
         }
+        .confirmationDialog(
+            "删除手记？",
+            isPresented: Binding(
+                get: { handbookItemPendingDeletion != nil },
+                set: { if !$0 { handbookItemPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: handbookItemPendingDeletion
+        ) { item in
+            Button("删除“\(item.displayTitle)”", role: .destructive) {
+                confirmDeleteHandbookItem()
+            }
+            Button("取消", role: .cancel) {
+                handbookItemPendingDeletion = nil
+            }
+        } message: { item in
+            Text("手记删除后无法恢复，请确认是否删除“\(item.displayTitle)”。")
+        }
     }
 
     private var secondarySidebar: some View {
@@ -187,12 +211,17 @@ struct ContentView: View {
     }
 
     private var secondarySidebarContainer: some View {
-        secondarySidebar
-            .opacity(isSecondarySidebarCollapsed ? 0 : 1)
-            .allowsHitTesting(!isSecondarySidebarCollapsed)
-            .background(AppTheme.sidebar)
-            .clipped()
-            .animation(AppMotion.modeSwitch, value: isSecondarySidebarCollapsed)
+        Group {
+            if isSecondarySidebarCollapsed {
+                Color.clear
+                    .background(AppTheme.sidebar)
+            } else {
+                secondarySidebar
+                    .background(AppTheme.sidebar)
+            }
+        }
+        .clipped()
+        .animation(AppMotion.modeSwitchAware, value: isSecondarySidebarCollapsed)
     }
 
     private var currentSecondarySidebarWidth: CGFloat {
@@ -276,8 +305,8 @@ struct ContentView: View {
 
     private var handbookColumn: some View {
         HandbookContentView(
-            allItems: store.handbookItems,
-            isLoaded: store.didLoadHandbookItems,
+            allItems: handbookStore.handbookItems,
+            isLoaded: handbookStore.didLoadHandbookItems,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
             searchText: debouncedHandbookSearchText,
@@ -420,7 +449,7 @@ struct ContentView: View {
 
         if aiSettings.canUseAI {
             isCreatingTodo = true
-            aiStatusMessage = "AI 正在解析快记..."
+            aiStatusMessage = "AI 正在解析快记…"
             Task {
                 do {
                     let aiResult = try await AIClient.shared.parseQuickInput(
@@ -580,7 +609,7 @@ struct ContentView: View {
         attachments: [HandbookAttachment]
     ) {
         withAnimation(AppMotion.capture) {
-            store.addHandbookItem(category: category, folder: folder, title: title, body: body, attachments: attachments)
+            handbookStore.addHandbookItem(category: category, folder: folder, title: title, body: body, attachments: attachments)
             handbookCategory = category
             handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -595,16 +624,23 @@ struct ContentView: View {
         attachments: [HandbookAttachment]
     ) {
         withAnimation(AppMotion.smooth) {
-            store.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
+            handbookStore.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
             handbookCategory = category
             handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 
     private func deleteHandbookItem(_ item: HandbookItem) {
-        withAnimation(AppMotion.quick) {
-            store.delete(item)
+        // 不立即删除：先弹确认对话框，避免误删无法恢复。
+        handbookItemPendingDeletion = item
+    }
+
+    private func confirmDeleteHandbookItem() {
+        guard let item = handbookItemPendingDeletion else { return }
+        withAnimation(AppMotion.quickAware) {
+            handbookStore.delete(item)
         }
+        handbookItemPendingDeletion = nil
     }
 
     private func focusQuickCapture() {
@@ -805,8 +841,7 @@ struct ContentView: View {
         if calendar.isDateInToday(date) { return "今天\(timeText)" }
         if calendar.isDateInTomorrow(date) { return "明天\(timeText)" }
         if calendar.isDateInYesterday(date) { return "昨天\(timeText)" }
-        let month = calendar.component(.month, from: date)
-        let day = calendar.component(.day, from: date)
-        return "\(month)/\(day)\(timeText)"
+        // 性能优化:用缓存的 DateFormatter 替代 .formatted() 调用。
+        return CachedDateFormatter.monthDay.string(from: date) + timeText
     }
 }

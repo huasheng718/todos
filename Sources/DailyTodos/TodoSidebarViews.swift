@@ -191,6 +191,7 @@ struct DateButton: View {
                     Text(countText)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isSelected ? .white : countColor)
+                        .monospacedDigit()
                         .frame(minWidth: 24, minHeight: 20)
                         .background(isSelected ? countColor : countColor.opacity(0.11), in: Capsule())
                         .help(countHelp)

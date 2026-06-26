@@ -36,6 +36,7 @@ struct AppSettingsSheet: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(AppTheme.mutedInk)
                 .help("关闭")
+                .accessibilityLabel("关闭")
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -172,13 +173,13 @@ struct AppSettingsSheet: View {
 
     private var updateStatusText: String {
         if updateController.isChecking {
-            return "正在检查远程版本..."
+            return "正在检查远程版本…"
         }
         if updateController.isDownloading {
             if let progress = updateController.downloadProgress {
                 return "正在下载更新 \(progress.statusText)"
             }
-            return "正在连接下载服务..."
+            return "正在连接下载服务…"
         }
         if let update = updateController.availableUpdate {
             return "可更新到 v\(update.version) (\(update.build))，设置入口会持续显示红点。"
@@ -342,6 +343,7 @@ struct AISettingsSheet: View {
             .buttonStyle(.tactilePlain)
             .foregroundStyle(AppTheme.mutedInk)
             .help("关闭")
+            .accessibilityLabel("关闭")
         }
     }
 
@@ -374,9 +376,12 @@ struct AISettingsSheet: View {
                 }
 
                 LabeledContent("API Key") {
-                    SecureField("sk-...", text: $aiSettings.apiKey)
+                    SecureField("sk-…", text: $aiSettings.apiKey)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("API Key")
                         .padding(.horizontal, 11)
                         .padding(.vertical, 9)
                         .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -531,6 +536,10 @@ struct AISettingsSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(aiSettings.connectionSucceeded ? AppTheme.success : TodoPriority.high.displayColor)
+                // 等价 aria-live="polite"：测试结果出现时 VoiceOver 自动播报。
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(message)
+                .accessibilityAddTraits(.updatesFrequently)
             } else if aiSettings.isTestingConnection {
                 HStack(spacing: 6) {
                     ProgressView()
@@ -578,6 +587,8 @@ struct AISettingsTextField: View {
         TextField(placeholder, text: $text)
             .textFieldStyle(.plain)
             .font(.system(size: 13, weight: .medium, design: .monospaced))
+            .autocorrectionDisabled()
+            .accessibilityLabel(placeholder)
             .padding(.horizontal, 11)
             .padding(.vertical, 9)
             .background(AppTheme.adaptiveWhite(0.94), in: RoundedRectangle(cornerRadius: 10, style: .continuous))

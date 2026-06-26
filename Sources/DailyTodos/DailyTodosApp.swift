@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
+    @StateObject private var handbookStore = HandbookStore()
     @StateObject private var aiSettings = AISettingsStore()
     @StateObject private var updateController = UpdateController()
     @Environment(\.scenePhase) private var scenePhase
@@ -11,13 +12,14 @@ struct DailyTodosApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(handbookStore)
                 .environmentObject(aiSettings)
                 .environmentObject(updateController)
                 .frame(minWidth: 1100, idealWidth: 1280, minHeight: 760, idealHeight: 860)
                 .background(WindowChromeConfigurator())
                 .task {
                     store.loadStartupData()
-                    store.prefetchHandbookItemsAfterStartup()
+                    handbookStore.prefetchHandbookItemsAfterStartup()
                     updateController.startMonitoring()
                     try? await Task.sleep(for: .milliseconds(900))
                     updateController.checkForUpdatesIfNeeded()
@@ -39,7 +41,7 @@ struct DailyTodosApp: App {
             }
 
             CommandGroup(after: .appInfo) {
-                Button("检查更新...") {
+                Button("检查更新…") {
                     updateController.checkForUpdates()
                 }
             }

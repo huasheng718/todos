@@ -46,6 +46,10 @@ struct HandbookCanvasToolbar: View {
                         .foregroundStyle(accentColor)
                         .lineLimit(1)
                         .transition(.opacity)
+                        // 等价 aria-live="polite"：复制成功时 VoiceOver 自动播报。
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(copiedMessage)
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
             }
             .frame(minWidth: 110, alignment: .trailing)
@@ -91,20 +95,20 @@ struct HandbookCanvasToolbar: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(AppTheme.panel.opacity(0.96))
-        .animation(AppMotion.quick, value: copiedMessage)
+        .animation(AppMotion.quickAware, value: copiedMessage)
     }
 
     private func performCopy(message: String, action: () -> Void) {
         action()
         let token = UUID()
         copyFeedbackToken = token
-        withAnimation(AppMotion.quick) {
+        withAnimation(AppMotion.quickAware) {
             copiedMessage = message
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
             guard copyFeedbackToken == token else { return }
-            withAnimation(AppMotion.quick) {
+            withAnimation(AppMotion.quickAware) {
                 copiedMessage = nil
             }
         }
@@ -140,7 +144,7 @@ struct HandbookToolbarCopyButton: View {
         .opacity(isEnabled ? 1 : 0.42)
         .disabled(!isEnabled)
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
+            withAnimation(AppMotion.hoverAware) {
                 isHovered = hovered
             }
         }

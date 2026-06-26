@@ -236,7 +236,7 @@ struct HandbookContentView: View {
                                 cardSummary: item.cardSummary,
                                 bodyCharacterCount: item.bodyCharacterCount,
                                 lengthKind: item.lengthKind,
-                                formattedDate: item.updatedAt.formatted(.dateTime.month().day().hour().minute()),
+                                formattedDate: CachedDateFormatter.monthDayHourMinute.string(from: item.updatedAt),
                                 displayTitle: item.displayTitle,
                                 trimmedFolder: item.trimmedFolder
                             ),
@@ -501,7 +501,7 @@ struct HandbookCaptureBar: View {
                         .transition(AppMotion.inlineTransition)
                 }
 
-                TextField("快速收集：会议结论、业务规则、调研发现或灵感", text: $title)
+                TextField("快速收集：会议结论、业务规则、调研发现或灵感…", text: $title)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, weight: .semibold))
                     .focused(focusedField, equals: .title)
@@ -511,7 +511,7 @@ struct HandbookCaptureBar: View {
                     }
 
                 Button {
-                    withAnimation(AppMotion.reveal) {
+                    withAnimation(AppMotion.revealAware) {
                         isExpanded.toggle()
                         if isExpanded {
                             focusedField.wrappedValue = .body
@@ -525,6 +525,8 @@ struct HandbookCaptureBar: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(AppTheme.mutedInk)
                 .help(isExpanded ? "收起正文" : "展开正文")
+                .accessibilityLabel("正文")
+                .accessibilityValue(isExpanded ? "已展开" : "已收起")
 
                 Button {
                     onCreate()
@@ -731,6 +733,7 @@ struct HandbookRow: View {
                         Text("\(item.attachments.count)")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(AppTheme.mutedInk)
+                            .monospacedDigit()
                     }
 
                     Text("\(characterCount) 字")
@@ -831,6 +834,7 @@ struct HandbookAttachmentCountTag: View {
         Label("\(count)", systemImage: "paperclip")
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(AppTheme.accent)
+            .monospacedDigit()
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(AppTheme.accentSoft.opacity(0.72), in: Capsule())

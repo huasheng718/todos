@@ -262,7 +262,7 @@ struct TodoDateGroupHeader: View {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppTheme.ink)
-            Text(date.formatted(.dateTime.year().month().day().weekday(.wide)))
+            Text(CachedDateFormatter.yearMonthDayWeekday.string(from: date))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppTheme.mutedInk)
             Spacer()
@@ -280,7 +280,7 @@ struct TodoDateGroupHeader: View {
         if calendar.isDateInToday(date) { return "今天" }
         if calendar.isDateInTomorrow(date) { return "明天" }
         if calendar.isDateInYesterday(date) { return "昨天" }
-        return date.formatted(.dateTime.month(.wide).day())
+        return CachedDateFormatter.monthWideDay.string(from: date)
     }
 }
 

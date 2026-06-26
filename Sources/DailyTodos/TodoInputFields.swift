@@ -22,6 +22,7 @@ struct InlineTextField: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(AppTheme.border)
             )
+            .accessibilityLabel(placeholder)
     }
 }
 
@@ -35,8 +36,9 @@ struct CompactNotesField: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
                 .frame(width: 16)
+                .accessibilityHidden(true)
 
-            TextField("备注（可选，添加背景、链接、判断依据）", text: $text)
+            TextField("备注（可选，添加背景、链接、判断依据）…", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .medium))
                 .submitLabel(.done)
@@ -52,5 +54,7 @@ struct CompactNotesField: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("备注")
     }
 }

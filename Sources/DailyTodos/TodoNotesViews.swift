@@ -90,6 +90,8 @@ struct NotesReadOnlyRow: View {
                     )
                     .interactionHitArea()
                     .disabled(isSummarizing)
+                    .accessibilityLabel("生成备注摘要")
+                    .accessibilityValue(isSummarizing ? "正在生成" : "可用")
 
                     if isSummarizing {
                         ProgressView()
@@ -99,9 +101,9 @@ struct NotesReadOnlyRow: View {
             }
             .frame(width: todoActionColumnWidth, alignment: .topTrailing)
         }
-        .animation(AppMotion.reveal, value: summary)
-        .animation(AppMotion.reveal, value: summaryError)
-        .animation(AppMotion.reveal, value: isSummarizing)
+        .animation(AppMotion.revealAware, value: summary)
+        .animation(AppMotion.revealAware, value: summaryError)
+        .animation(AppMotion.revealAware, value: isSummarizing)
     }
 
     private var displayText: String {
@@ -215,6 +217,7 @@ struct InlineNotesEditor: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.border)
         )
+        .accessibilityLabel("备注")
     }
 
     private var editorHeight: CGFloat {

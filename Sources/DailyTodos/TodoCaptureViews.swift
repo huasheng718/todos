@@ -50,7 +50,7 @@ struct QuickCaptureBar: View {
                 .frame(width: 28, height: 28)
                 .scaleEffect(isFocused ? 1.04 : 1)
 
-                TextField("快速记录：要推进什么？", text: $title)
+                TextField("快速记录：要推进什么…", text: $title)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
@@ -69,7 +69,7 @@ struct QuickCaptureBar: View {
                         onActivate()
                         return
                     }
-                    withAnimation(AppMotion.reveal) {
+                    withAnimation(AppMotion.revealAware) {
                         isExpanded = false
                     }
                 } label: {
@@ -80,6 +80,8 @@ struct QuickCaptureBar: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(AppTheme.mutedInk)
                 .help(isExpanded ? "收起记录字段" : "展开记录字段")
+                .accessibilityLabel("记录字段")
+                .accessibilityValue(isExpanded ? "已展开" : "已收起")
                 .disabled(isCreating)
 
                 Button(action: onCreate) {
@@ -108,6 +110,7 @@ struct QuickCaptureBar: View {
                     .buttonStyle(.tactilePlain)
                     .foregroundStyle(AppTheme.mutedInk)
                     .help("清空记录")
+                    .accessibilityLabel("清空记录")
                     .disabled(isCreating)
                 }
             }
@@ -143,6 +146,9 @@ struct QuickCaptureBar: View {
                 .foregroundStyle(aiStatusMessage.contains("失败") ? TodoPriority.high.displayColor : AppTheme.accent)
                 .padding(.leading, 32)
                 .transition(AppMotion.inlineTransition)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(aiStatusMessage)
+                .accessibilityAddTraits(.updatesFrequently)
             } else if isAIEnabled && hasDraft {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
@@ -234,17 +240,17 @@ struct QuickCaptureBar: View {
             y: hasDraft || isHovered || isFocused ? 7 : 4
         )
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
+            withAnimation(AppMotion.hoverAware) {
                 isHovered = hovered
             }
         }
-        .animation(AppMotion.reveal, value: isExpanded)
-        .animation(AppMotion.capture, value: hasDraft)
-        .animation(AppMotion.capture, value: isCreating)
-        .animation(AppMotion.capture, value: aiStatusMessage)
-        .animation(AppMotion.capture, value: aiTrace)
-        .animation(AppMotion.hover, value: isHovered)
-        .animation(AppMotion.hover, value: isFocused)
+        .animation(AppMotion.revealAware, value: isExpanded)
+        .animation(AppMotion.captureAware, value: hasDraft)
+        .animation(AppMotion.captureAware, value: isCreating)
+        .animation(AppMotion.captureAware, value: aiStatusMessage)
+        .animation(AppMotion.captureAware, value: aiTrace)
+        .animation(AppMotion.hoverAware, value: isHovered)
+        .animation(AppMotion.hoverAware, value: isFocused)
     }
 
     private var canCreate: Bool {

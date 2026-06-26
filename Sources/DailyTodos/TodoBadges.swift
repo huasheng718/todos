@@ -94,6 +94,8 @@ struct ProgressMenuTag: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("切换推进状态")
+        .accessibilityLabel("推进状态")
+        .accessibilityValue(progress.boardTitle)
     }
 }
 

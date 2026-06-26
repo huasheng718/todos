@@ -24,6 +24,7 @@ struct TodoFeedbackBanner: View {
                 .foregroundStyle(AppTheme.accent)
                 .frame(width: 24, height: 24)
                 .background(AppTheme.accentSoft, in: Circle())
+                .accessibilityHidden(true)
 
             Text(feedback.message)
                 .font(.system(size: 12, weight: .semibold))
@@ -59,6 +60,7 @@ struct TodoFeedbackBanner: View {
             .buttonStyle(.tactilePlain)
             .foregroundStyle(AppTheme.mutedInk)
             .help("关闭")
+            .accessibilityLabel("关闭")
         }
         .padding(.leading, 10)
         .padding(.trailing, 6)
@@ -70,5 +72,9 @@ struct TodoFeedbackBanner: View {
                 .stroke(AppTheme.accent.opacity(0.18), lineWidth: 1)
         )
         .shadow(color: AppTheme.rowShadow.opacity(0.95), radius: 16, x: 0, y: 8)
+        // 等价 aria-live="polite"：banner 出现时 VoiceOver 自动播报消息内容。
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(feedback.message)
+        .accessibilityAddTraits(.updatesFrequently)
     }
 }

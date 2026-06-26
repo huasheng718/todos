@@ -44,6 +44,8 @@ struct SkinPickerButton: View {
         }
         .menuStyle(.borderlessButton)
         .help("切换皮肤")
+        .accessibilityLabel("切换皮肤")
+        .accessibilityValue(currentSkin.title)
     }
 }
 
@@ -197,6 +199,7 @@ struct PrimarySidebarView: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(hasUpdate ? AppTheme.accent : AppTheme.mutedInk)
                 .help(hasUpdate ? "有新版本，打开设置查看" : "应用设置")
+                .accessibilityLabel(hasUpdate ? "应用设置，有新版本可用" : "应用设置")
             }
             .padding(.bottom, 14)
         }
@@ -246,8 +249,10 @@ struct SecondarySidebarCollapseButton: View {
         .buttonStyle(.tactilePlain)
         .interactionHitArea()
         .help(isCollapsed ? "展开辅导航" : "收起辅导航")
+        .accessibilityLabel("辅导航")
+        .accessibilityValue(isCollapsed ? "已收起" : "已展开")
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
+            withAnimation(AppMotion.hoverAware) {
                 isHovered = hovered
             }
         }
@@ -289,8 +294,10 @@ struct PrimarySidebarButton: View {
         }
         .buttonStyle(.tactilePlain)
         .help(section.title)
+        .accessibilityLabel(section.title)
+        .accessibilityValue(isSelected ? "已选中" : "未选中")
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
+            withAnimation(AppMotion.hoverAware) {
                 isHovered = hovered
             }
         }

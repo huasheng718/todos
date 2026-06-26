@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HandbookSidebarView: View {
-    @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var store: HandbookStore
     @Binding var selectedCategory: HandbookCategory?
     @Binding var selectedFolder: String?
     @Binding var searchText: String
@@ -186,6 +186,7 @@ struct HandbookCategoryButton: View {
                     Text("\(count)")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isSelected ? .white : AppTheme.accent)
+                        .monospacedDigit()
                         .frame(minWidth: 24, minHeight: 20)
                         .background(isSelected ? AppTheme.accent : AppTheme.accent.opacity(0.11), in: Capsule())
                 }

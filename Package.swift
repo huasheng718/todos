@@ -7,7 +7,8 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "DailyTodos", targets: ["DailyTodos"])
+        .executable(name: "DailyTodos", targets: ["DailyTodos"]),
+        .executable(name: "daily-todos-bench", targets: ["DailyTodosBench"])
     ],
     targets: [
         .executableTarget(
@@ -16,6 +17,11 @@ let package = Package(
             resources: [
                 .process("Resources")
             ]
+        ),
+        .executableTarget(
+            name: "DailyTodosBench",
+            dependencies: [],
+            path: "Sources/DailyTodosBench"
         )
     ]
 )

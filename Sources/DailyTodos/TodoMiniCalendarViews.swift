@@ -163,6 +163,7 @@ struct TodoMiniCalendar: View {
         }
         .buttonStyle(.tactilePlain)
         .help(help)
+        .accessibilityLabel(help)
     }
 
     private var yearTitle: String {

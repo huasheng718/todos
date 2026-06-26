@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 let statusColumnWidth: CGFloat = 82
 let progressColumnWidth: CGFloat = 104
@@ -11,6 +12,19 @@ let secondarySidebarWidth: CGFloat = 250
 let collapsedSecondarySidebarWidth: CGFloat = 0
 
 enum AppMotion {
+    // 全局减少动效开关：在“系统设置 > 辅助功能 > 显示 > 减少动态效果”开启时为 true。
+    // 所有动画都通过 reduceAware* 工厂读取该值，自动降级为快速淡入淡出或即时切换，
+    // 避免 PrefersReducedMotion 用户被位移/缩放动画打扰。
+    static var reduceMotion: Bool {
+        #if canImport(UIKit)
+        return UIAccessibility.isReduceMotionEnabled
+        #elseif canImport(AppKit)
+        return NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        #else
+        return false
+        #endif
+    }
+
     static let press = Animation.interactiveSpring(response: 0.18, dampingFraction: 0.86, blendDuration: 0.02)
     static let quick = Animation.easeOut(duration: 0.14)
     static let hover = Animation.easeOut(duration: 0.12)
@@ -23,10 +37,30 @@ enum AppMotion {
     static let modeSwitch = Animation.interactiveSpring(response: 0.30, dampingFraction: 0.90, blendDuration: 0.04)
     static let sectionSwitch = Animation.easeOut(duration: 0.16)
 
+    // reduceMotion 感知变体：开启系统“减少动态效果”时返回极短淡入或 nil（即时切换）。
+    static var pressAware: Animation? { reduceMotion ? .easeOut(duration: 0.08) : press }
+    static var quickAware: Animation? { reduceMotion ? .easeOut(duration: 0.08) : quick }
+    static var hoverAware: Animation? { reduceMotion ? nil : hover }
+    static var smoothAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : smooth }
+    static var revealAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : reveal }
+    static var listAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : list }
+    static var captureAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : capture }
+    static var statusAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : status }
+    static var completeAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : complete }
+    static var modeSwitchAware: Animation? { reduceMotion ? .easeOut(duration: 0.1) : modeSwitch }
+    static var sectionSwitchAware: Animation? { reduceMotion ? .easeOut(duration: 0.08) : sectionSwitch }
+
     static var rowTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.985, anchor: .top)),
-            removal: .opacity.combined(with: .scale(scale: 0.985, anchor: .center))
+        // 性能优化:简化为 .opacity + .offset,移除 .move + .scale 组合。
+        // .move(edge:) 会触发布局失效(推动其他行),.scale 涉及 transform 矩阵计算。
+        // 在 1000 行列表中,每次插入/删除的 transition 计算会呈倍数放大。
+        // .offset 只是视觉位移,不影响布局,计算成本最低。
+        if reduceMotion {
+            return .opacity
+        }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: -6)),
+            removal: .opacity
         )
     }
 
@@ -35,41 +69,37 @@ enum AppMotion {
     }
 
     static var inlineTransition: AnyTransition {
-        .opacity.combined(with: .scale(scale: 0.985, anchor: .top))
+        if reduceMotion {
+            return .opacity
+        }
+        return .opacity.combined(with: .scale(scale: 0.985, anchor: .top))
     }
 }
 
+extension View {
+    /// `withAnimation` 的 reduceMotion 感知版本：动画可能为 nil（即时切换）。
+    func withAppMotion(_ animation: Animation?, body: () -> Void) {
+        withAnimation(animation, body)
+    }
+}
+
+// 性能优化:ButtonStyle 内不再持有 @State isHovered 与 .onHover 监听器。
+// 原实现每个按钮都会附带 1 个 hover 监听器,在长列表中(row 内有 3-5 个按钮)
+// 会产生 100+ 监听器同时活跃,鼠标移动时引起 row body 重算。
+// 现在仅保留按压反馈(scale + opacity),hover 视觉由 row 层级统一处理。
 struct TactilePlainButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .contentShape(Rectangle())
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(buttonFill(isPressed: configuration.isPressed))
+                    .fill(configuration.isPressed ? AppTheme.accentSoft.opacity(0.82) : Color.clear)
             }
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
             .opacity(isEnabled ? (configuration.isPressed ? 0.78 : 1) : 0.46)
-            .animation(AppMotion.press, value: configuration.isPressed)
-            .animation(AppMotion.hover, value: isHovered)
-            .onHover { hovered in
-                isHovered = hovered
-            }
-    }
-
-    private func buttonFill(isPressed: Bool) -> Color {
-        guard isEnabled else {
-            return Color.clear
-        }
-        if isPressed {
-            return AppTheme.accentSoft.opacity(0.82)
-        }
-        if isHovered {
-            return AppTheme.adaptiveWhite(0.68)
-        }
-        return Color.clear
+            .animation(AppMotion.pressAware, value: configuration.isPressed)
     }
 }
 
