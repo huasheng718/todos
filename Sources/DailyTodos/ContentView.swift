@@ -482,12 +482,14 @@ struct ContentView: View {
         title: String,
         body: String,
         attachments: [HandbookAttachment]
-    ) {
+    ) -> HandbookItem? {
+        var createdItem: HandbookItem?
         withAnimation(AppMotion.capture) {
-            store.addHandbookItem(category: category, folder: folder, title: title, body: body, attachments: attachments)
+            createdItem = store.addHandbookItem(category: category, folder: folder, title: title, body: body, attachments: attachments)
             handbookCategory = category
             handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        return createdItem
     }
 
     private func updateHandbookItem(

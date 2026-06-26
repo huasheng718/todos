@@ -151,7 +151,16 @@ extension HandbookItem {
     }
 
     var displayTitle: String {
-        trimmedTitle.isEmpty ? category.title : trimmedTitle
+        if !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+        if let firstLine = trimmedBody.split(whereSeparator: \.isNewline).first {
+            let summary = String(firstLine).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !summary.isEmpty {
+                return String(summary.prefix(32))
+            }
+        }
+        return "未命名手记"
     }
 
     var cardSummary: String? {

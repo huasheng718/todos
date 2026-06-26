@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct HandbookDetailPanel: View {
     let item: HandbookItem?
@@ -15,7 +14,9 @@ struct HandbookDetailPanel: View {
     @State private var bodyMetrics = HandbookBodyMetrics.empty
     @State private var outlineUpdateToken = UUID()
     @State private var isDirty = false
+    @State private var isSyncingDraft = false
     @State private var bodyMetricsTask: Task<Void, Never>?
+    @State private var autoSaveTask: Task<Void, Never>?
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
     var body: some View {
@@ -29,7 +30,18 @@ struct HandbookDetailPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppTheme.workSurface)
-        .onChange(of: item) { _, newValue in
+        .onChange(of: item) { oldValue, newValue in
+            if oldValue?.id == newValue?.id {
+                if let newValue {
+                    isDirty = computeIsDirty(comparedTo: newValue)
+                } else {
+                    isDirty = false
+                }
+                return
+            }
+            if let oldValue {
+                submitEdit(for: oldValue, force: true)
+            }
             syncDraft(with: newValue)
             isDirty = false
         }
@@ -40,20 +52,6 @@ struct HandbookDetailPanel: View {
 
     private func canvasPanel(for item: HandbookItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HandbookCanvasToolbar(
-                accentColor: category.accentColor,
-                isDirty: isDirty,
-                canCopyAll: !copyAllText(for: item).isEmpty,
-                canCopyTitle: !(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && item.displayTitle.isEmpty),
-                onDelete: { onDelete(item) },
-                onCopyAll: { copyToPasteboard(copyAllText(for: item)) },
-                onCopyTitle: { copyToPasteboard(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.displayTitle : title) },
-                onSave: { submitEdit(for: item) }
-            )
-
-            Divider()
-                .overlay(AppTheme.hairline.opacity(0.56))
-
             ScrollView {
                 HandbookEditableCanvas(
                     category: $category,
@@ -66,7 +64,7 @@ struct HandbookDetailPanel: View {
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
                     isBodyEmpty: bodyMetrics.isEmpty,
-                    formattedDate: item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()),
+                    formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute()),
                     attachmentCount: attachments.count
                 )
                 .padding(.bottom, 16)
@@ -82,27 +80,34 @@ struct HandbookDetailPanel: View {
                 }
             }
             .onChange(of: attachments) { _, _ in
+                guard !isSyncingDraft else { return }
                 isDirty = computeIsDirty(comparedTo: item)
-                submitEdit(for: item)
+                submitEdit(for: item, force: true)
             }
             .onChange(of: category) { _, _ in
+                guard !isSyncingDraft else { return }
                 isDirty = computeIsDirty(comparedTo: item)
-                submitEdit(for: item)
+                submitEdit(for: item, force: true)
             }
             .onChange(of: folder) { _, _ in
+                guard !isSyncingDraft else { return }
                 isDirty = computeIsDirty(comparedTo: item)
-                submitEdit(for: item)
+                submitEdit(for: item, force: true)
             }
             .onChange(of: canvasFocus) { oldValue, newValue in
                 if oldValue != nil && newValue == nil {
-                    submitEdit(for: item)
+                    submitEdit(for: item, force: true)
                 }
             }
             .onChange(of: title) { _, _ in
+                guard !isSyncingDraft else { return }
                 isDirty = computeIsDirty(comparedTo: item)
+                scheduleAutoSave(for: item)
             }
             .onChange(of: bodyText) { _, _ in
+                guard !isSyncingDraft else { return }
                 isDirty = computeIsDirty(comparedTo: item)
+                scheduleAutoSave(for: item)
             }
             .onChange(of: bodyText) { _, newValue in
                 scheduleBodyMetricsUpdate(for: newValue)
@@ -138,14 +143,18 @@ struct HandbookDetailPanel: View {
             || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func submitEdit(for item: HandbookItem) {
+    private func submitEdit(for item: HandbookItem, force: Bool = false) {
+        autoSaveTask?.cancel()
         guard canSubmit else { return }
+        guard force || computeIsDirty(comparedTo: item) else { return }
         onUpdate(item, category, folder, title, bodyText, attachments)
         isDirty = false
     }
 
     private func syncDraft(with item: HandbookItem?) {
         guard let item else { return }
+        autoSaveTask?.cancel()
+        isSyncingDraft = true
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
@@ -158,6 +167,20 @@ struct HandbookDetailPanel: View {
             bodyMetrics = .empty
         }
         scheduleBodyMetricsUpdate(for: item.body)
+        Task { @MainActor in
+            isSyncingDraft = false
+        }
+    }
+
+    private func scheduleAutoSave(for item: HandbookItem) {
+        autoSaveTask?.cancel()
+        autoSaveTask = Task {
+            try? await Task.sleep(for: .milliseconds(650))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                submitEdit(for: item)
+            }
+        }
     }
 
     private func scheduleBodyMetricsUpdate(for text: String) {
@@ -184,26 +207,6 @@ struct HandbookDetailPanel: View {
                 outline = newOutline
             }
         }
-    }
-
-    private func copyToPasteboard(_ value: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(value, forType: .string)
-    }
-
-    private func copyAllText(for item: HandbookItem) -> String {
-        let titleText = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? item.displayTitle
-            : title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if titleText.isEmpty {
-            return body
-        }
-        if body.isEmpty {
-            return titleText
-        }
-        return "\(titleText)\n\n\(body)"
     }
 
     private func computeIsDirty(comparedTo item: HandbookItem) -> Bool {
