@@ -26,8 +26,8 @@ struct ContentView: View {
     @State private var aiStatusMessage: String?
     @State private var quickCaptureAITrace: AITrace?
     @State private var quickCaptureAIResultSummary: String?
-    @State private var isAISettingsPresented = false
     @State private var isAppSettingsPresented = false
+    @State private var appSettingsSection: AppSettingsSection = .appearance
     @State private var isSecondarySidebarCollapsed = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @State private var highlightedTodoID: TodoItem.ID?
@@ -53,7 +53,7 @@ struct ContentView: View {
                     set: { moduleRegistry.activate($0) }
                 ),
                 installedModules: moduleRegistry.installedModules,
-                onOpenSettings: { isAppSettingsPresented = true },
+                onOpenSettings: { openSettings(.appearance) },
                 hasUpdate: updateController.hasAvailableUpdate
             )
 
@@ -125,13 +125,14 @@ struct ContentView: View {
         .onChange(of: store.todos) { _, _ in
             rebuildFilteredTodos()
         }
-        .sheet(isPresented: $isAISettingsPresented) {
-            AISettingsSheet()
-                .environmentObject(aiSettings)
-        }
         .sheet(isPresented: $isAppSettingsPresented) {
-            AppSettingsSheet(selectedSkinRawValue: $selectedSkinRawValue)
+            AppSettingsSheet(
+                selectedSkinRawValue: $selectedSkinRawValue,
+                selectedSection: $appSettingsSection
+            )
                 .environmentObject(updateController)
+                .environmentObject(moduleRegistry)
+                .environmentObject(aiSettings)
         }
     }
 
@@ -164,7 +165,7 @@ struct ContentView: View {
                 contentTitle: contentTitle,
                 contentSubtitle: contentSubtitle,
                 isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                isAISettingsPresented: $isAISettingsPresented,
+                onOpenAISettings: { openSettings(.ai) },
                 onActivate: focusQuickCapture,
                 onCreate: createTodo,
                 onClear: cancelCreate,
@@ -182,8 +183,8 @@ struct ContentView: View {
                 contentTitle: contentTitle,
                 contentSubtitle: contentSubtitle,
                 isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                isAISettingsPresented: $isAISettingsPresented,
                 isAIEnabled: aiSettings.canUseAI,
+                onOpenAISettings: { openSettings(.ai) },
                 onCreate: createHandbookItem,
                 onUpdate: updateHandbookItem,
                 onDelete: deleteHandbookItem
@@ -207,6 +208,11 @@ struct ContentView: View {
         case .weekly:
             filteredTodosCache = store.todos(matching: debouncedSearchText).filter(\.isWeekly)
         }
+    }
+
+    private func openSettings(_ section: AppSettingsSection) {
+        appSettingsSection = section
+        isAppSettingsPresented = true
     }
 
     private var contentTitle: String {

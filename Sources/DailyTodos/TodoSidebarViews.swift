@@ -10,6 +10,11 @@ struct TodoSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            sidebarHeader
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 15) {
                     navigationGroup
@@ -17,7 +22,7 @@ struct TodoSidebarView: View {
                     miniCalendarGroup
                 }
                 .padding(.horizontal, 17)
-                .padding(.top, 48)
+                .padding(.top, 14)
                 .padding(.bottom, 14)
             }
             .scrollIndicators(.hidden)
@@ -43,6 +48,45 @@ struct TodoSidebarView: View {
         .onChange(of: store.todos) { _, _ in
             rebuildMetrics()
         }
+    }
+
+    private var sidebarHeader: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("待办")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+                Text("今日、等待、固定、全部")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            if metrics.overdueCount > 0 {
+                Text("\(metrics.overdueCount)")
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 22, minHeight: 20)
+                    .background(TodoPriority.high.displayColor, in: Capsule())
+                    .help("逾期未完成")
+            } else {
+                Text("\(metrics.activeCount)")
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(minWidth: 22, minHeight: 20)
+                    .background(AppTheme.accentSoft, in: Capsule())
+                    .help("未完成事项")
+            }
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 16)
+        .frame(height: 48)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var navigationGroup: some View {
