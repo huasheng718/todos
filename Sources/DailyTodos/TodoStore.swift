@@ -237,21 +237,22 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    @discardableResult
     func addHandbookItem(
         category: HandbookCategory,
         folder: String = "",
         title: String,
         body: String,
         attachments: [HandbookAttachment] = []
-    ) {
+    ) -> HandbookItem? {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
+        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return nil }
 
         let item = HandbookItem(
             category: category,
             folder: folder.trimmingCharacters(in: .whitespacesAndNewlines),
-            title: cleanedTitle.isEmpty ? category.title : cleanedTitle,
+            title: cleanedTitle,
             body: cleanedBody,
             attachments: attachments
         )
@@ -263,8 +264,10 @@ final class TodoStore: ObservableObject {
                 handbookItems.insert(item, at: handbookInsertionIndex(for: item))
             }
             lastError = nil
+            return item
         } catch {
             lastError = "保存手记失败：\(error.localizedDescription)"
+            return nil
         }
     }
 
@@ -278,13 +281,21 @@ final class TodoStore: ObservableObject {
     ) {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
         guard let index = handbookItems.firstIndex(where: { $0.id == item.id }) else { return }
+        let current = handbookItems[index]
+        guard current.category != category
+            || current.trimmedFolder != cleanedFolder
+            || current.trimmedTitle != cleanedTitle
+            || current.trimmedBody != cleanedBody
+            || current.attachments != attachments
+        else { return }
 
-        var updated = handbookItems[index]
+        var updated = current
         updated.category = category
-        updated.folder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.title = cleanedTitle.isEmpty ? category.title : cleanedTitle
+        updated.folder = cleanedFolder
+        updated.title = cleanedTitle
         updated.body = cleanedBody
         updated.attachments = attachments
         updated.updatedAt = Date()

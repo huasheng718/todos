@@ -286,77 +286,56 @@ struct HandbookDetailMetaBar: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                editableTags
-                HandbookMetaDot()
-                passiveMeta
+            HStack(spacing: 7) {
+                HandbookCategoryInlineTag(category: category)
+                HandbookFolderInlineTag(folder: $folder)
+                passiveMetaCards
                 Spacer(minLength: 0)
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                editableTags
-                passiveMeta
+                HStack(spacing: 7) {
+                    HandbookCategoryInlineTag(category: category)
+                    HandbookFolderInlineTag(folder: $folder)
+                }
+                passiveMetaCards
             }
         }
     }
 
-    private var editableTags: some View {
+    private var passiveMetaCards: some View {
         HStack(spacing: 7) {
-            HandbookCategoryInlineTag(category: $category)
-            HandbookFolderInlineTag(folder: $folder)
-        }
-    }
-
-    private var passiveMeta: some View {
-        HStack(spacing: 8) {
-            HandbookMetaText(icon: lengthKind.icon, text: lengthKind.title)
-            HandbookMetaDot()
-            HandbookMetaText(icon: "character.cursor.ibeam", text: "\(characterCount) 字")
-            HandbookMetaDot()
-            HandbookMetaText(icon: "calendar", text: formattedDate)
+            HandbookMetaCard(icon: lengthKind.icon, text: lengthKind.title)
+            HandbookMetaCard(icon: "character.cursor.ibeam", text: "\(characterCount) 字")
+            HandbookMetaCard(icon: "calendar", text: formattedDate)
             if attachmentCount > 0 {
-                HandbookMetaDot()
-                HandbookMetaText(icon: "paperclip", text: "\(attachmentCount) 个附件")
+                HandbookMetaCard(icon: "paperclip", text: "\(attachmentCount) 个附件")
             }
         }
     }
 }
 
 struct HandbookCategoryInlineTag: View {
-    @Binding var category: HandbookCategory
+    let category: HandbookCategory
 
     var body: some View {
-        Menu {
-            Picker("分类", selection: $category) {
-                ForEach(HandbookCategory.allCases) { option in
-                    Label(option.title, systemImage: option.icon).tag(option)
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: category.icon)
-                    .font(.system(size: 11, weight: .bold))
+        HStack(spacing: 5) {
+            Image(systemName: category.icon)
+                .font(.system(size: 11, weight: .bold))
 
-                Text(category.title)
-                    .font(.system(size: 12, weight: .bold))
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .black))
-                    .foregroundStyle(category.accentColor.opacity(0.72))
-            }
-            .foregroundStyle(category.accentColor)
-            .padding(.horizontal, 9)
-            .frame(height: 25)
-            .background(category.softColor, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(category.accentColor.opacity(0.24))
-            )
+            Text(category.title)
+                .font(.system(size: 12, weight: .bold))
         }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
+        .foregroundStyle(category.accentColor)
+        .padding(.horizontal, 9)
+        .frame(height: 25)
+        .background(category.softColor, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(category.accentColor.opacity(0.24))
+        )
         .fixedSize()
-        .help("点击修改分类")
+        .help("拖拽左侧手记可修改分类")
     }
 }
 
@@ -466,7 +445,7 @@ struct HandbookFolderInlineTag: View {
     }
 }
 
-struct HandbookMetaText: View {
+struct HandbookMetaCard: View {
     let icon: String
     let text: String
 
@@ -474,15 +453,15 @@ struct HandbookMetaText: View {
         Label(text, systemImage: icon)
             .font(.system(size: 12, weight: .semibold))
             .monospacedDigit()
-            .foregroundStyle(AppTheme.mutedInk)
+            .foregroundStyle(AppTheme.ink.opacity(0.76))
             .lineLimit(1)
-    }
-}
-
-struct HandbookMetaDot: View {
-    var body: some View {
-        Circle()
-            .fill(AppTheme.hairline)
-            .frame(width: 4, height: 4)
+            .padding(.horizontal, 8)
+            .frame(height: 25)
+            .background(AppTheme.adaptiveWhite(0.64), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(AppTheme.border.opacity(0.72))
+            )
+            .fixedSize(horizontal: true, vertical: false)
     }
 }

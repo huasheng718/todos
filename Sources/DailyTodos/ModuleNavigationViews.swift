@@ -406,16 +406,14 @@ struct HandbookModuleView: View {
     @Binding var isSecondarySidebarCollapsed: Bool
 
     // 回调
-    let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
+    let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> HandbookItem?
     let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onDelete: (HandbookItem) -> Void
 
     @State private var selectedItemID: UUID?
 
     private var selectedItem: HandbookItem? {
-        guard let selectedItemID else {
-            return store.handbookItems.first
-        }
+        guard let selectedItemID else { return nil }
         return store.handbookItems.first { $0.id == selectedItemID } ?? store.handbookItems.first
     }
 
@@ -435,7 +433,18 @@ struct HandbookModuleView: View {
                         selectedItemID = item.id
                     },
                     onCreate: { category, folder, title, body, attachments in
-                        onCreate(category, folder, title, body, attachments)
+                        let createdItem = onCreate(category, folder, title, body, attachments)
+                        selectedItemID = createdItem?.id
+                        return createdItem
+                    },
+                    onMove: { item, category, folder in
+                        onUpdate(item, category, folder, item.title, item.body, item.attachments)
+                    },
+                    onDelete: { item in
+                        onDelete(item)
+                        if selectedItemID == item.id {
+                            selectedItemID = nil
+                        }
                     }
                 )
             } collapsed: {

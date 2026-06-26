@@ -31,9 +31,11 @@ struct HandbookTreeView: View {
     let isLoaded: Bool
     @Binding var isSecondarySidebarCollapsed: Bool
     let onSelect: (HandbookItem) -> Void
-    let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
+    let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> HandbookItem?
+    let onMove: (HandbookItem, HandbookCategory, String) -> Void
+    let onDelete: (HandbookItem) -> Void
 
-    @State private var expandedNodeIDs: Set<String> = ["all", "cat-businessRule", "cat-research", "cat-meeting", "cat-inspiration"]
+    @State private var expandedNodeIDs: Set<String> = []
     @State private var draftTitle = ""
     @State private var draftBody = ""
     @FocusState private var focusField: HandbookFocusField?
@@ -60,6 +62,12 @@ struct HandbookTreeView: View {
             }
         }
         .background(AppTheme.sidebar)
+        .onAppear {
+            expandAllVisibleNodes()
+        }
+        .onChange(of: items) { _, _ in
+            expandAllVisibleNodes()
+        }
     }
 
     private var sidebarHeader: some View {
@@ -151,7 +159,8 @@ struct HandbookTreeView: View {
             onSelect: {
                 selectedCategory = nil
                 selectedFolder = nil
-            }
+            },
+            onDrop: { _ in false }
         )
     }
 
@@ -174,6 +183,9 @@ struct HandbookTreeView: View {
                 onSelect: {
                     selectedCategory = category
                     selectedFolder = nil
+                },
+                onDrop: { itemIDs in
+                    moveDraggedItems(itemIDs, to: category, folder: nil)
                 }
             )
 
@@ -212,7 +224,8 @@ struct HandbookTreeView: View {
                 onSelect: {
                     selectedCategory = category
                     selectedFolder = folder
-                }
+                },
+                onDrop: { _ in false }
             )
 
             if isExpanded {
@@ -228,16 +241,21 @@ struct HandbookTreeView: View {
     private func treeUnfiledNode(items: [HandbookItem], category: HandbookCategory) -> some View {
         let nodeID = "unfiled-\(category.rawValue)"
         let isExpanded = expandedNodeIDs.contains(nodeID)
+        let isSelected = selectedCategory == category && selectedFolder == ""
 
         return VStack(alignment: .leading, spacing: 0) {
             HandbookTreeRow(
                 title: "未归档",
                 icon: "folder.badge.plus",
                 count: items.count,
-                isSelected: false,
+                isSelected: isSelected,
                 isExpanded: isExpanded,
                 onToggle: { toggleExpand(nodeID) },
-                onSelect: {}
+                onSelect: {
+                    selectedCategory = category
+                    selectedFolder = ""
+                },
+                onDrop: { _ in false }
             )
 
             if isExpanded {
@@ -256,7 +274,16 @@ struct HandbookTreeView: View {
         return HandbookTreeItemRow(
             item: item,
             isSelected: isSelected,
-            indent: indent
+            indent: indent,
+            onMove: { category, folder in
+                move(item, to: category, folder: folder)
+            },
+            onDelete: {
+                if selectedItemID == item.id {
+                    selectedItemID = nil
+                }
+                onDelete(item)
+            }
         ) {
             selectedItemID = item.id
             onSelect(item)
@@ -291,7 +318,12 @@ struct HandbookTreeView: View {
         }
         let category = selectedCategory ?? HandbookCategory.infer(from: "\(title)\n\(body)")
         let folder = (selectedFolder ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        onCreate(category, folder, title, body, [])
+        guard let createdItem = onCreate(category, folder, title, body, []) else { return }
+        selectedItemID = createdItem.id
+        selectedCategory = createdItem.category
+        selectedFolder = createdItem.trimmedFolder.isEmpty ? "" : createdItem.trimmedFolder
+        expandPath(to: createdItem)
+        onSelect(createdItem)
         draftTitle = ""
         draftBody = ""
         focusField = .title
@@ -319,6 +351,63 @@ struct HandbookTreeView: View {
         }
         return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
+
+    private func expandAllVisibleNodes() {
+        var ids = Set(["all"])
+        for category in HandbookCategory.allCases {
+            let categoryItems = items.filter { $0.category == category }
+            ids.insert("cat-\(category.rawValue)")
+            for folder in uniqueFolders(in: categoryItems) {
+                ids.insert(folderNodeID(category: category, folder: folder))
+            }
+            if categoryItems.contains(where: { $0.trimmedFolder.isEmpty }) {
+                ids.insert("unfiled-\(category.rawValue)")
+            }
+        }
+        expandedNodeIDs.formUnion(ids)
+    }
+
+    private func expandPath(to item: HandbookItem) {
+        expandedNodeIDs.insert("all")
+        expandedNodeIDs.insert("cat-\(item.category.rawValue)")
+        if item.trimmedFolder.isEmpty {
+            expandedNodeIDs.insert("unfiled-\(item.category.rawValue)")
+        } else {
+            expandedNodeIDs.insert(folderNodeID(category: item.category, folder: item.trimmedFolder))
+        }
+    }
+
+    private func folderNodeID(category: HandbookCategory, folder: String) -> String {
+        "folder-\(category.rawValue)-\(folder)"
+    }
+
+    private func move(_ item: HandbookItem, to category: HandbookCategory, folder: String?) {
+        let targetFolder = folder ?? item.trimmedFolder
+        guard item.category != category || item.trimmedFolder != targetFolder else { return }
+        withAnimation(AppMotion.smooth) {
+            onMove(item, category, targetFolder)
+            selectedItemID = item.id
+            selectedCategory = category
+            selectedFolder = targetFolder.isEmpty ? "" : targetFolder
+            expandedNodeIDs.insert("cat-\(category.rawValue)")
+            if targetFolder.isEmpty {
+                expandedNodeIDs.insert("unfiled-\(category.rawValue)")
+            } else {
+                expandedNodeIDs.insert(folderNodeID(category: category, folder: targetFolder))
+            }
+        }
+    }
+
+    private func moveDraggedItems(_ itemIDs: [String], to category: HandbookCategory, folder: String?) -> Bool {
+        var didAccept = false
+        for idString in itemIDs {
+            guard let itemID = UUID(uuidString: idString),
+                  let item = items.first(where: { $0.id == itemID }) else { continue }
+            move(item, to: category, folder: folder)
+            didAccept = true
+        }
+        return didAccept
+    }
 }
 
 /// 树行（分类/文件夹级别）
@@ -331,6 +420,7 @@ struct HandbookTreeRow: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let onSelect: () -> Void
+    let onDrop: ([String]) -> Bool
 
     @State private var isHovered = false
 
@@ -373,6 +463,9 @@ struct HandbookTreeRow: View {
                 isHovered = hovered
             }
         }
+        .dropDestination(for: String.self) { items, _ in
+            onDrop(items)
+        }
     }
 
     private var rowBackground: Color {
@@ -388,9 +481,12 @@ struct HandbookTreeItemRow: View {
     let item: HandbookItem
     let isSelected: Bool
     let indent: CGFloat
+    let onMove: (HandbookCategory, String?) -> Void
+    let onDelete: () -> Void
     let onSelect: () -> Void
 
     @State private var isHovered = false
+    @State private var showsPreview = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -435,10 +531,61 @@ struct HandbookTreeItemRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
+        .draggable(item.id.uuidString)
+        .contextMenu {
+            moveMenu
+        }
         .onHover { hovered in
             withAnimation(AppMotion.hover) {
                 isHovered = hovered
+                showsPreview = hovered
             }
         }
+        .popover(isPresented: $showsPreview, arrowEdge: .trailing) {
+            HandbookTreeItemPreview(item: item)
+        }
+    }
+
+    @ViewBuilder
+    private var moveMenu: some View {
+        Menu("移动到") {
+            ForEach(HandbookCategory.allCases) { category in
+                Button {
+                    onMove(category, nil)
+                } label: {
+                    Label(category.title, systemImage: category.icon)
+                }
+            }
+        }
+        Divider()
+        Button(role: .destructive, action: onDelete) {
+            Label("删除手记", systemImage: "trash")
+        }
+    }
+}
+
+struct HandbookTreeItemPreview: View {
+    let item: HandbookItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(item.displayTitle)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("最后修改于 \(item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()))")
+                Text("创建于 \(item.createdAt.formatted(.dateTime.year().month().day().hour().minute()))")
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.white.opacity(0.92))
+            .monospacedDigit()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(width: 260, alignment: .leading)
+        .background(AppTheme.adaptiveBlack(0.90), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
