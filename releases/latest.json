@@ -1,6 +1,6 @@
 {
-  "version": "1.1.26",
-  "build": 27,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.26/AntOrder-1.1.26.pkg",
-  "releaseNotes": "蚁序 1.1.26 更新：去掉手记数据加载的350ms启动延迟，切换到手记时同步加载确保数据已就绪，消除透明白屏等待。"
+  "version": "1.1.28",
+  "build": 28,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.1.28/AntOrder-1.1.28.pkg",
+  "releaseNotes": "蚁序 1.1.28 更新：从架构层面重构手记加载链路，App启动时同步加载手记数据消除双重异步等待，预计算列表displayData缓存，简化contentArea分支，syncDraft关闭动画，预计算日期格式化。"
 }
