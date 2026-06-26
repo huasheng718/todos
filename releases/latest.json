@@ -1,6 +1,6 @@
 {
-  "version": "1.2.3",
-  "build": 32,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.3/AntOrder-1.2.3.pkg",
-  "releaseNotes": "蚁序 1.2.3 更新：隐藏顶部 AI 快捷入口；将侧栏展开折叠控件移入左二；手记编辑区新增格式工具栏，并将附件入口移入工具栏。"
+  "version": "1.2.4",
+  "build": 33,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.4/AntOrder-1.2.4.pkg",
+  "releaseNotes": "蚁序 1.2.4 更新：移除待办左二头部的汇总计数，保留各分类自己的数量提示，让侧栏更简洁。"
 }
