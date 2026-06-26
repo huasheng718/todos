@@ -290,7 +290,7 @@ struct TodoModuleView: View {
         HStack(spacing: 0) {
             // 导航树（左侧）
             TodoSidebarView(scope: $scope)
-                .frame(width: 280)
+                .frame(width: secondarySidebarWidth)
                 .background(AppTheme.sidebar)
 
             // 详情（右侧）
@@ -443,7 +443,7 @@ struct HandbookModuleView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(width: 340)
+            .frame(width: secondarySidebarWidth)
             .background(AppTheme.sidebar)
 
             // 详情面板（右侧）
@@ -460,9 +460,10 @@ struct HandbookModuleView: View {
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(AppTheme.workSurface)
+            .background {
+                AppTheme.workSurface
+                    .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
+            }
             .animation(AppMotion.smooth, value: selectedItemID)
         }
     }

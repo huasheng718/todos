@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "build": 29,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.0/AntOrder-1.2.0.pkg",
-  "releaseNotes": "蚁序 1.2.0 更新：微应用架构重构。待办和手记成为独立微应用，支持安装/卸载；手记采用目录树导航，合并导航和列表为统一树形结构；设置页面新增模块管理。"
+  "version": "1.2.1",
+  "build": 30,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.1/AntOrder-1.2.1.pkg",
+  "releaseNotes": "蚁序 1.2.1 更新：优化手记工作台三栏布局。左一主导航加宽避免文字拥挤，左二目录树收窄释放正文空间，右侧详情区去掉多层卡片和重复边框，让手记内容直接铺满工作区。"
 }

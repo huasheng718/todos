@@ -366,7 +366,7 @@ struct ModuleSwitcherBar: View {
             }
             .padding(.bottom, 14)
         }
-        .frame(width: 60)
+        .frame(width: primarySidebarWidth)
         .frame(maxHeight: .infinity)
         .background(AppTheme.sidebar)
     }
@@ -397,7 +397,7 @@ struct ModuleButton: View {
                     .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
                     .lineLimit(1)
             }
-            .frame(width: 52)
+            .frame(width: primarySidebarWidth - 16)
         }
         .buttonStyle(.plain)
         .help(module.displayName)
