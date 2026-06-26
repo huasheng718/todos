@@ -104,13 +104,8 @@ struct HandbookDetailPanel: View {
                 isDirty = computeIsDirty(comparedTo: item)
                 scheduleAutoSave(for: item)
             }
-            .onChange(of: bodyText) { _, _ in
-                guard !isSyncingDraft else { return }
-                isDirty = computeIsDirty(comparedTo: item)
-                scheduleAutoSave(for: item)
-            }
             .onChange(of: bodyText) { _, newValue in
-                scheduleBodyMetricsUpdate(for: newValue)
+                handleBodyTextChange(newValue, for: item)
             }
             .scrollIndicators(.hidden)
             .padding(.horizontal, 34)
@@ -155,21 +150,29 @@ struct HandbookDetailPanel: View {
         guard let item else { return }
         autoSaveTask?.cancel()
         isSyncingDraft = true
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            category = item.category
-            folder = item.folder
-            title = item.title
-            bodyText = item.body
-            attachments = item.attachments
-            outline = []
-            bodyMetrics = .empty
+        PerformanceMonitor.event("HandbookDetail.syncDraft", detail: "\(item.id.uuidString) chars=\(item.body.count)")
+        PerformanceMonitor.measure("HandbookDetail.syncDraft.apply") {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                if category != item.category { category = item.category }
+                if folder != item.folder { folder = item.folder }
+                if title != item.title { title = item.title }
+                if bodyText != item.body { bodyText = item.body }
+                if attachments != item.attachments { attachments = item.attachments }
+            }
         }
         scheduleBodyMetricsUpdate(for: item.body)
         Task { @MainActor in
             isSyncingDraft = false
         }
+    }
+
+    private func handleBodyTextChange(_ newValue: String, for item: HandbookItem) {
+        guard !isSyncingDraft else { return }
+        scheduleBodyMetricsUpdate(for: newValue)
+        isDirty = computeIsDirty(comparedTo: item)
+        scheduleAutoSave(for: item)
     }
 
     private func scheduleAutoSave(for item: HandbookItem) {
@@ -190,21 +193,29 @@ struct HandbookDetailPanel: View {
             guard !Task.isCancelled else { return }
 
             let metrics = await Task.detached(priority: .userInitiated) {
-                HandbookBodyMetrics(text: text)
+                PerformanceMonitor.measure("HandbookDetail.metrics.body") {
+                    HandbookBodyMetrics(text: text)
+                }
             }.value
 
             let newOutline: [MarkdownOutlineEntry]
             if text.contains("#") {
                 newOutline = await Task.detached(priority: .userInitiated) {
-                    MarkdownOutlineEntry.extract(from: text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    PerformanceMonitor.measure("HandbookDetail.metrics.outline") {
+                        MarkdownOutlineEntry.extract(from: text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
                 }.value
             } else {
                 newOutline = []
             }
 
             await MainActor.run {
-                bodyMetrics = metrics
-                outline = newOutline
+                if bodyMetrics != metrics {
+                    bodyMetrics = metrics
+                }
+                if outline != newOutline {
+                    outline = newOutline
+                }
             }
         }
     }

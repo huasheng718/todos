@@ -99,11 +99,7 @@ final class TodoStore: ObservableObject {
                         }
                     }.value
 
-                    guard generation == handbookLoadGeneration, !didLoadHandbookItems else { return }
-                    handbookItems = items
-                    didLoadHandbookItems = true
-                    isLoadingHandbookItems = false
-                    lastError = nil
+                    finishScheduledHandbookLoad(items, generation: generation)
                 } catch {
                     guard generation == handbookLoadGeneration, !didLoadHandbookItems else { return }
                     isLoadingHandbookItems = false
@@ -291,6 +287,7 @@ final class TodoStore: ObservableObject {
             || current.trimmedBody != cleanedBody
             || current.attachments != attachments
         else { return }
+        let didMoveScope = current.category != category || current.trimmedFolder != cleanedFolder
 
         var updated = current
         updated.category = category
@@ -304,8 +301,12 @@ final class TodoStore: ObservableObject {
             try PerformanceMonitor.measure("TodoStore.updateHandbookItem") {
                 try loadHandbookItemsIfNeededInternal()
                 try update(updated)
-                handbookItems.remove(at: index)
-                handbookItems.insert(updated, at: handbookInsertionIndex(for: updated))
+                if didMoveScope {
+                    handbookItems.remove(at: index)
+                    handbookItems.insert(updated, at: handbookInsertionIndex(for: updated))
+                } else {
+                    handbookItems[index] = updated
+                }
             }
             lastError = nil
         } catch {
@@ -413,6 +414,14 @@ final class TodoStore: ObservableObject {
         didLoadHandbookItems = true
     }
 
+    private func finishScheduledHandbookLoad(_ items: [HandbookItem], generation: Int) {
+        guard generation == handbookLoadGeneration, !didLoadHandbookItems else { return }
+        handbookItems = items
+        didLoadHandbookItems = true
+        isLoadingHandbookItems = false
+        lastError = nil
+    }
+
     private func createSchema() throws {
         try execute(
             """
@@ -454,6 +463,7 @@ final class TodoStore: ObservableObject {
         try addColumnIfNeeded(table: "handbook_items", name: "attachments_json", definition: "TEXT NOT NULL DEFAULT '[]'")
         try execute("CREATE INDEX IF NOT EXISTS idx_handbook_category_updated ON handbook_items(category, updated_at)")
         try execute("CREATE INDEX IF NOT EXISTS idx_handbook_folder_updated ON handbook_items(folder, updated_at)")
+        try execute("CREATE INDEX IF NOT EXISTS idx_handbook_updated_created ON handbook_items(updated_at DESC, created_at DESC)")
     }
 
     private func migrateLegacyJSONIfNeeded() throws {
@@ -501,6 +511,7 @@ final class TodoStore: ObservableObject {
             """
             SELECT id, category, folder, title, body, attachments_json, created_at, updated_at
             FROM handbook_items
+            ORDER BY updated_at DESC, created_at DESC
             """
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
@@ -513,7 +524,7 @@ final class TodoStore: ObservableObject {
         while sqlite3_step(statement) == SQLITE_ROW {
             result.append(try handbookItem(from: statement))
         }
-        return result.sorted(by: sortHandbookItems)
+        return result
     }
 
     private func insertInitialTodo() throws {

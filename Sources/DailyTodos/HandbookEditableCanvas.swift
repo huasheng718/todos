@@ -46,7 +46,7 @@ struct HandbookEditableCanvas: View {
                     .lineSpacing(5)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, -4)
-                    .frame(minHeight: editorHeight, maxHeight: editorHeight)
+                    .frame(height: editorHeight)
                     .focused(focusedField, equals: .body)
 
                 if isBodyEmpty {
