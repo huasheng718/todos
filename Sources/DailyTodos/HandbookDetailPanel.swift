@@ -70,7 +70,7 @@ struct HandbookDetailPanel: View {
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
                     isBodyEmpty: bodyMetrics.isEmpty,
-                    updatedAt: item.updatedAt,
+                    formattedDate: item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()),
                     attachmentCount: attachments.count
                 )
                 .padding(.bottom, 16)
@@ -148,13 +148,17 @@ struct HandbookDetailPanel: View {
 
     private func syncDraft(with item: HandbookItem?) {
         guard let item else { return }
-        category = item.category
-        folder = item.folder
-        title = item.title
-        bodyText = item.body
-        attachments = item.attachments
-        outline = []
-        bodyMetrics = .empty
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            category = item.category
+            folder = item.folder
+            title = item.title
+            bodyText = item.body
+            attachments = item.attachments
+            outline = []
+            bodyMetrics = .empty
+        }
         scheduleBodyMetricsUpdate(for: item.body)
     }
 

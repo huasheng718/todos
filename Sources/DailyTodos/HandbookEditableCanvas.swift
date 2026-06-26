@@ -10,7 +10,7 @@ struct HandbookEditableCanvas: View {
     let characterCount: Int
     let editorHeight: CGFloat
     let isBodyEmpty: Bool
-    let updatedAt: Date
+    let formattedDate: String
     let attachmentCount: Int
 
     var body: some View {
@@ -27,7 +27,7 @@ struct HandbookEditableCanvas: View {
                 folder: $folder,
                 lengthKind: lengthKind,
                 characterCount: characterCount,
-                updatedAt: updatedAt,
+                formattedDate: formattedDate,
                 attachmentCount: attachmentCount
             )
 
@@ -59,7 +59,7 @@ struct HandbookDetailMetaBar: View {
     @Binding var folder: String
     let lengthKind: HandbookLengthKind
     let characterCount: Int
-    let updatedAt: Date
+    let formattedDate: String
     let attachmentCount: Int
 
     var body: some View {
@@ -91,7 +91,7 @@ struct HandbookDetailMetaBar: View {
             HandbookMetaDot()
             HandbookMetaText(icon: "character.cursor.ibeam", text: "\(characterCount) 字")
             HandbookMetaDot()
-            HandbookMetaText(icon: "calendar", text: updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
+            HandbookMetaText(icon: "calendar", text: formattedDate)
             if attachmentCount > 0 {
                 HandbookMetaDot()
                 HandbookMetaText(icon: "paperclip", text: "\(attachmentCount) 个附件")

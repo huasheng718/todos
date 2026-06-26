@@ -15,9 +15,9 @@ struct HandbookContentView: View {
     @State private var selectedItemID: UUID?
     @State private var shouldSelectLatestAfterCreate = false
     @State private var activeFilter: HandbookListFilter = .all
-    @State private var showsLoadingState = false
     @State private var scopedItemsCache: [HandbookItem] = []
     @State private var visibleItemsCache: [HandbookItem] = []
+    @State private var displayDataCache: [HandbookRowDisplayData] = []
     @State private var visibleItemsCacheKey: HandbookListCacheKey?
     @State private var rebuildTask: Task<Void, Never>?
     @FocusState private var focusedField: HandbookFocusField?
@@ -51,16 +51,8 @@ struct HandbookContentView: View {
         .onChange(of: activeFilter) { _, _ in
             rebuildVisibleItems()
         }
-        .onChange(of: isLoaded) { _, newValue in
-            if newValue {
-                showsLoadingState = false
-            } else {
-                scheduleLoadingStateIfNeeded()
-            }
-        }
         .onAppear {
             rebuildVisibleItems()
-            scheduleLoadingStateIfNeeded()
         }
     }
 
@@ -141,39 +133,21 @@ struct HandbookContentView: View {
         let visibleItems = snapshot.visibleItems
         let selectedItem = selectedItem(in: visibleItems)
 
-        if !isLoaded && showsLoadingState {
-            HStack(alignment: .top, spacing: 10) {
-                handbookListCard(itemsCount: 0, visibleItems: [], selectedItem: nil)
-                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                HandbookLoadingState()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .transition(AppMotion.viewTransition)
-        } else if !isLoaded {
-            HStack(alignment: .top, spacing: 10) {
-                handbookListCard(itemsCount: 0, visibleItems: [], selectedItem: nil)
-                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        } else if items.isEmpty {
-            HStack(alignment: .top, spacing: 10) {
-                handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
-                    .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
-
-                HandbookEmptyState(category: selectedCategory)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .transition(AppMotion.viewTransition)
+        if !isLoaded {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if visibleItems.isEmpty {
             HStack(alignment: .top, spacing: 10) {
                 handbookListCard(itemsCount: items.count, visibleItems: visibleItems, selectedItem: selectedItem)
                     .frame(minWidth: 230, idealWidth: 260, maxWidth: 300, maxHeight: .infinity)
 
-                HandbookFilteredEmptyState(filter: activeFilter)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if items.isEmpty {
+                    HandbookEmptyState(category: selectedCategory)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    HandbookFilteredEmptyState(filter: activeFilter)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
             .transition(AppMotion.viewTransition)
         } else {
@@ -198,22 +172,6 @@ struct HandbookContentView: View {
         }
     }
 
-    private func scheduleLoadingStateIfNeeded() {
-        guard !isLoaded else {
-            showsLoadingState = false
-            return
-        }
-
-        let delay: Duration = .milliseconds(120)
-        Task { @MainActor in
-            try? await Task.sleep(for: delay)
-            guard !isLoaded else { return }
-            withAnimation(AppMotion.quick) {
-                showsLoadingState = true
-            }
-        }
-    }
-
     private func handbookListCard(itemsCount: Int, visibleItems: [HandbookItem], selectedItem: HandbookItem?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HandbookListCardHeader(
@@ -229,21 +187,13 @@ struct HandbookContentView: View {
 
             ScrollView {
                 LazyVStack(spacing: 7) {
-                    ForEach(visibleItems) { item in
+                    ForEach(displayDataCache) { data in
                         HandbookRow(
-                            displayData: HandbookRowDisplayData(
-                                item: item,
-                                cardSummary: item.cardSummary,
-                                bodyCharacterCount: item.bodyCharacterCount,
-                                lengthKind: item.lengthKind,
-                                formattedDate: item.updatedAt.formatted(.dateTime.month().day().hour().minute()),
-                                displayTitle: item.displayTitle,
-                                trimmedFolder: item.trimmedFolder
-                            ),
-                            isSelected: selectedItem?.id == item.id,
+                            displayData: data,
+                            isSelected: selectedItem?.id == data.item.id,
                             onSelect: {
                                 withAnimation(AppMotion.smooth) {
-                                    selectedItemID = item.id
+                                    selectedItemID = data.item.id
                                 }
                             }
                         )
@@ -282,6 +232,20 @@ struct HandbookContentView: View {
         selectedItemID = currentItems.first?.id
     }
 
+    private func buildDisplayData(for visible: [HandbookItem]) -> [HandbookRowDisplayData] {
+        visible.map { item in
+            HandbookRowDisplayData(
+                item: item,
+                cardSummary: item.cardSummary,
+                bodyCharacterCount: item.bodyCharacterCount,
+                lengthKind: item.lengthKind,
+                formattedDate: item.updatedAt.formatted(.dateTime.month().day().hour().minute()),
+                displayTitle: item.displayTitle,
+                trimmedFolder: item.trimmedFolder
+            )
+        }
+    }
+
     private func rebuildVisibleItems(from sourceItems: [HandbookItem]? = nil) {
         let items = sourceItems ?? allItems
 
@@ -292,6 +256,7 @@ struct HandbookContentView: View {
             scopedItemsCache = scoped
             visibleItemsCache = visible
             visibleItemsCacheKey = listCacheKey(from: items)
+            displayDataCache = buildDisplayData(for: visible)
             syncSelection(with: visible)
             PerformanceMonitor.event("Handbook.visibleItems.count", detail: "\(visible.count)")
             return
@@ -327,6 +292,7 @@ struct HandbookContentView: View {
                 scopedItemsCache = scoped
                 visibleItemsCache = visible
                 visibleItemsCacheKey = cacheKey
+                displayDataCache = buildDisplayData(for: visible)
                 syncSelection(with: visible)
                 PerformanceMonitor.event("Handbook.visibleItems.count", detail: "\(visible.count)")
             }
@@ -646,7 +612,7 @@ struct HandbookInferenceBadge: View {
     }
 }
 
-struct HandbookRowDisplayData: Equatable {
+struct HandbookRowDisplayData: Equatable, Identifiable {
     let item: HandbookItem
     let cardSummary: String?
     let bodyCharacterCount: Int
@@ -654,6 +620,8 @@ struct HandbookRowDisplayData: Equatable {
     let formattedDate: String
     let displayTitle: String
     let trimmedFolder: String
+
+    var id: UUID { item.id }
 }
 
 struct HandbookRow: View {

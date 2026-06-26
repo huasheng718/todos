@@ -71,14 +71,6 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    func scheduleLoadHandbookItemsIfNeeded() {
-        scheduleLoadHandbookItemsIfNeeded(after: nil)
-    }
-
-    func prefetchHandbookItemsAfterStartup() {
-        scheduleLoadHandbookItemsIfNeeded(after: nil)
-    }
-
     private func scheduleLoadHandbookItemsIfNeeded(after delay: Duration?) {
         guard !didLoadHandbookItems, !isLoadingHandbookItems else { return }
 

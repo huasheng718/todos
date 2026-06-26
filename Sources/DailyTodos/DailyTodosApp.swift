@@ -17,7 +17,7 @@ struct DailyTodosApp: App {
                 .background(WindowChromeConfigurator())
                 .task {
                     store.loadStartupData()
-                    store.prefetchHandbookItemsAfterStartup()
+                    store.loadHandbookItemsIfNeeded()
                     updateController.startMonitoring()
                     try? await Task.sleep(for: .milliseconds(900))
                     updateController.checkForUpdatesIfNeeded()
