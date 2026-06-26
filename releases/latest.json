@@ -1,6 +1,6 @@
 {
-  "version": "1.2.1",
-  "build": 30,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.1/AntOrder-1.2.1.pkg",
-  "releaseNotes": "蚁序 1.2.1 更新：优化手记工作台三栏布局。左一主导航加宽避免文字拥挤，左二目录树收窄释放正文空间，右侧详情区去掉多层卡片和重复边框，让手记内容直接铺满工作区。"
+  "version": "1.2.2",
+  "build": 31,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.2/AntOrder-1.2.2.pkg",
+  "releaseNotes": "蚁序 1.2.2 更新：重新设计设置页，将 AI 配置统一纳入设置；优化待办左侧二级栏头部，使其与手记工作台保持一致。"
 }
