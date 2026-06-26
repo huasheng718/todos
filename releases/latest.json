@@ -1,6 +1,6 @@
 {
-  "version": "1.2.5",
-  "build": 34,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.5/AntOrder-1.2.5.pkg",
-  "releaseNotes": "蚁序 1.2.5 更新：手记支持实时自动保存，新增后立即定位；侧栏目录默认展开并支持分类菜单和拖拽移动；修复新建标题被默认成分类名的问题，移除编辑区手动保存工具栏并优化元信息卡片。"
+  "version": "1.2.6",
+  "build": 35,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.6/AntOrder-1.2.6.pkg",
+  "releaseNotes": "蚁序 1.2.6 更新：重新设计手记目录树为轻量大纲样式，优化整行点击命中、层级缩进、选中状态和日期对齐，让手记侧栏更适合阅读和定位。"
 }
