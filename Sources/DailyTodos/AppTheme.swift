@@ -8,7 +8,7 @@ let todoActionColumnWidth: CGFloat = 128
 let compactHitTargetSize: CGFloat = 38
 let primarySidebarWidth: CGFloat = 76
 let secondarySidebarWidth: CGFloat = 250
-let collapsedSecondarySidebarWidth: CGFloat = 0
+let collapsedSecondarySidebarWidth: CGFloat = 46
 
 enum AppMotion {
     static let press = Animation.interactiveSpring(response: 0.18, dampingFraction: 0.86, blendDuration: 0.02)

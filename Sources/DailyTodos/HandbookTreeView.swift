@@ -29,6 +29,7 @@ struct HandbookTreeView: View {
     @Binding var selectedItemID: UUID?
     let searchText: String
     let isLoaded: Bool
+    @Binding var isSecondarySidebarCollapsed: Bool
     let onSelect: (HandbookItem) -> Void
     let onCreate: (HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
 
@@ -39,6 +40,11 @@ struct HandbookTreeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            sidebarHeader
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
             // 快记输入栏
             handbookQuickCapture
 
@@ -54,6 +60,30 @@ struct HandbookTreeView: View {
             }
         }
         .background(AppTheme.sidebar)
+    }
+
+    private var sidebarHeader: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("手记")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+
+                Text("想法、机会、资料沉淀")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            SecondarySidebarCollapseButton(isCollapsed: $isSecondarySidebarCollapsed)
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 16)
+        .frame(height: 48)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // 快记输入栏

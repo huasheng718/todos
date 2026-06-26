@@ -3,6 +3,7 @@ import SwiftUI
 struct TodoSidebarView: View {
     @EnvironmentObject private var store: TodoStore
     @Binding var scope: TodoScope
+    @Binding var isCollapsed: Bool
     @State private var calendarMonth = Date()
     @State private var metrics = TodoSidebarMetrics.empty
 
@@ -64,6 +65,8 @@ struct TodoSidebarView: View {
             }
 
             Spacer(minLength: 12)
+
+            SecondarySidebarCollapseButton(isCollapsed: $isCollapsed)
 
             if metrics.overdueCount > 0 {
                 Text("\(metrics.overdueCount)")
