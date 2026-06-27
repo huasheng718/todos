@@ -1,6 +1,6 @@
 {
-  "version": "1.2.13",
-  "build": 42,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.13/AntOrder-1.2.13.pkg",
-  "releaseNotes": "修复手记编辑器输入提示状态，并统一手记与待办的背景色和搜索语义。"
+  "version": "1.2.14",
+  "build": 43,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.14/AntOrder-1.2.14.pkg",
+  "releaseNotes": "凭证入口收敛为单一录入按钮；新增 Chrome CSV、电脑文本文件和粘贴文本导入；录入改为右侧内联表单。"
 }
