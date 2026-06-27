@@ -33,7 +33,13 @@ struct HandbookDetailPanel: View {
         .onChange(of: item) { oldValue, newValue in
             if oldValue?.id == newValue?.id {
                 if let newValue {
-                    syncDraft(with: newValue, preservesLocalTextEdits: isDirty)
+                    syncDraft(
+                        with: newValue,
+                        preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(
+                            isDirty: isDirty,
+                            isEditorFocused: canvasFocus != nil
+                        )
+                    )
                 } else {
                     isDirty = false
                 }
