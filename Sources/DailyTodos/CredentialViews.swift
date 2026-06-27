@@ -797,6 +797,10 @@ struct CredentialDetailPane: View {
     let onReveal: (CredentialItem) -> CredentialSecretPayload?
     let onCopy: (CredentialItem, String) -> Void
     @State private var revealedSecret: CredentialSecretPayload?
+    @State private var breachCheckSummary: CredentialBreachCheckSummary?
+    @State private var isCheckingBreachRisk = false
+    @State private var breachCheckMessage: String?
+    @State private var breachCheckCredentialID: UUID?
     @State private var isDeleteConfirmationPresented = false
 
     var body: some View {
@@ -812,6 +816,7 @@ struct CredentialDetailPane: View {
         .padding(24)
         .onChange(of: item?.id) { _, _ in
             revealedSecret = nil
+            resetBreachCheck()
         }
     }
 
@@ -858,11 +863,19 @@ struct CredentialDetailPane: View {
             CredentialSecretSection(
                 item: item,
                 secret: revealedSecret,
+                breachCheckSummary: breachCheckSummary,
+                isCheckingBreachRisk: isCheckingBreachRisk,
+                breachCheckMessage: breachCheckMessage,
                 onReveal: {
                     revealedSecret = onReveal(item)
+                    resetBreachCheck()
                 },
                 onHide: {
                     revealedSecret = nil
+                    resetBreachCheck()
+                },
+                onCheckRisk: {
+                    checkBreachRisk(for: item)
                 },
                 onCopy: { value in
                     onCopy(item, value)
@@ -908,6 +921,56 @@ struct CredentialDetailPane: View {
             Text("删除后需要通过加密备份恢复。")
         }
     }
+
+    private func resetBreachCheck() {
+        breachCheckSummary = nil
+        breachCheckMessage = nil
+        isCheckingBreachRisk = false
+        breachCheckCredentialID = nil
+    }
+
+    private func checkBreachRisk(for item: CredentialItem) {
+        guard let secret = revealedSecret else {
+            breachCheckMessage = "查看敏感字段后再检查"
+            return
+        }
+
+        isCheckingBreachRisk = true
+        breachCheckMessage = nil
+        breachCheckSummary = nil
+        breachCheckCredentialID = item.id
+
+        let checkingCredentialID = item.id
+        Task {
+            let summary = await CredentialBreachChecker.checkCredential(
+                username: item.username,
+                password: secret.secretValue
+            )
+            await MainActor.run {
+                guard breachCheckCredentialID == checkingCredentialID else {
+                    return
+                }
+                breachCheckSummary = summary
+                breachCheckMessage = summaryMessage(for: summary)
+                isCheckingBreachRisk = false
+            }
+        }
+    }
+
+    private func summaryMessage(for summary: CredentialBreachCheckSummary) -> String {
+        let emailAtRisk = summary.email.isExposed
+        let passwordAtRisk = summary.password.isExposed
+        if emailAtRisk || passwordAtRisk {
+            return "发现泄露风险"
+        }
+        if case .failed = summary.password {
+            return "部分检查失败"
+        }
+        if case .skippedEmpty = summary.password {
+            return "账号检查完成，密码为空未检查"
+        }
+        return "未发现已知泄露"
+    }
 }
 
 struct CredentialInfoRow: View {
@@ -932,8 +995,12 @@ struct CredentialInfoRow: View {
 struct CredentialSecretSection: View {
     let item: CredentialItem
     let secret: CredentialSecretPayload?
+    let breachCheckSummary: CredentialBreachCheckSummary?
+    let isCheckingBreachRisk: Bool
+    let breachCheckMessage: String?
     let onReveal: () -> Void
     let onHide: () -> Void
+    let onCheckRisk: () -> Void
     let onCopy: (String) -> Void
 
     var body: some View {
@@ -949,6 +1016,11 @@ struct CredentialSecretSection: View {
                     }
                     .buttonStyle(.tactilePlain)
                 } else {
+                    Button(action: onCheckRisk) {
+                        Label(isCheckingBreachRisk ? "检查中" : "检查风险", systemImage: "shield.lefthalf.filled")
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .disabled(isCheckingBreachRisk)
                     Button(action: onHide) {
                         Label("隐藏", systemImage: "eye.slash")
                     }
@@ -961,10 +1033,143 @@ struct CredentialSecretSection: View {
                 CredentialSensitiveValue(label: "密码 / Key / Token", value: secret.secretValue, onCopy: onCopy)
                 CredentialSensitiveValue(label: "证书内容", value: secret.certificateBody, onCopy: onCopy)
                 CredentialSensitiveValue(label: "备注", value: secret.notes, onCopy: onCopy)
+                CredentialBreachRiskPanel(
+                    summary: breachCheckSummary,
+                    isChecking: isCheckingBreachRisk,
+                    message: breachCheckMessage
+                )
             } else {
                 CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
                 CredentialHiddenValue()
             }
+        }
+    }
+}
+
+struct CredentialBreachRiskPanel: View {
+    let summary: CredentialBreachCheckSummary?
+    let isChecking: Bool
+    let message: String?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: iconName)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(statusColor)
+                .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(message ?? "可检查邮箱泄露和密码泄露")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(statusColor)
+
+                if let summary {
+                    Text(detailText(for: summary))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("若账号是邮箱，会发送到 XposedOrNot；密码仅发送 SHA-1 前 5 位到 HIBP。")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(panelFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(statusColor.opacity(0.18))
+        )
+        .animation(AppMotion.status, value: isChecking)
+        .animation(AppMotion.status, value: summary)
+    }
+
+    private var iconName: String {
+        if isChecking {
+            return "arrow.triangle.2.circlepath"
+        }
+        if let summary, summary.email.isExposed || summary.password.isExposed {
+            return "exclamationmark.shield.fill"
+        }
+        if let summary, case .failed = summary.password {
+            return "exclamationmark.triangle.fill"
+        }
+        if summary != nil {
+            return "checkmark.shield.fill"
+        }
+        return "shield"
+    }
+
+    private var statusColor: Color {
+        if isChecking {
+            return AppTheme.accent
+        }
+        if let summary, summary.email.isExposed || summary.password.isExposed {
+            return TodoPriority.high.displayColor
+        }
+        if let summary, case .failed = summary.password {
+            return TodoPriority.medium.displayColor
+        }
+        if summary != nil {
+            return AppTheme.success
+        }
+        return AppTheme.mutedInk
+    }
+
+    private var panelFill: Color {
+        if let summary, summary.email.isExposed || summary.password.isExposed {
+            return TodoPriority.high.displayColor.opacity(0.08)
+        }
+        if let summary, case .failed = summary.password {
+            return TodoPriority.medium.displayColor.opacity(0.08)
+        }
+        if summary != nil {
+            return AppTheme.successSoft.opacity(0.70)
+        }
+        return AppTheme.adaptiveWhite(0.58)
+    }
+
+    private func detailText(for summary: CredentialBreachCheckSummary) -> String {
+        [emailText(for: summary.email), passwordText(for: summary.password)]
+            .compactMap { $0 }
+            .joined(separator: "；")
+    }
+
+    private func emailText(for result: CredentialEmailBreachResult) -> String {
+        switch result {
+        case .skippedNotEmail:
+            return "账号不是邮箱，已跳过邮箱检查"
+        case .notFound:
+            return "邮箱未命中 XposedOrNot 已知泄露"
+        case .exposed(_, let breachNames):
+            let preview = breachNames.prefix(3).joined(separator: "、")
+            if preview.isEmpty {
+                return "邮箱出现在已知泄露中"
+            }
+            let moreCount = breachNames.count - min(breachNames.count, 3)
+            return moreCount > 0
+                ? "邮箱出现在 \(preview) 等 \(breachNames.count) 个泄露中"
+                : "邮箱出现在 \(preview) 泄露中"
+        case .failed(let message):
+            return "邮箱检查失败：\(message)"
+        }
+    }
+
+    private func passwordText(for result: CredentialPasswordBreachResult) -> String {
+        switch result {
+        case .skippedEmpty:
+            return "密码为空，已跳过密码检查"
+        case .notFound:
+            return "密码未命中 HIBP 已知泄露"
+        case .exposed(let occurrenceCount):
+            return "密码在 HIBP 中出现 \(occurrenceCount) 次"
+        case .failed(let message):
+            return "密码检查失败：\(message)"
         }
     }
 }

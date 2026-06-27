@@ -22,6 +22,7 @@ struct DailyTodosChecks {
                 try checkLazyStartupLoading()
                 try checkHandbookNotesSnapshotInvalidation()
                 try checkTodoStore()
+                try checkCredentialBreachChecker()
                 try checkCredentialStore()
             }
             try await checkScheduledHandbookLoading()
@@ -38,6 +39,47 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() {
         throw CheckFailure.failed(message)
     }
+}
+
+func checkCredentialBreachChecker() throws {
+    let passwordHash = CredentialBreachChecker.passwordSHA1PrefixSuffix("password")
+    try expect(passwordHash.prefix == "5BAA6", "HIBP 密码检查应使用 SHA-1 前 5 位")
+    try expect(passwordHash.suffix == "1E4C9B93F3F0682250B6CF8331B7EE68FD8", "HIBP 密码检查应在本地保留 SHA-1 后缀")
+
+    let rangeResponse = """
+    003CD215739D7C1B2218670D26F81408237:2
+    1E4C9B93F3F0682250B6CF8331B7EE68FD8:3303003
+    """
+    try expect(
+        CredentialBreachChecker.parsePwnedPasswordRangeResponse(rangeResponse, matching: passwordHash.suffix) == 3_303_003,
+        "HIBP range 响应应识别匹配后缀出现次数"
+    )
+    try expect(
+        CredentialBreachChecker.parsePwnedPasswordRangeResponse(rangeResponse, matching: "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF") == 0,
+        "HIBP range 响应未匹配后缀时应返回 0"
+    )
+
+    try expect(
+        CredentialBreachChecker.emailAddress(in: "账号 user@example.com") == "user@example.com",
+        "风险检查应能从账号字段中识别邮箱"
+    )
+    try expect(
+        CredentialBreachChecker.emailAddress(in: "HT008881") == nil,
+        "非邮箱账号应跳过邮箱泄露检查"
+    )
+
+    let xposedResponse = Data(#"{"breaches":[["Adobe","Dropbox"]]}"#.utf8)
+    let emailResult = try CredentialBreachChecker.parseXposedOrNotEmailResponse(xposedResponse, email: "user@example.com")
+    if case .exposed(let email, let names) = emailResult {
+        try expect(email == "user@example.com", "XposedOrNot 解析应保留被检查邮箱")
+        try expect(names == ["Adobe", "Dropbox"], "XposedOrNot 解析应提取泄露名称")
+    } else {
+        throw CheckFailure.failed("XposedOrNot 命中响应应解析为 exposed")
+    }
+
+    let notFoundResponse = Data(#"{"Error":"Not found"}"#.utf8)
+    let notFoundResult = try CredentialBreachChecker.parseXposedOrNotEmailResponse(notFoundResponse, email: "safe@example.com")
+    try expect(notFoundResult == .notFound(email: "safe@example.com"), "XposedOrNot 未命中响应应解析为 notFound")
 }
 
 func checkHandbookEditorPlaceholderPolicy() throws {
