@@ -1,6 +1,6 @@
 {
-  "version": "1.2.12",
-  "build": 41,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.12/AntOrder-1.2.12.pkg",
-  "releaseNotes": "蚁序 1.2.12 更新：新增凭证应用，用于本地管理个人网站账号、软件账号、密码、API Key、证书和密钥；支持主密码解锁、敏感字段加密存储、显式查看/复制、类型筛选、搜索、加密备份导出与导入。"
+  "version": "1.2.13",
+  "build": 42,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.13/AntOrder-1.2.13.pkg",
+  "releaseNotes": "修复手记编辑器输入提示状态，并统一手记与待办的背景色和搜索语义。"
 }
