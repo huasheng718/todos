@@ -19,6 +19,7 @@ struct DailyTodosChecks {
                 try checkUpdateDownloadProgress()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
+                try checkHandbookEditorSyncPolicy()
                 try checkLazyStartupLoading()
                 try checkHandbookNotesSnapshotInvalidation()
                 try checkTodoStore()
@@ -94,6 +95,21 @@ func checkHandbookEditorPlaceholderPolicy() throws {
     try expect(
         !HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: false, isBodyFocused: false),
         "正文已有内容时不应显示手记输入提示"
+    )
+}
+
+func checkHandbookEditorSyncPolicy() throws {
+    try expect(
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: true, isEditorFocused: false),
+        "同一条手记仍有未保存编辑时，应保留本地标题和正文"
+    )
+    try expect(
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: true),
+        "同一条手记自动保存回写时，即使已清空 dirty 状态，也应保留当前编辑焦点"
+    )
+    try expect(
+        !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
+        "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
     )
 }
 
