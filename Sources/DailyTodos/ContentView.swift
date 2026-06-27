@@ -509,8 +509,6 @@ struct ContentView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             store.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
-            handbookCategory = category
-            handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 
