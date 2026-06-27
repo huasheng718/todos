@@ -413,6 +413,8 @@ struct HandbookModuleView: View {
     @State private var selectedItemID: UUID?
     @State private var selectedItemCache: HandbookItem?
 
+    private let notesListWidth: CGFloat = 368
+
     private var selectedItem: HandbookItem? {
         guard selectedItemID != nil else { return nil }
         return selectedItemCache
@@ -420,39 +422,49 @@ struct HandbookModuleView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // 目录树（左侧）- 替代 HandbookSidebarView + HandbookContentView 的列表
             secondarySidebar {
-                HandbookTreeView(
+                HandbookFolderSidebarView(
                     items: store.handbookItems,
                     selectedCategory: $handbookCategory,
                     selectedFolder: $handbookFolder,
-                    selectedItemID: $selectedItemID,
-                    searchText: debouncedHandbookSearchText,
-                    isLoaded: store.didLoadHandbookItems,
                     isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                    onSelect: { item in
-                        selectedItemID = item.id
-                    },
-                    onCreate: { category, folder, title, body, attachments in
-                        let createdItem = onCreate(category, folder, title, body, attachments)
-                        selectedItemID = createdItem?.id
-                        return createdItem
-                    },
+                    isLoaded: store.didLoadHandbookItems,
                     onMove: { item, category, folder in
                         onUpdate(item, category, folder, item.title, item.body, item.attachments)
-                    },
-                    onDelete: { item in
-                        onDelete(item)
-                        if selectedItemID == item.id {
-                            selectedItemID = nil
-                        }
                     }
                 )
             } collapsed: {
                 CollapsedSecondarySidebarRail(title: "手记", isCollapsed: $isSecondarySidebarCollapsed)
             }
 
-            // 详情面板（右侧）
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.72))
+
+            HandbookNotesListView(
+                items: store.handbookItems,
+                selectedCategory: $handbookCategory,
+                selectedFolder: $handbookFolder,
+                searchText: $handbookSearchText,
+                debouncedSearchText: debouncedHandbookSearchText,
+                selectedItemID: selectedItemID,
+                isLoaded: store.didLoadHandbookItems,
+                onSelect: { item in
+                    selectedItemID = item.id
+                    selectedItemCache = item
+                },
+                onCreateDraft: createDraftHandbookItem,
+                onDelete: { item in
+                    onDelete(item)
+                    if selectedItemID == item.id {
+                        selectedItemID = nil
+                    }
+                }
+            )
+            .frame(width: notesListWidth)
+
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.72))
+
             HandbookDetailPanel(
                 item: selectedItem,
                 onUpdate: { item, category, folder, title, body, attachments in
@@ -473,7 +485,7 @@ struct HandbookModuleView: View {
             .animation(AppMotion.smooth, value: selectedItemID)
         }
         .onAppear {
-            syncSelectedItemCache(from: store.handbookItems)
+            syncSelectedItemCache(from: store.handbookItems, shouldRespectScope: false)
         }
         .onChange(of: selectedItemID) { _, _ in
             syncSelectedItemCache(from: store.handbookItems)
@@ -481,21 +493,73 @@ struct HandbookModuleView: View {
         .onChange(of: store.handbookItems) { _, newItems in
             syncSelectedItemCache(from: newItems)
         }
+        .onChange(of: handbookCategory) { _, _ in
+            syncSelectedItemCache(from: store.handbookItems)
+        }
+        .onChange(of: handbookFolder) { _, _ in
+            syncSelectedItemCache(from: store.handbookItems)
+        }
     }
 
-    private func syncSelectedItemCache(from items: [HandbookItem]) {
+    private func createDraftHandbookItem() {
+        let previousCategory = handbookCategory
+        let previousFolder = handbookFolder
+        let category = handbookCategory ?? .businessRule
+        let folder = handbookFolder?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let createdItem = onCreate(category, folder, "未命名手记", "", []) else { return }
+        handbookCategory = previousCategory
+        handbookFolder = previousFolder
+        selectedItemID = createdItem.id
+        selectedItemCache = createdItem
+    }
+
+    private func syncSelectedItemCache(from items: [HandbookItem], shouldRespectScope: Bool = true) {
+        let scopedItems = shouldRespectScope ? filteredItems(from: items) : items
+
         guard let selectedItemID else {
-            selectedItemCache = nil
+            selectedItemCache = scopedItems.first
+            self.selectedItemID = scopedItems.first?.id
             return
         }
 
-        if let selectedItem = items.first(where: { $0.id == selectedItemID }) {
+        if let selectedItem = scopedItems.first(where: { $0.id == selectedItemID }) {
             selectedItemCache = selectedItem
             return
         }
 
-        selectedItemCache = items.first
-        self.selectedItemID = items.first?.id
+        selectedItemCache = scopedItems.first
+        self.selectedItemID = scopedItems.first?.id
+    }
+
+    private func filteredItems(from items: [HandbookItem]) -> [HandbookItem] {
+        let folder = handbookFolder?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = debouncedHandbookSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+
+        return items.filter { item in
+            if let handbookCategory, item.category != handbookCategory {
+                return false
+            }
+            if let folder {
+                if folder.isEmpty {
+                    guard item.trimmedFolder.isEmpty else { return false }
+                } else if item.trimmedFolder != folder {
+                    return false
+                }
+            }
+            guard !query.isEmpty else { return true }
+            return item.displayTitle.range(of: query, options: options) != nil
+                || item.trimmedBody.range(of: query, options: options) != nil
+                || item.trimmedFolder.range(of: query, options: options) != nil
+                || item.category.title.range(of: query, options: options) != nil
+                || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
+        }
+        .sorted { lhs, rhs in
+            if lhs.updatedAt == rhs.updatedAt {
+                return lhs.createdAt > rhs.createdAt
+            }
+            return lhs.updatedAt > rhs.updatedAt
+        }
     }
 
     @ViewBuilder

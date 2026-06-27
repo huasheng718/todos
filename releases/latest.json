@@ -1,6 +1,6 @@
 {
-  "version": "1.2.7",
-  "build": 36,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.7/AntOrder-1.2.7.pkg",
-  "releaseNotes": "优化手记加载、目录树和编辑体验，修复末级手记选中稳定性。"
+  "version": "1.2.8",
+  "build": 37,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.8/AntOrder-1.2.8.pkg",
+  "releaseNotes": "手记改为类 macOS 备忘录三栏布局：左侧分类与标签、中间按时间分组列表、右侧极简编辑区；优化新建后定位、附件工具栏和空正文切换光标体验。"
 }

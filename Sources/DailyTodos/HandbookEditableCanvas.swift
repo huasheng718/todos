@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct HandbookEditableCanvas: View {
@@ -15,13 +16,14 @@ struct HandbookEditableCanvas: View {
     let attachmentCount: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             TextField("手记标题", text: $title, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 25, weight: .bold))
                 .foregroundStyle(AppTheme.ink)
                 .lineLimit(1...3)
                 .focused(focusedField, equals: .title)
+                .padding(.top, 2)
 
             HandbookDetailMetaBar(
                 category: $category,
@@ -31,27 +33,21 @@ struct HandbookEditableCanvas: View {
                 formattedDate: formattedDate,
                 attachmentCount: attachmentCount
             )
-
-            HandbookEditorToolbar(
-                bodyText: $bodyText,
-                attachments: $attachments,
-                focusedField: focusedField
-            )
-            .padding(.top, 2)
+            .padding(.bottom, 4)
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $bodyText)
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.system(size: 15.5, weight: .regular))
                     .foregroundStyle(AppTheme.ink)
-                    .lineSpacing(5)
+                    .lineSpacing(6)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, -4)
                     .frame(height: editorHeight)
                     .focused(focusedField, equals: .body)
 
                 if isBodyEmpty {
-                    Text("从这里开始写手记，支持 Markdown。")
-                        .font(.system(size: 15, weight: .medium))
+                    Text("从这里开始写手记")
+                        .font(.system(size: 15.5, weight: .regular))
                         .foregroundStyle(AppTheme.mutedInk)
                         .padding(.top, 8)
                         .allowsHitTesting(false)
@@ -115,39 +111,69 @@ struct HandbookEditorToolbar: View {
 
                 toolbarDivider
 
-                Button {
-                    let picked = HandbookAttachmentPicker.pick()
-                    guard !picked.isEmpty else { return }
-                    attachments.append(contentsOf: picked)
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "paperclip")
-                            .font(.system(size: 12, weight: .bold))
-                        Text(attachments.isEmpty ? "附件" : "\(attachments.count)")
-                            .font(.system(size: 12, weight: .bold))
-                            .monospacedDigit()
-                    }
-                    .frame(height: 28)
-                    .padding(.horizontal, 9)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.accent)
-                .background(AppTheme.accentSoft.opacity(0.62), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(AppTheme.accent.opacity(0.18))
-                )
-                .help("添加附件")
+                attachmentMenu
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
         }
         .scrollIndicators(.hidden)
-        .background(AppTheme.adaptiveWhite(0.72), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(toolbarBackground, in: Capsule())
         .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(AppTheme.border.opacity(0.76))
+            Capsule()
+                .stroke(AppTheme.hairline.opacity(AppTheme.isDark ? 0.62 : 0.34))
         )
+    }
+
+    private var attachmentMenu: some View {
+        Menu {
+            Button {
+                let picked = HandbookAttachmentPicker.pick()
+                guard !picked.isEmpty else { return }
+                attachments.append(contentsOf: picked)
+            } label: {
+                Label("添加附件", systemImage: "plus")
+            }
+
+            if !attachments.isEmpty {
+                Divider()
+                ForEach(attachments) { attachment in
+                    Menu {
+                        Button {
+                            open(attachment)
+                        } label: {
+                            Label("打开", systemImage: "arrow.up.right.square")
+                        }
+                        Button(role: .destructive) {
+                            remove(attachment)
+                        } label: {
+                            Label("移除", systemImage: "trash")
+                        }
+                    } label: {
+                        Label(attachment.name, systemImage: attachment.kind.icon)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 13, weight: .semibold))
+                if !attachments.isEmpty {
+                    Text("\(attachments.count)")
+                        .font(.system(size: 12, weight: .bold))
+                        .monospacedDigit()
+                }
+            }
+            .foregroundStyle(attachments.isEmpty ? AppTheme.ink.opacity(0.72) : AppTheme.accent)
+            .frame(minWidth: 28, minHeight: 28)
+            .padding(.horizontal, attachments.isEmpty ? 0 : 7)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("附件")
+    }
+
+    private var toolbarBackground: Color {
+        AppTheme.isDark ? AppTheme.adaptiveWhite(0.12) : Color(red: 0.962, green: 0.962, blue: 0.958)
     }
 
     private var styleMenu: some View {
@@ -185,7 +211,7 @@ struct HandbookEditorToolbar: View {
 
     private var toolbarDivider: some View {
         Rectangle()
-            .fill(AppTheme.hairline.opacity(0.74))
+            .fill(AppTheme.hairline.opacity(0.54))
             .frame(width: 1, height: 20)
             .padding(.horizontal, 1)
     }
@@ -237,6 +263,14 @@ struct HandbookEditorToolbar: View {
     private func focusBody() {
         focusedField.wrappedValue = .body
     }
+
+    private func open(_ attachment: HandbookAttachment) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: attachment.path))
+    }
+
+    private func remove(_ attachment: HandbookAttachment) {
+        attachments.removeAll { $0.id == attachment.id }
+    }
 }
 
 struct HandbookEditorToolButton: View {
@@ -286,15 +320,24 @@ struct HandbookDetailMetaBar: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
+                Text(formattedDate)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .monospacedDigit()
+
                 HandbookCategoryInlineTag(category: category)
                 HandbookFolderInlineTag(folder: $folder)
                 passiveMetaCards
                 Spacer(minLength: 0)
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(formattedDate)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+                    .monospacedDigit()
+                HStack(spacing: 8) {
                     HandbookCategoryInlineTag(category: category)
                     HandbookFolderInlineTag(folder: $folder)
                 }
@@ -304,10 +347,9 @@ struct HandbookDetailMetaBar: View {
     }
 
     private var passiveMetaCards: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             HandbookMetaCard(icon: lengthKind.icon, text: lengthKind.title)
             HandbookMetaCard(icon: "character.cursor.ibeam", text: "\(characterCount) 字")
-            HandbookMetaCard(icon: "calendar", text: formattedDate)
             if attachmentCount > 0 {
                 HandbookMetaCard(icon: "paperclip", text: "\(attachmentCount) 个附件")
             }
@@ -324,15 +366,15 @@ struct HandbookCategoryInlineTag: View {
                 .font(.system(size: 11, weight: .bold))
 
             Text(category.title)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11.5, weight: .semibold))
         }
         .foregroundStyle(category.accentColor)
-        .padding(.horizontal, 9)
-        .frame(height: 25)
+        .padding(.horizontal, 8)
+        .frame(height: 23)
         .background(category.softColor, in: Capsule())
         .overlay(
             Capsule()
-                .stroke(category.accentColor.opacity(0.24))
+                .stroke(category.accentColor.opacity(0.18))
         )
         .fixedSize()
         .help("拖拽左侧手记可修改分类")
@@ -358,7 +400,7 @@ struct HandbookFolderInlineTag: View {
                     .font(.system(size: 11, weight: .bold))
 
                 Text(trimmedFolder.isEmpty ? "未归档" : trimmedFolder)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 11.5, weight: .semibold))
                     .lineLimit(1)
                     .frame(maxWidth: 160, alignment: .leading)
 
@@ -367,12 +409,12 @@ struct HandbookFolderInlineTag: View {
                     .foregroundStyle(AppTheme.mutedInk.opacity(0.78))
             }
             .foregroundStyle(trimmedFolder.isEmpty ? AppTheme.mutedInk : AppTheme.ink.opacity(0.84))
-            .padding(.horizontal, 9)
-            .frame(height: 25)
-            .background(AppTheme.adaptiveWhite(0.70), in: Capsule())
+            .padding(.horizontal, 8)
+            .frame(height: 23)
+            .background(AppTheme.adaptiveWhite(0.42), in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(AppTheme.border.opacity(trimmedFolder.isEmpty ? 0.62 : 0.90))
+                    .stroke(AppTheme.border.opacity(trimmedFolder.isEmpty ? 0.38 : 0.52))
             )
         }
         .buttonStyle(.plain)
@@ -451,17 +493,12 @@ struct HandbookMetaCard: View {
 
     var body: some View {
         Label(text, systemImage: icon)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 11.5, weight: .semibold))
             .monospacedDigit()
-            .foregroundStyle(AppTheme.ink.opacity(0.76))
+            .foregroundStyle(AppTheme.mutedInk)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(height: 25)
-            .background(AppTheme.adaptiveWhite(0.64), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(AppTheme.border.opacity(0.72))
-            )
+            .padding(.horizontal, 2)
+            .frame(height: 23)
             .fixedSize(horizontal: true, vertical: false)
     }
 }

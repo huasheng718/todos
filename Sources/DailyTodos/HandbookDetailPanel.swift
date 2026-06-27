@@ -52,6 +52,24 @@ struct HandbookDetailPanel: View {
 
     private func canvasPanel(for item: HandbookItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+
+                HandbookEditorToolbar(
+                    bodyText: $bodyText,
+                    attachments: $attachments,
+                    focusedField: $canvasFocus
+                )
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 24)
+            .frame(height: 52)
+            .background(AppTheme.workSurface)
+
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.60))
+
             ScrollView {
                 HandbookEditableCanvas(
                     category: $category,
@@ -67,16 +85,13 @@ struct HandbookDetailPanel: View {
                     formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute()),
                     attachmentCount: attachments.count
                 )
+                .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
 
                 if !outline.isEmpty {
                     HandbookOutlineStrip(entries: outline)
+                        .frame(maxWidth: 880, alignment: .leading)
                         .padding(.bottom, 16)
-                }
-
-                if !attachments.isEmpty {
-                    HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
-                        .padding(.top, 8)
                 }
             }
             .onChange(of: attachments) { _, _ in
@@ -95,6 +110,7 @@ struct HandbookDetailPanel: View {
                 submitEdit(for: item, force: true)
             }
             .onChange(of: canvasFocus) { oldValue, newValue in
+                guard !isSyncingDraft else { return }
                 if oldValue != nil && newValue == nil {
                     submitEdit(for: item, force: true)
                 }
@@ -108,8 +124,8 @@ struct HandbookDetailPanel: View {
                 handleBodyTextChange(newValue, for: item)
             }
             .scrollIndicators(.hidden)
-            .padding(.horizontal, 34)
-            .padding(.top, 22)
+            .padding(.horizontal, 38)
+            .padding(.top, 26)
             .padding(.bottom, 28)
         }
     }
@@ -155,6 +171,7 @@ struct HandbookDetailPanel: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
+                if canvasFocus != nil { canvasFocus = nil }
                 if category != item.category { category = item.category }
                 if folder != item.folder { folder = item.folder }
                 if title != item.title { title = item.title }
