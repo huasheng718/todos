@@ -43,6 +43,7 @@ struct ContentView: View {
     private var activeSection: AppSection {
         switch moduleRegistry.activeModuleID {
         case "handbook": return .handbook
+        case "credentials": return .credentials
         default: return .todos
         }
     }
@@ -187,6 +188,8 @@ struct ContentView: View {
                 onUpdate: updateHandbookItem,
                 onDelete: deleteHandbookItem
             )
+        case "credentials":
+            CredentialsModuleView()
         default:
             Text("未知模块")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -219,6 +222,8 @@ struct ContentView: View {
             return dayTitle
         case .handbook:
             return handbookCategory?.title ?? "手记"
+        case .credentials:
+            return "凭证"
         }
     }
 
@@ -231,6 +236,8 @@ struct ContentView: View {
                 return "\(handbookCategory.subtitle)，用于沉淀可复用信息"
             }
             return "收集业务规则、调研、会议和灵感"
+        case .credentials:
+            return "账号、密码、Key 和证书"
         }
     }
 

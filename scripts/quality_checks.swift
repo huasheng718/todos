@@ -22,6 +22,7 @@ struct DailyTodosChecks {
                 try checkLazyStartupLoading()
                 try checkHandbookNotesSnapshotInvalidation()
                 try checkTodoStore()
+                try checkCredentialStore()
             }
             try await checkScheduledHandbookLoading()
             try await checkHandbookLoadingStateConflict()
@@ -502,6 +503,77 @@ func checkTodoStore() throws {
         attachments: olderItem.attachments
     )
     try expect(store.handbookItems.last?.id == item.id, "实时保存正文不应改变手记列表位置")
+}
+
+@MainActor
+func checkCredentialStore() throws {
+    let databaseURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("DailyTodosCredentialChecks-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("credentials.sqlite")
+    try FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+    let store = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
+    store.load()
+    try expect(store.status == .uninitialized, "首次加载凭证库应处于未初始化状态")
+
+    store.initialize(masterPassword: "correct horse battery staple")
+    try expect(store.status == .unlocked, "初始化后应解锁凭证库")
+
+    var draft = CredentialDraft()
+    draft.title = "GitHub"
+    draft.type = .apiKey
+    draft.username = "dev@example.com"
+    draft.serviceURL = "https://github.com"
+    draft.secretValue = "sample-sensitive-token"
+    draft.notes = "恢复码"
+    draft.tagsText = "dev, code"
+
+    guard let item = store.addCredential(draft) else {
+        throw CheckFailure.failed("新增凭证失败：\(store.lastError ?? "unknown")")
+    }
+    try expect(store.credentials.count == 1, "新增凭证后内存列表应有 1 条")
+    try expect(store.credentials(matching: "github", type: nil).count == 1, "凭证应支持标题搜索")
+    try expect(store.credentials(matching: "sample-sensitive-token", type: nil).isEmpty, "敏感字段不应进入普通搜索")
+
+    guard let secret = store.secretPayload(for: item, auditAction: "测试查看") else {
+        throw CheckFailure.failed("解密凭证失败")
+    }
+    try expect(secret.secretValue == "sample-sensitive-token", "正确主密码应解密敏感字段")
+
+    let databaseData = try Data(contentsOf: databaseURL)
+    let databaseText = String(data: databaseData, encoding: .utf8) ?? ""
+    try expect(!databaseText.contains("sample-sensitive-token"), "SQLite 文件不应包含敏感字段明文")
+    try expect(!databaseText.contains("恢复码"), "SQLite 文件不应包含敏感备注明文")
+
+    guard let backup = store.exportBackup(password: "backup password") else {
+        throw CheckFailure.failed("导出凭证备份失败：\(store.lastError ?? "unknown")")
+    }
+    try expect(!backup.contains("sample-sensitive-token"), "备份文件不应包含敏感字段明文")
+
+    store.lock()
+    try expect(store.status == .locked, "手动锁定后状态应为 locked")
+    store.unlock(masterPassword: "wrong password")
+    try expect(store.status == .locked, "错误主密码不应解锁凭证库")
+    store.unlock(masterPassword: "correct horse battery staple")
+    try expect(store.status == .unlocked, "正确主密码应重新解锁凭证库")
+
+    let importedURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("DailyTodosCredentialImportChecks-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("credentials.sqlite")
+    try FileManager.default.createDirectory(at: importedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let importedStore = CredentialStore(storageURL: importedURL, autoLockInterval: 60)
+    importedStore.load()
+    importedStore.importBackup(backup, password: "backup password", replaceExisting: true)
+    importedStore.unlock(masterPassword: "correct horse battery staple")
+    try expect(importedStore.credentials.count == 1, "导入备份后应恢复凭证")
+    guard let importedItem = importedStore.credentials.first,
+          let importedSecret = importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
+        throw CheckFailure.failed("导入备份后无法解密凭证")
+    }
+    try expect(importedSecret.secretValue == "sample-sensitive-token", "导入备份后敏感字段应保持一致")
+
+    store.deleteCredential(item)
+    try expect(store.credentials.isEmpty, "删除凭证后内存列表应为空")
 }
 
 @MainActor
