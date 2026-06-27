@@ -1,239 +1,5 @@
 import SwiftUI
 
-/// 待办模块的导航视图
-/// 替代原来的 TodoSidebarView，但集成到2栏布局中
-struct TodoNavigationView: View {
-    @State private var scope: TodoScope = .dashboard
-    @EnvironmentObject private var store: TodoStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 标题
-            VStack(alignment: .leading, spacing: 4) {
-                Text("待办")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("管理日常待办事项")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-            .padding(.horizontal, 17)
-            .padding(.top, 48)
-            .padding(.bottom, 14)
-
-            SearchField(text: .constant(""))
-
-            // scope 列表
-            VStack(alignment: .leading, spacing: 7) {
-                SidebarSectionLabel("视图")
-
-                // 从现有的 TodoSidebarView 借鉴 scope 按钮
-                TodoScopeButton(scope: .dashboard, isSelected: scope == .dashboard) {
-                    scope = .dashboard
-                }
-                TodoScopeButton(scope: .all, isSelected: scope == .all) {
-                    scope = .all
-                }
-                TodoScopeButton(scope: .waiting, isSelected: scope == .waiting) {
-                    scope = .waiting
-                }
-                TodoScopeButton(scope: .weekly, isSelected: scope == .weekly) {
-                    scope = .weekly
-                }
-            }
-            .padding(.horizontal, 17)
-            .padding(.top, 14)
-
-            Spacer(minLength: 0)
-
-            // 底部统计
-            VStack(alignment: .leading, spacing: 4) {
-                Text("待办")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("共 \(store.todos.count) 条")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-            .padding(.horizontal, 17)
-            .padding(.vertical, 13)
-        }
-        .background(AppTheme.sidebar)
-        .foregroundStyle(AppTheme.ink)
-    }
-}
-
-/// 待办模块的内容视图
-struct TodoContentView: View {
-    @EnvironmentObject private var store: TodoStore
-
-    var body: some View {
-        Text("待办内容视图")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-/// 手记模块的导航视图（框架，目录树会在下一步实现）
-struct HandbookNavigationView: View {
-    @EnvironmentObject private var store: TodoStore
-    @State private var searchText = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("手记")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("业务规则、调研、会议、灵感")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-            .padding(.horizontal, 17)
-            .padding(.top, 48)
-            .padding(.bottom, 14)
-
-            SearchField(text: $searchText)
-
-            // 目录树占位符 - 下一步实现
-            HandbookTreePlaceholder()
-
-            Spacer(minLength: 0)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("手记")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("共 \(store.handbookItems.count) 条沉淀")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-            .padding(.horizontal, 17)
-            .padding(.vertical, 13)
-        }
-        .background(AppTheme.sidebar)
-        .foregroundStyle(AppTheme.ink)
-    }
-}
-
-/// 手记模块的内容视图
-struct HandbookModuleContentView: View {
-    @EnvironmentObject private var store: TodoStore
-
-    var body: some View {
-        Text("手记内容视图")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-/// 手记目录树占位符
-struct HandbookTreePlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            SidebarSectionLabel("目录")
-            Text("目录树即将实现")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-        }
-        .padding(.horizontal, 17)
-        .padding(.top, 14)
-    }
-}
-
-/// TodoScope 切换按钮
-/// 复用现有 DateButton 的视觉风格，作为导航视图中 scope 切换的占位组件
-struct TodoScopeButton: View {
-    let scope: TodoScope
-    let isSelected: Bool
-    let action: () -> Void
-    @State private var isHovered = false
-
-    private var title: String {
-        switch scope {
-        case .dashboard: "今日推进"
-        case .all: "全部待办"
-        case .waiting: "等待反馈"
-        case .weekly: "本周固定"
-        case .day: "按日期"
-        }
-    }
-
-    private var subtitle: String {
-        switch scope {
-        case .dashboard: "风险优先，推进今天"
-        case .all: "完整任务池"
-        case .waiting: "需要别人推进"
-        case .weekly: "重复管理动作"
-        case .day: "选择某天查看"
-        }
-    }
-
-    private var systemImage: String {
-        switch scope {
-        case .dashboard: "target"
-        case .all: "tray.full.fill"
-        case .waiting: "person.2.fill"
-        case .weekly: "repeat"
-        case .day: "calendar"
-        }
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(isSelected ? AppTheme.accentWarm : Color.clear)
-                    .frame(width: 3, height: 30)
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
-                    .frame(width: 18)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(isHovered ? 0.36 : 0.0))
-            )
-        }
-        .buttonStyle(.tactilePlain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onHover { hovered in
-            isHovered = hovered
-        }
-        .animation(AppMotion.hover, value: isHovered)
-        .animation(AppMotion.smooth, value: isSelected)
-    }
-
-    private var navBackground: Color {
-        if isSelected {
-            return AppTheme.sidebarSelected
-        }
-        if isHovered {
-            return AppTheme.adaptiveWhite(0.46)
-        }
-        return Color.clear
-    }
-}
-
 // MARK: - 完整模块视图
 
 /// 待办模块完整视图：导航树 + 详情面板
@@ -412,6 +178,8 @@ struct HandbookModuleView: View {
 
     @State private var selectedItemID: UUID?
     @State private var selectedItemCache: HandbookItem?
+    @State private var visibleHandbookItems: [HandbookItem] = []
+    @State private var hasVisibleHandbookSnapshot = false
 
     private let notesListWidth: CGFloat = 368
 
@@ -452,6 +220,7 @@ struct HandbookModuleView: View {
                     selectedItemID = item.id
                     selectedItemCache = item
                 },
+                onVisibleItemsChange: syncSelectionWithVisibleItems,
                 onCreateDraft: createDraftHandbookItem,
                 onDelete: { item in
                     onDelete(item)
@@ -484,45 +253,54 @@ struct HandbookModuleView: View {
             }
         }
         .onAppear {
-            syncSelectedItemCache(from: store.handbookItems, shouldRespectScope: false)
+            syncSelectedItemCache(from: store.handbookItems)
         }
         .onChange(of: selectedItemID) { _, _ in
-            syncSelectedItemCache(from: store.handbookItems, shouldRespectScope: false)
+            syncSelectedItemCache(from: visibleHandbookItems)
         }
         .onChange(of: store.handbookItems) { _, newItems in
-            syncSelectedItemCache(from: newItems)
+            if !hasVisibleHandbookSnapshot {
+                syncSelectedItemCache(from: newItems)
+            } else {
+                refreshSelectedItemCache(from: newItems)
+            }
         }
         .onChange(of: handbookCategory) { _, _ in
-            syncSelectedItemCache(from: store.handbookItems)
+            syncSelectedItemCache(from: visibleHandbookItems)
         }
         .onChange(of: handbookFolder) { _, _ in
-            syncSelectedItemCache(from: store.handbookItems)
+            syncSelectedItemCache(from: visibleHandbookItems)
+        }
+        .onChange(of: debouncedHandbookSearchText) { _, _ in
+            syncSelectedItemCache(from: visibleHandbookItems)
         }
     }
 
     private func createDraftHandbookItem() {
-        let previousCategory = handbookCategory
-        let previousFolder = handbookFolder
         let category = handbookCategory ?? .businessRule
         let folder = handbookFolder?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard let createdItem = onCreate(category, folder, "未命名手记", "", []) else { return }
-        handbookCategory = previousCategory
-        handbookFolder = previousFolder
         selectedItemID = createdItem.id
         selectedItemCache = createdItem
+        visibleHandbookItems = [createdItem]
+        hasVisibleHandbookSnapshot = true
     }
 
-    private func syncSelectedItemCache(from items: [HandbookItem], shouldRespectScope: Bool = true) {
+    private func syncSelectionWithVisibleItems(_ items: [HandbookItem]) {
+        visibleHandbookItems = items
+        hasVisibleHandbookSnapshot = true
+        syncSelectedItemCache(from: items)
+    }
+
+    private func syncSelectedItemCache(from items: [HandbookItem]) {
         if let selectedItemID {
-            let lookupItems = shouldRespectScope ? filteredItems(from: items) : items
-            if let selectedItem = lookupItems.first(where: { $0.id == selectedItemID }) {
+            if let selectedItem = items.first(where: { $0.id == selectedItemID }) {
                 selectedItemCache = selectedItem
                 return
             }
         }
 
-        let fallbackItems = shouldRespectScope ? filteredItems(from: items) : sortedHandbookItems(items)
-        guard let fallbackItem = fallbackItems.first else {
+        guard let fallbackItem = items.first else {
             selectedItemCache = nil
             self.selectedItemID = nil
             return
@@ -532,44 +310,41 @@ struct HandbookModuleView: View {
         self.selectedItemID = fallbackItem.id
     }
 
-    private func filteredItems(from items: [HandbookItem]) -> [HandbookItem] {
-        let folder = handbookFolder?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let query = debouncedHandbookSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-
-        return items.filter { item in
-            if let handbookCategory, item.category != handbookCategory {
-                return false
-            }
-            if let folder {
-                if folder.isEmpty {
-                    guard item.trimmedFolder.isEmpty else { return false }
-                } else if item.trimmedFolder != folder {
-                    return false
-                }
-            }
-            guard !query.isEmpty else { return true }
-            return item.displayTitle.range(of: query, options: options) != nil
-                || item.trimmedBody.range(of: query, options: options) != nil
-                || item.trimmedFolder.range(of: query, options: options) != nil
-                || item.category.title.range(of: query, options: options) != nil
-                || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
+    private func refreshSelectedItemCache(from items: [HandbookItem]) {
+        guard let selectedItemID,
+              let selectedItem = items.first(where: { $0.id == selectedItemID }) else {
+            syncSelectedItemCache(from: visibleHandbookItems)
+            return
         }
-        .sorted { lhs, rhs in
-            if lhs.updatedAt == rhs.updatedAt {
-                return lhs.createdAt > rhs.createdAt
-            }
-            return lhs.updatedAt > rhs.updatedAt
+        guard isVisibleInCurrentHandbookScope(selectedItem) else {
+            syncSelectedItemCache(from: visibleHandbookItems)
+            return
         }
+        selectedItemCache = selectedItem
     }
 
-    private func sortedHandbookItems(_ items: [HandbookItem]) -> [HandbookItem] {
-        items.sorted { lhs, rhs in
-            if lhs.updatedAt == rhs.updatedAt {
-                return lhs.createdAt > rhs.createdAt
-            }
-            return lhs.updatedAt > rhs.updatedAt
+    private func isVisibleInCurrentHandbookScope(_ item: HandbookItem) -> Bool {
+        if let handbookCategory, item.category != handbookCategory {
+            return false
         }
+
+        if let folder = handbookFolder {
+            let normalizedFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
+            if normalizedFolder.isEmpty {
+                guard item.trimmedFolder.isEmpty else { return false }
+            } else if item.trimmedFolder != normalizedFolder {
+                return false
+            }
+        }
+
+        let query = debouncedHandbookSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        return item.displayTitle.range(of: query, options: options) != nil
+            || item.trimmedBody.range(of: query, options: options) != nil
+            || item.trimmedFolder.range(of: query, options: options) != nil
+            || item.category.title.range(of: query, options: options) != nil
+            || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
     }
 
     @ViewBuilder

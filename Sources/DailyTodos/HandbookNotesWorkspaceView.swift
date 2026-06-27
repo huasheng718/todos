@@ -8,29 +8,8 @@ struct HandbookFolderSidebarView: View {
     let isLoaded: Bool
     let onMove: (HandbookItem, HandbookCategory, String) -> Void
 
-    private var totalCount: Int { items.count }
-
-    private var categoryCounts: [HandbookCategory: Int] {
-        Dictionary(grouping: items, by: \.category)
-            .mapValues(\.count)
-    }
-
-    private var folderCounts: [(name: String, count: Int)] {
-        let counts = Dictionary(
-            grouping: items
-                .filter { item in
-                    selectedCategory == nil || item.category == selectedCategory
-                }
-                .map(\.trimmedFolder)
-                .filter { !$0.isEmpty },
-            by: { $0 }
-        )
-        .mapValues(\.count)
-
-        return counts
-            .map { (name: $0.key, count: $0.value) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
+    @State private var metrics = HandbookSidebarMetrics.empty
+    @State private var metricsTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,6 +37,18 @@ struct HandbookFolderSidebarView: View {
             Spacer(minLength: 0)
         }
         .background(notesSidebarBackground)
+        .onAppear {
+            rebuildMetrics(immediate: true)
+        }
+        .onChange(of: items) { _, _ in
+            rebuildMetrics()
+        }
+        .onChange(of: selectedCategory) { _, _ in
+            rebuildMetrics()
+        }
+        .onDisappear {
+            metricsTask?.cancel()
+        }
     }
 
     private var sidebarHeader: some View {
@@ -90,7 +81,7 @@ struct HandbookFolderSidebarView: View {
             HandbookFolderSidebarRow(
                 title: "全部手记",
                 icon: "folder",
-                count: totalCount,
+                count: metrics.totalCount,
                 accentColor: AppTheme.accent,
                 isSelected: selectedCategory == nil && selectedFolder == nil,
                 onSelect: {
@@ -110,7 +101,7 @@ struct HandbookFolderSidebarView: View {
                 HandbookFolderSidebarRow(
                     title: category.title,
                     icon: "folder",
-                    count: categoryCounts[category, default: 0],
+                    count: metrics.categoryCounts[category, default: 0],
                     accentColor: category.accentColor,
                     isSelected: selectedCategory == category && selectedFolder == nil,
                     onSelect: {
@@ -130,7 +121,7 @@ struct HandbookFolderSidebarView: View {
         VStack(alignment: .leading, spacing: 7) {
             HandbookNotesSectionLabel("标签")
 
-            if folderCounts.isEmpty {
+            if metrics.folders.isEmpty {
                 Text("暂无二级目录")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.secondaryText)
@@ -138,16 +129,16 @@ struct HandbookFolderSidebarView: View {
                     .padding(.vertical, 6)
             } else {
                 FlowLayout(spacing: 6, lineSpacing: 6) {
-                    ForEach(folderCounts, id: \.name) { folder in
+                    ForEach(metrics.folders, id: \.self) { folder in
                         HandbookFolderTagButton(
-                            title: folder.name,
-                            count: folder.count,
-                            isSelected: selectedFolder == folder.name,
+                            title: folder,
+                            count: metrics.folderCounts[folder, default: 0],
+                            isSelected: selectedFolder == folder,
                             onSelect: {
-                                selectedFolder = folder.name
+                                selectedFolder = folder
                             },
                             onDrop: { itemIDs in
-                                moveDraggedItems(itemIDs, category: selectedCategory, folder: folder.name)
+                                moveDraggedItems(itemIDs, category: selectedCategory, folder: folder)
                             }
                         )
                     }
@@ -171,6 +162,31 @@ struct HandbookFolderSidebarView: View {
         AppTheme.isDark ? AppTheme.sidebar : Color(red: 0.944, green: 0.946, blue: 0.950)
     }
 
+    private func rebuildMetrics(immediate: Bool = false) {
+        metricsTask?.cancel()
+        let sourceItems = items
+        let category = selectedCategory
+
+        if immediate || metrics == .empty {
+            metrics = PerformanceMonitor.measure("HandbookFolderSidebar.metrics.sync") {
+                HandbookSidebarMetrics(items: sourceItems, selectedCategory: category)
+            }
+            return
+        }
+
+        metricsTask = Task {
+            try? await Task.sleep(for: .milliseconds(24))
+            guard !Task.isCancelled else { return }
+            let newMetrics = await Task.detached(priority: .userInitiated) {
+                PerformanceMonitor.measure("HandbookFolderSidebar.metrics") {
+                    HandbookSidebarMetrics(items: sourceItems, selectedCategory: category)
+                }
+            }.value
+            guard !Task.isCancelled else { return }
+            metrics = newMetrics
+        }
+    }
+
     private func moveDraggedItems(_ itemIDs: [String], category: HandbookCategory?, folder: String?) -> Bool {
         var didAccept = false
         for idString in itemIDs {
@@ -192,6 +208,7 @@ struct HandbookNotesListView: View {
     let selectedItemID: UUID?
     let isLoaded: Bool
     let onSelect: (HandbookItem) -> Void
+    let onVisibleItemsChange: ([HandbookItem]) -> Void
     let onCreateDraft: () -> Void
     let onDelete: (HandbookItem) -> Void
 
@@ -219,13 +236,16 @@ struct HandbookNotesListView: View {
             rebuildSnapshot()
         }
         .onChange(of: selectedCategory) { _, _ in
-            rebuildSnapshot(immediate: true)
+            rebuildSnapshot()
         }
         .onChange(of: selectedFolder) { _, _ in
-            rebuildSnapshot(immediate: true)
+            rebuildSnapshot()
         }
         .onChange(of: debouncedSearchText) { _, _ in
             rebuildSnapshot()
+        }
+        .onDisappear {
+            snapshotTask?.cancel()
         }
     }
 
@@ -350,6 +370,7 @@ struct HandbookNotesListView: View {
         let applySnapshot: @MainActor (HandbookNotesListSnapshot) -> Void = { newSnapshot in
             let previousCount = snapshot.visibleCount
             snapshot = newSnapshot
+            onVisibleItemsChange(newSnapshot.visibleItems)
             if previousCount != newSnapshot.visibleCount {
                 PerformanceMonitor.event("HandbookNotesListSnapshot.count", detail: "\(newSnapshot.visibleCount)")
             }
@@ -365,6 +386,7 @@ struct HandbookNotesListView: View {
                 )
             }
             snapshot = newSnapshot
+            onVisibleItemsChange(newSnapshot.visibleItems)
             return
         }
 

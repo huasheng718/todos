@@ -12,6 +12,7 @@ struct NotesReadOnlyRow: View {
     @State private var summaryTrace: AITrace?
     @State private var showsSummaryTrace = false
     @State private var isSummarizing = false
+    @State private var summarySourceSignature = ""
 
     init(title: String = "", notes: String, isDone: Bool = false) {
         self.title = title
@@ -102,21 +103,35 @@ struct NotesReadOnlyRow: View {
         .animation(AppMotion.reveal, value: summary)
         .animation(AppMotion.reveal, value: summaryError)
         .animation(AppMotion.reveal, value: isSummarizing)
+        .onChange(of: summaryInputSignature) { _, newValue in
+            guard summarySourceSignature != newValue else { return }
+            summary = nil
+            summaryError = nil
+            summaryTrace = nil
+            showsSummaryTrace = false
+        }
     }
 
     private var displayText: String {
         notes.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var summaryInputSignature: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines) + "\u{1F}" + displayText
+    }
+
     private func summarizeNotes() {
         guard aiSettings.canUseAI, !isSummarizing else { return }
         isSummarizing = true
+        summary = nil
         summaryError = nil
         summaryTrace = nil
+        showsSummaryTrace = false
         let configuration = aiSettings.configuration
         let apiKey = aiSettings.apiKey
         let sourceTitle = title
         let sourceNotes = displayText
+        let sourceSignature = summaryInputSignature
         Task {
             do {
                 let result = try await AIClient.shared.summarizeNotes(
@@ -128,11 +143,13 @@ struct NotesReadOnlyRow: View {
                 await MainActor.run {
                     summary = result.content
                     summaryTrace = result.trace
+                    summarySourceSignature = sourceSignature
                     isSummarizing = false
                 }
             } catch {
                 await MainActor.run {
                     summaryError = error.localizedDescription
+                    summarySourceSignature = sourceSignature
                     isSummarizing = false
                 }
             }

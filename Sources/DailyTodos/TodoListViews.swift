@@ -102,7 +102,8 @@ struct TodoListView: View {
     }
 
     private var dashboardList: some View {
-        LazyVStack(spacing: 6) {
+        let groups = dashboardGroups
+        return LazyVStack(spacing: 6) {
             if aiSettings.canUseAI {
                 DailySuggestionCard(
                     suggestion: dailySuggestion,
@@ -114,9 +115,9 @@ struct TodoListView: View {
                 )
             }
 
-            DashboardSummaryStrip(groups: dashboardGroups)
+            DashboardSummaryStrip(groups: groups)
 
-            ForEach(dashboardGroups) { group in
+            ForEach(groups) { group in
                 if !group.todos.isEmpty {
                     WorkSection(group: group) { todo in
                         TodoFlowRow(
@@ -132,7 +133,7 @@ struct TodoListView: View {
                 }
             }
 
-            if dashboardGroups.allSatisfy({ $0.todos.isEmpty }) {
+            if groups.allSatisfy({ $0.todos.isEmpty }) {
                 EmptyTodoHint(isAllScope: false)
             }
         }
@@ -248,12 +249,13 @@ struct TodoListView: View {
     }
 
     private var boardList: some View {
-        ScrollView(.horizontal) {
+        let columns = boardGroups
+        return ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(TodoProgress.allCases) { progress in
                     TodoBoardColumn(
                         progress: progress,
-                        todos: todos.filter { $0.progress == progress },
+                        todos: columns[progress, default: []],
                         onToggle: onToggle,
                         onProgressChange: onProgressChange,
                         onUpdate: onUpdate,
@@ -287,20 +289,24 @@ struct TodoListView: View {
     private var dashboardGroups: [WorkSectionGroup] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let activeTodos = todos.filter { $0.progress != .done }
-        let overdue = activeTodos.filter { todo in
-            todo.progress != .waiting && calendar.startOfDay(for: todo.date) < today
+        var overdue: [TodoItem] = []
+        var todayItems: [TodoItem] = []
+        var waiting: [TodoItem] = []
+        var weekly: [TodoItem] = []
+
+        for todo in todos where todo.progress != .done {
+            let day = calendar.startOfDay(for: todo.date)
+            if todo.progress == .waiting {
+                waiting.append(todo)
+            } else if day < today {
+                overdue.append(todo)
+            } else if calendar.isDateInToday(todo.date) {
+                todayItems.append(todo)
+            } else if todo.isWeekly {
+                weekly.append(todo)
+            }
         }
-        let todayItems = activeTodos.filter { todo in
-            todo.progress != .waiting && calendar.isDateInToday(todo.date)
-        }
-        let waiting = activeTodos.filter { $0.progress == .waiting }
-        let weekly = activeTodos.filter { todo in
-            todo.isWeekly
-                && !overdue.contains(where: { $0.id == todo.id })
-                && !todayItems.contains(where: { $0.id == todo.id })
-                && !waiting.contains(where: { $0.id == todo.id })
-        }
+
         return [
             WorkSectionGroup(kind: .overdue, todos: overdue),
             WorkSectionGroup(kind: .today, todos: todayItems),
@@ -317,6 +323,10 @@ struct TodoListView: View {
             .sorted { $0.date > $1.date }
     }
 
+    private var boardGroups: [TodoProgress: [TodoItem]] {
+        Dictionary(grouping: todos, by: \.progress)
+    }
+
     private var matrixColumns: [GridItem] {
         [
             GridItem(.flexible(minimum: 300), spacing: 12),
@@ -325,9 +335,9 @@ struct TodoListView: View {
     }
 
     private var matrixGroups: [TodoMatrixGroup] {
-        let activeTodos = todos.filter { $0.progress != .done }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
+        var buckets = Dictionary(uniqueKeysWithValues: TodoMatrixKind.allCases.map { ($0, [TodoItem]()) })
 
         func isImportant(_ todo: TodoItem) -> Bool {
             todo.priority == .high
@@ -337,20 +347,23 @@ struct TodoListView: View {
             todo.progress != .waiting && calendar.startOfDay(for: todo.date) <= today
         }
 
-        return TodoMatrixKind.allCases.map { kind in
-            let filtered = activeTodos.filter { todo in
-                switch kind {
-                case .urgentImportant:
-                    return isUrgent(todo) && isImportant(todo)
-                case .importantNotUrgent:
-                    return !isUrgent(todo) && isImportant(todo)
-                case .urgentNotImportant:
-                    return isUrgent(todo) && !isImportant(todo)
-                case .notUrgentNotImportant:
-                    return !isUrgent(todo) && !isImportant(todo)
-                }
+        for todo in todos where todo.progress != .done {
+            let kind: TodoMatrixKind
+            switch (isUrgent(todo), isImportant(todo)) {
+            case (true, true):
+                kind = .urgentImportant
+            case (false, true):
+                kind = .importantNotUrgent
+            case (true, false):
+                kind = .urgentNotImportant
+            case (false, false):
+                kind = .notUrgentNotImportant
             }
-            return TodoMatrixGroup(kind: kind, todos: filtered)
+            buckets[kind, default: []].append(todo)
+        }
+
+        return TodoMatrixKind.allCases.map { kind in
+            TodoMatrixGroup(kind: kind, todos: buckets[kind, default: []])
         }
     }
 }
