@@ -319,9 +319,7 @@ struct ModuleSwitcherBar: View {
                         isSelected: activeModuleID == module.id
                     ) {
                         PerformanceMonitor.event("ModuleSwitcher.activate", detail: module.id)
-                        withAnimation(AppMotion.sectionSwitch) {
-                            activeModuleID = module.id
-                        }
+                        activeModuleID = module.id
                     }
                 }
             }
@@ -342,7 +340,7 @@ struct ModuleSwitcherBar: View {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(AppTheme.mutedInk)
+                            .foregroundStyle(AppTheme.secondaryText)
                             .frame(width: 36, height: 36)
                             .background(AppTheme.adaptiveWhite(0.34), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
@@ -377,7 +375,7 @@ struct ModuleButton: View {
             VStack(spacing: 4) {
                 Image(systemName: module.icon)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.secondaryText)
                     .frame(width: 36, height: 36)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -386,7 +384,7 @@ struct ModuleButton: View {
 
                 Text(module.displayName)
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.secondaryText)
                     .lineLimit(1)
             }
             .frame(width: primarySidebarWidth - 16)
@@ -394,9 +392,7 @@ struct ModuleButton: View {
         .buttonStyle(.plain)
         .help(module.displayName)
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
-                isHovered = hovered
-            }
+            isHovered = hovered
         }
     }
 }

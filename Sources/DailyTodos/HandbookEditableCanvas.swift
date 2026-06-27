@@ -48,7 +48,7 @@ struct HandbookEditableCanvas: View {
                 if isBodyEmpty {
                     Text("从这里开始写手记")
                         .font(.system(size: 15.5, weight: .regular))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(AppTheme.secondaryText)
                         .padding(.top, 8)
                         .allowsHitTesting(false)
                 }
@@ -163,7 +163,7 @@ struct HandbookEditorToolbar: View {
                         .monospacedDigit()
                 }
             }
-            .foregroundStyle(attachments.isEmpty ? AppTheme.ink.opacity(0.72) : AppTheme.accent)
+            .foregroundStyle(attachments.isEmpty ? AppTheme.secondaryText : AppTheme.accent)
             .frame(minWidth: 28, minHeight: 28)
             .padding(.horizontal, attachments.isEmpty ? 0 : 7)
         }
@@ -200,7 +200,7 @@ struct HandbookEditorToolbar: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))
             }
-            .foregroundStyle(AppTheme.ink.opacity(0.86))
+            .foregroundStyle(AppTheme.ink)
             .frame(height: 28)
             .padding(.horizontal, 8)
         }

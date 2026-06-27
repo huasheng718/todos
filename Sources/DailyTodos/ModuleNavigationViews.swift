@@ -482,13 +482,12 @@ struct HandbookModuleView: View {
                 AppTheme.workSurface
                     .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
             }
-            .animation(AppMotion.smooth, value: selectedItemID)
         }
         .onAppear {
             syncSelectedItemCache(from: store.handbookItems, shouldRespectScope: false)
         }
         .onChange(of: selectedItemID) { _, _ in
-            syncSelectedItemCache(from: store.handbookItems)
+            syncSelectedItemCache(from: store.handbookItems, shouldRespectScope: false)
         }
         .onChange(of: store.handbookItems) { _, newItems in
             syncSelectedItemCache(from: newItems)
@@ -514,21 +513,23 @@ struct HandbookModuleView: View {
     }
 
     private func syncSelectedItemCache(from items: [HandbookItem], shouldRespectScope: Bool = true) {
-        let scopedItems = shouldRespectScope ? filteredItems(from: items) : items
+        if let selectedItemID {
+            let lookupItems = shouldRespectScope ? filteredItems(from: items) : items
+            if let selectedItem = lookupItems.first(where: { $0.id == selectedItemID }) {
+                selectedItemCache = selectedItem
+                return
+            }
+        }
 
-        guard let selectedItemID else {
-            selectedItemCache = scopedItems.first
-            self.selectedItemID = scopedItems.first?.id
+        let fallbackItems = shouldRespectScope ? filteredItems(from: items) : sortedHandbookItems(items)
+        guard let fallbackItem = fallbackItems.first else {
+            selectedItemCache = nil
+            self.selectedItemID = nil
             return
         }
 
-        if let selectedItem = scopedItems.first(where: { $0.id == selectedItemID }) {
-            selectedItemCache = selectedItem
-            return
-        }
-
-        selectedItemCache = scopedItems.first
-        self.selectedItemID = scopedItems.first?.id
+        selectedItemCache = fallbackItem
+        self.selectedItemID = fallbackItem.id
     }
 
     private func filteredItems(from items: [HandbookItem]) -> [HandbookItem] {
@@ -555,6 +556,15 @@ struct HandbookModuleView: View {
                 || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
         }
         .sorted { lhs, rhs in
+            if lhs.updatedAt == rhs.updatedAt {
+                return lhs.createdAt > rhs.createdAt
+            }
+            return lhs.updatedAt > rhs.updatedAt
+        }
+    }
+
+    private func sortedHandbookItems(_ items: [HandbookItem]) -> [HandbookItem] {
+        items.sorted { lhs, rhs in
             if lhs.updatedAt == rhs.updatedAt {
                 return lhs.createdAt > rhs.createdAt
             }
