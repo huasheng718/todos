@@ -572,8 +572,39 @@ func checkCredentialStore() throws {
     }
     try expect(importedSecret.secretValue == "sample-sensitive-token", "导入备份后敏感字段应保持一致")
 
+    let looseText = """
+    星邦（剪叉）
+    http://s3.rootcloud.com/
+    账号：HT008881
+    密码：sample-login-password
+    """
+    guard let parsedDraft = CredentialImportParser.draft(fromLooseText: looseText) else {
+        throw CheckFailure.failed("文本凭证解析失败")
+    }
+    try expect(parsedDraft.title == "星邦（剪叉）", "文本解析应识别第一行为标题")
+    try expect(parsedDraft.serviceURL == "http://s3.rootcloud.com/", "文本解析应识别 URL")
+    try expect(parsedDraft.username == "HT008881", "文本解析应识别账号")
+    try expect(parsedDraft.secretValue == "sample-login-password", "文本解析应识别密码")
+
+    let chromeCSV = """
+    name,url,username,password,note
+    RootCloud,http://s3.rootcloud.com/,HT008881,sample-login-password,剪叉车平台
+    """
+    let chromeDrafts = CredentialImportParser.drafts(fromChromeCSV: chromeCSV)
+    try expect(chromeDrafts.count == 1, "Chrome CSV 应解析 1 条凭证")
+    try expect(chromeDrafts[0].title == "RootCloud", "Chrome CSV 应识别 name")
+    try expect(chromeDrafts[0].username == "HT008881", "Chrome CSV 应识别 username")
+    try expect(chromeDrafts[0].secretValue == "sample-login-password", "Chrome CSV 应识别 password")
+
+    let importedCount = store.importCredentials([parsedDraft] + chromeDrafts)
+    try expect(importedCount == 2, "批量导入应返回成功条数")
+    try expect(store.credentials.count == 3, "批量导入后凭证数量应增加")
+    let databaseDataAfterImport = try Data(contentsOf: databaseURL)
+    let databaseTextAfterImport = String(data: databaseDataAfterImport, encoding: .utf8) ?? ""
+    try expect(!databaseTextAfterImport.contains("sample-login-password"), "导入凭证后 SQLite 不应包含密码明文")
+
     store.deleteCredential(item)
-    try expect(store.credentials.isEmpty, "删除凭证后内存列表应为空")
+    try expect(!store.credentials.contains { $0.id == item.id }, "删除凭证后内存列表不应保留该条")
 }
 
 @MainActor

@@ -197,6 +197,21 @@ final class CredentialStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    func importCredentials(_ drafts: [CredentialDraft]) -> Int {
+        guard !drafts.isEmpty else { return 0 }
+        var importedCount = 0
+        for draft in drafts {
+            if addCredential(draft) != nil {
+                importedCount += 1
+            }
+        }
+        if importedCount > 0 {
+            recordAudit(action: "导入凭证", credentialTitle: "\(importedCount) 条")
+        }
+        return importedCount
+    }
+
     func deleteCredential(_ item: CredentialItem) {
         guard activeKey() != nil else { return }
         do {

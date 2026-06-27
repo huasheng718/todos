@@ -1,19 +1,30 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
+
+enum CredentialEditorMode: Equatable {
+    case create(CredentialDraft)
+    case edit(CredentialItem, CredentialDraft)
+}
+
+struct CredentialNotice: Equatable {
+    let message: String
+    let isError: Bool
+}
 
 struct CredentialsModuleView: View {
     @EnvironmentObject private var credentialStore: CredentialStore
     @State private var searchText = ""
     @State private var selectedType: CredentialType?
     @State private var selectedCredentialID: UUID?
-    @State private var isEditorPresented = false
-    @State private var editingCredential: CredentialItem?
+    @State private var editorMode: CredentialEditorMode?
     @State private var isBackupSheetPresented = false
     @State private var isResetConfirmationPresented = false
     @State private var unlockPassword = ""
     @State private var newMasterPassword = ""
     @State private var repeatedMasterPassword = ""
     @State private var initializationError: String?
+    @State private var importNotice: CredentialNotice?
 
     private var visibleCredentials: [CredentialItem] {
         credentialStore.credentials(matching: searchText, type: selectedType)
@@ -30,8 +41,7 @@ struct CredentialsModuleView: View {
                 searchText: $searchText,
                 selectedType: $selectedType,
                 credentials: credentialStore.credentials,
-                status: credentialStore.status,
-                onNew: openNewCredential
+                status: credentialStore.status
             )
             .frame(width: 280)
             .background(AppTheme.sidebar)
@@ -40,7 +50,9 @@ struct CredentialsModuleView: View {
                 CredentialTopBar(
                     status: credentialStore.status,
                     count: credentialStore.credentials.count,
+                    notice: importNotice,
                     onNew: openNewCredential,
+                    onImportFile: importCredentialsFromFile,
                     onLock: { credentialStore.lock() },
                     onBackup: { isBackupSheetPresented = true }
                 )
@@ -56,25 +68,6 @@ struct CredentialsModuleView: View {
         }
         .onAppear {
             credentialStore.load()
-        }
-        .sheet(isPresented: $isEditorPresented) {
-            CredentialEditorSheet(
-                item: editingCredential,
-                initialSecret: editingCredential.flatMap { credentialStore.secretPayload(for: $0, auditAction: "编辑凭证") },
-                onSave: { item, draft in
-                    if let item {
-                        credentialStore.updateCredential(item, draft: draft)
-                    } else {
-                        credentialStore.addCredential(draft)
-                    }
-                    isEditorPresented = false
-                    editingCredential = nil
-                },
-                onCancel: {
-                    isEditorPresented = false
-                    editingCredential = nil
-                }
-            )
         }
         .sheet(isPresented: $isBackupSheetPresented) {
             CredentialBackupSheet()
@@ -121,14 +114,16 @@ struct CredentialsModuleView: View {
             CredentialWorkArea(
                 credentials: visibleCredentials,
                 selectedCredential: selectedCredential,
+                editorMode: $editorMode,
                 error: credentialStore.lastError,
                 auditEvents: credentialStore.auditEvents,
                 onSelect: { selectedCredentialID = $0.id },
-                onNew: openNewCredential,
                 onEdit: { item in
-                    editingCredential = item
-                    isEditorPresented = true
+                    let secret = credentialStore.secretPayload(for: item, auditAction: "编辑凭证") ?? .empty
+                    editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
                 },
+                onSaveDraft: saveEditorDraft,
+                onImportDrafts: importDrafts,
                 onDelete: { item in
                     credentialStore.deleteCredential(item)
                     if selectedCredentialID == item.id {
@@ -159,8 +154,56 @@ struct CredentialsModuleView: View {
 
     private func openNewCredential() {
         guard credentialStore.isUnlocked else { return }
-        editingCredential = nil
-        isEditorPresented = true
+        importNotice = nil
+        editorMode = .create(CredentialDraft())
+    }
+
+    private func saveEditorDraft(_ mode: CredentialEditorMode) {
+        switch mode {
+        case .create(let draft):
+            if let item = credentialStore.addCredential(draft) {
+                selectedCredentialID = item.id
+                editorMode = nil
+            }
+        case .edit(let item, let draft):
+            credentialStore.updateCredential(item, draft: draft)
+            selectedCredentialID = item.id
+            editorMode = nil
+        }
+    }
+
+    private func importDrafts(_ drafts: [CredentialDraft]) {
+        guard !drafts.isEmpty else {
+            importNotice = CredentialNotice(message: "没有识别到可导入的凭证", isError: true)
+            return
+        }
+        let importedCount = credentialStore.importCredentials(drafts)
+        if importedCount > 0 {
+            selectedCredentialID = credentialStore.credentials.first?.id
+            editorMode = nil
+            importNotice = CredentialNotice(message: "已导入 \(importedCount) 条凭证", isError: false)
+        } else {
+            importNotice = CredentialNotice(message: credentialStore.lastError ?? "导入失败，请检查文件内容", isError: true)
+        }
+    }
+
+    private func importCredentialsFromFile() {
+        guard credentialStore.isUnlocked else { return }
+        importNotice = nil
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.commaSeparatedText, .plainText, .text]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                let text = try String(contentsOf: url, encoding: .utf8)
+                let drafts = CredentialImportParser.drafts(fromFileText: text)
+                importDrafts(drafts)
+            } catch {
+                importNotice = CredentialNotice(message: "读取文件失败：\(error.localizedDescription)", isError: true)
+            }
+        }
     }
 
     private func copyToClipboard(_ value: String) {
@@ -179,7 +222,6 @@ struct CredentialSidebar: View {
     @Binding var selectedType: CredentialType?
     let credentials: [CredentialItem]
     let status: CredentialVaultStatus
-    let onNew: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -227,18 +269,6 @@ struct CredentialSidebar: View {
             Spacer(minLength: 0)
 
             VStack(alignment: .leading, spacing: 8) {
-                if status == .unlocked {
-                    Button(action: onNew) {
-                        Label("新建凭证", systemImage: "plus")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.tactilePlain)
-                }
-
                 Text(statusText)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
@@ -323,7 +353,9 @@ struct CredentialTypeButton: View {
 struct CredentialTopBar: View {
     let status: CredentialVaultStatus
     let count: Int
+    let notice: CredentialNotice?
     let onNew: () -> Void
+    let onImportFile: () -> Void
     let onLock: () -> Void
     let onBackup: () -> Void
 
@@ -341,14 +373,30 @@ struct CredentialTopBar: View {
             Spacer()
 
             if status == .unlocked {
-                Button(action: onBackup) {
-                    Label("备份", systemImage: "externaldrive.badge.checkmark")
+                if let notice {
+                    Label(notice.message, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(notice.isError ? TodoPriority.high.displayColor : AppTheme.accent)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 260, alignment: .trailing)
+                }
+
+                Menu {
+                    Button(action: onImportFile) {
+                        Label("从 Chrome 导出的 CSV 或电脑文本导入", systemImage: "folder")
+                    }
+                    Button(action: onBackup) {
+                        Label("加密备份 / 恢复", systemImage: "externaldrive.badge.checkmark")
+                    }
+                } label: {
+                    Label("导入", systemImage: "tray.and.arrow.down")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(height: 30)
                         .padding(.horizontal, 10)
                         .background(AppTheme.adaptiveWhite(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-                .buttonStyle(.tactilePlain)
+                .menuStyle(.borderlessButton)
 
                 Button(action: onLock) {
                     Image(systemName: "lock.fill")
@@ -360,7 +408,7 @@ struct CredentialTopBar: View {
                 .help("锁定凭证库")
 
                 Button(action: onNew) {
-                    Label("新建", systemImage: "plus")
+                    Label("录入", systemImage: "square.and.pencil")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(height: 30)
@@ -509,11 +557,13 @@ struct CredentialAccessPanel<Content: View>: View {
 struct CredentialWorkArea: View {
     let credentials: [CredentialItem]
     let selectedCredential: CredentialItem?
+    @Binding var editorMode: CredentialEditorMode?
     let error: String?
     let auditEvents: [CredentialAuditEvent]
     let onSelect: (CredentialItem) -> Void
-    let onNew: () -> Void
     let onEdit: (CredentialItem) -> Void
+    let onSaveDraft: (CredentialEditorMode) -> Void
+    let onImportDrafts: ([CredentialDraft]) -> Void
     let onDelete: (CredentialItem) -> Void
     let onReveal: (CredentialItem) -> CredentialSecretPayload?
     let onCopy: (CredentialItem, String) -> Void
@@ -523,24 +573,38 @@ struct CredentialWorkArea: View {
             CredentialListPane(
                 credentials: credentials,
                 selectedCredential: selectedCredential,
-                onSelect: onSelect,
-                onNew: onNew
+                onSelect: { item in
+                    editorMode = nil
+                    onSelect(item)
+                }
             )
             .frame(width: 360)
 
             Divider()
                 .overlay(AppTheme.hairline)
 
-            CredentialDetailPane(
-                item: selectedCredential,
-                error: error,
-                auditEvents: auditEvents,
-                onEdit: onEdit,
-                onDelete: onDelete,
-                onReveal: onReveal,
-                onCopy: onCopy
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let editorMode {
+                CredentialInlineEditor(
+                    mode: editorMode,
+                    error: error,
+                    onChange: { self.editorMode = $0 },
+                    onSave: onSaveDraft,
+                    onCancel: { self.editorMode = nil },
+                    onImportDrafts: onImportDrafts
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                CredentialDetailPane(
+                    item: selectedCredential,
+                    error: error,
+                    auditEvents: auditEvents,
+                    onEdit: onEdit,
+                    onDelete: onDelete,
+                    onReveal: onReveal,
+                    onCopy: onCopy
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 }
@@ -549,7 +613,6 @@ struct CredentialListPane: View {
     let credentials: [CredentialItem]
     let selectedCredential: CredentialItem?
     let onSelect: (CredentialItem) -> Void
-    let onNew: () -> Void
 
     var body: some View {
         ScrollView {
@@ -562,10 +625,6 @@ struct CredentialListPane: View {
                         Text("没有匹配的凭证")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(AppTheme.ink)
-                        Button(action: onNew) {
-                            Label("新建凭证", systemImage: "plus")
-                        }
-                        .buttonStyle(.tactilePlain)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 80)
@@ -912,72 +971,252 @@ struct CredentialAuditPanel: View {
     }
 }
 
-struct CredentialEditorSheet: View {
-    let item: CredentialItem?
-    let initialSecret: CredentialSecretPayload?
-    let onSave: (CredentialItem?, CredentialDraft) -> Void
+struct CredentialInlineEditor: View {
+    let mode: CredentialEditorMode
+    let error: String?
+    let onChange: (CredentialEditorMode) -> Void
+    let onSave: (CredentialEditorMode) -> Void
     let onCancel: () -> Void
-    @State private var draft: CredentialDraft
+    let onImportDrafts: ([CredentialDraft]) -> Void
+    @State private var pastedText = ""
+    @State private var parseMessage: String?
 
-    init(
-        item: CredentialItem?,
-        initialSecret: CredentialSecretPayload?,
-        onSave: @escaping (CredentialItem?, CredentialDraft) -> Void,
-        onCancel: @escaping () -> Void
-    ) {
-        self.item = item
-        self.initialSecret = initialSecret
-        self.onSave = onSave
-        self.onCancel = onCancel
-        _draft = State(initialValue: item.map { CredentialDraft(item: $0, secret: initialSecret ?? .empty) } ?? CredentialDraft())
+    private var draft: CredentialDraft {
+        switch mode {
+        case .create(let draft), .edit(_, let draft):
+            return draft
+        }
+    }
+
+    private var title: String {
+        switch mode {
+        case .create: "录入凭证"
+        case .edit: "编辑凭证"
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item == nil ? "新建凭证" : "编辑凭证")
-                        .font(.system(size: 20, weight: .bold))
-                    Text("敏感字段会加密后保存，普通搜索不会索引明文。")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(width: 46, height: 46)
+                        .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                        Text("直接粘贴账号文本，或在下方字段里补充。保存后敏感字段加密落库。")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                    }
+
+                    Spacer()
                 }
+
+                pasteCard
+                formCard
+
+                if let error {
+                    Text(error)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(TodoPriority.high.displayColor)
+                }
+
+                HStack {
+                    Button("取消", action: onCancel)
+                        .buttonStyle(.borderless)
+                    Spacer()
+                    Button {
+                        onSave(mode)
+                    } label: {
+                        Label("保存凭证", systemImage: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(draft.cleanedTitle.isEmpty)
+                }
+            }
+            .padding(24)
+        }
+        .background(AppTheme.workSurface)
+    }
+
+    private var pasteCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("粘贴解析")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
                 Spacer()
+                Button {
+                    parsePastedText()
+                } label: {
+                    Label("填入表单", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.tactilePlain)
+                .disabled(pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            Form {
-                TextField("标题", text: $draft.title)
-                Picker("类型", selection: $draft.type) {
+            TextEditor(text: $pastedText)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .frame(minHeight: 116)
+                .padding(8)
+                .background(AppTheme.adaptiveWhite(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppTheme.hairline.opacity(0.72))
+                )
+
+            Text(parseMessageText)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(parseMessageColor)
+        }
+        .padding(14)
+        .background(AppTheme.panel.opacity(0.86), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.border.opacity(0.78))
+        )
+    }
+
+    private var formCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("字段")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+
+            CredentialDraftFields(
+                draft: draft,
+                onChange: updateDraft
+            )
+        }
+        .padding(14)
+        .background(AppTheme.panel.opacity(0.86), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.border.opacity(0.78))
+        )
+    }
+
+    private func parsePastedText() {
+        let drafts = CredentialImportParser.drafts(fromLooseText: pastedText)
+        guard let first = drafts.first else {
+            parseMessage = "错误：没有识别到可导入的凭证"
+            return
+        }
+
+        if drafts.count == 1 {
+            updateDraft(first)
+            parseMessage = "已填入表单"
+        } else {
+            onImportDrafts(drafts)
+            parseMessage = "已导入 \(drafts.count) 条凭证"
+        }
+    }
+
+    private var parseMessageText: String {
+        parseMessage ?? "支持：标题、网址、账号：xxx、密码：xxx。多条记录可用空行分隔。"
+    }
+
+    private var parseMessageColor: Color {
+        guard let parseMessage else { return AppTheme.mutedInk }
+        return parseMessage.hasPrefix("错误：") ? TodoPriority.high.displayColor : AppTheme.accent
+    }
+
+    private func updateDraft(_ draft: CredentialDraft) {
+        switch mode {
+        case .create:
+            onChange(.create(draft))
+        case .edit(let item, _):
+            onChange(.edit(item, draft))
+        }
+    }
+}
+
+struct CredentialDraftFields: View {
+    let draft: CredentialDraft
+    let onChange: (CredentialDraft) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CredentialField(label: "标题") {
+                TextField("如：星邦（剪叉）", text: binding(\.title))
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            CredentialField(label: "类型") {
+                Picker("", selection: binding(\.type)) {
                     ForEach(CredentialType.allCases) { type in
                         Label(type.title, systemImage: type.icon).tag(type)
                     }
                 }
-                TextField("账号", text: $draft.username)
-                TextField("网址 / 服务", text: $draft.serviceURL)
-                SecureField("密码 / Key / Token", text: $draft.secretValue)
-                TextField("证书内容", text: $draft.certificateBody, axis: .vertical)
-                    .lineLimit(3...6)
-                TextField("备注", text: $draft.notes, axis: .vertical)
-                    .lineLimit(3...6)
-                TextField("标签，用逗号分隔", text: $draft.tagsText)
+                .labelsHidden()
+                .frame(maxWidth: 220, alignment: .leading)
             }
-            .formStyle(.grouped)
 
-            HStack {
-                Spacer()
-                Button("取消", action: onCancel)
-                    .buttonStyle(.borderless)
-                Button("保存") {
-                    onSave(item, draft)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(draft.cleanedTitle.isEmpty)
+            CredentialField(label: "账号") {
+                TextField("账号 / 用户名", text: binding(\.username))
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            CredentialField(label: "网址/服务") {
+                TextField("https://example.com", text: binding(\.serviceURL))
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            CredentialField(label: "密码/Key") {
+                SecureField("密码、Token、Key", text: binding(\.secretValue))
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            CredentialField(label: "证书内容") {
+                TextField("证书、license 或其他凭证", text: binding(\.certificateBody), axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            CredentialField(label: "备注") {
+                TextField("补充说明", text: binding(\.notes), axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            CredentialField(label: "标签") {
+                TextField("用逗号分隔", text: binding(\.tagsText))
+                    .textFieldStyle(.roundedBorder)
             }
         }
-        .padding(22)
-        .frame(width: 560)
-        .frame(minHeight: 560)
-        .background(AppTheme.workSurface)
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<CredentialDraft, Value>) -> Binding<Value> {
+        Binding(
+            get: { draft[keyPath: keyPath] },
+            set: { value in
+                var updated = draft
+                updated[keyPath: keyPath] = value
+                onChange(updated)
+            }
+        )
+    }
+}
+
+struct CredentialField<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .frame(width: 82, alignment: .leading)
+                .padding(.top, 7)
+            content()
+        }
     }
 }
 
