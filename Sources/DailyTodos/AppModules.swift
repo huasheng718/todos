@@ -19,6 +19,7 @@ struct HandbookAppModule: AppModule {
 }
 
 /// 凭证微应用模块
+@MainActor
 struct CredentialsAppModule: AppModule {
     let id = "credentials"
     let displayName = "凭证"
