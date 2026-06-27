@@ -882,14 +882,6 @@ struct CredentialDetailPane: View {
                 }
             )
 
-            VStack(alignment: .leading, spacing: 10) {
-                CredentialInfoRow(label: "网址/服务", value: item.serviceURL.isEmpty ? "--" : item.serviceURL)
-                CredentialInfoRow(label: "更新时间", value: item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
-            }
-
-            Divider()
-                .overlay(AppTheme.hairline)
-
             if !item.tags.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(item.tags, id: \.self) { tag in
@@ -973,25 +965,6 @@ struct CredentialDetailPane: View {
     }
 }
 
-struct CredentialInfoRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(label)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 76, alignment: .leading)
-            Text(value)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.ink)
-                .textSelection(.enabled)
-            Spacer()
-        }
-    }
-}
-
 struct CredentialSecretSection: View {
     let item: CredentialItem
     let secret: CredentialSecretPayload?
@@ -1029,18 +1002,22 @@ struct CredentialSecretSection: View {
             }
 
             if let secret {
-                CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
-                CredentialSensitiveValue(label: "密码 / Key / Token", value: secret.secretValue, onCopy: onCopy)
-                CredentialSensitiveValue(label: "证书内容", value: secret.certificateBody, onCopy: onCopy)
-                CredentialSensitiveValue(label: "备注", value: secret.notes, onCopy: onCopy)
+                CredentialDetailFieldsTable(
+                    item: item,
+                    secret: secret,
+                    onCopy: onCopy
+                )
                 CredentialBreachRiskPanel(
                     summary: breachCheckSummary,
                     isChecking: isCheckingBreachRisk,
                     message: breachCheckMessage
                 )
             } else {
-                CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
-                CredentialHiddenValue()
+                CredentialDetailFieldsTable(
+                    item: item,
+                    secret: nil,
+                    onCopy: onCopy
+                )
             }
         }
     }
@@ -1174,59 +1151,168 @@ struct CredentialBreachRiskPanel: View {
     }
 }
 
-struct CredentialHiddenValue: View {
+struct CredentialDetailFieldsTable: View {
+    let item: CredentialItem
+    let secret: CredentialSecretPayload?
+    let onCopy: (String) -> Void
+
     var body: some View {
-        HStack(spacing: 8) {
-            Text("密码 / Key / Token")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 112, alignment: .leading)
-            Image(systemName: "lock.fill")
-                .font(.system(size: 11, weight: .bold))
-            Text("已隐藏，点击查看后显示")
-                .font(.system(size: 13, weight: .semibold))
+        VStack(spacing: 0) {
+            CredentialCopyableFieldRow(label: "账号", value: item.username, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "密码", value: secret?.secretValue ?? "", isPassword: true, isLocked: secret == nil, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "网站", value: item.serviceURL, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "修改日期", value: item.updatedAt.formatted(.dateTime.year().month().day()), canCopy: false, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "备注", value: secret?.notes ?? "", canCopy: secret != nil, showsDivider: false, onCopy: onCopy)
         }
-        .foregroundStyle(AppTheme.mutedInk)
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.adaptiveWhite(0.62), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 14)
+        .background(AppTheme.adaptiveWhite(0.54), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.48))
+        )
     }
 }
 
-struct CredentialSensitiveValue: View {
+struct CredentialCopyableFieldRow: View {
     let label: String
     let value: String
+    var isPassword = false
+    var isLocked = false
+    var canCopy = true
+    var showsDivider = true
     let onCopy: (String) -> Void
-    var isSensitive = true
+    @State private var isHovered = false
+    @State private var didCopy = false
+
+    private var displayValue: String {
+        if isLocked {
+            return "已隐藏"
+        }
+        if value.isEmpty {
+            return "--"
+        }
+        if isPassword && !isHovered && !didCopy {
+            return String(repeating: "•", count: min(max(value.count, 8), 18))
+        }
+        return value
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(label)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 112, alignment: .leading)
-                .padding(.top, 7)
-            Text(value.isEmpty ? "--" : value)
-                .font(.system(size: 12, weight: .medium, design: isSensitive ? .monospaced : .default))
-                .foregroundStyle(AppTheme.ink)
-                .textSelection(.enabled)
-                .lineLimit(4)
-                .padding(.vertical, 7)
-            Spacer()
-            Button {
-                onCopy(value)
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .frame(width: 28, height: 26)
+        Group {
+            if isCopyEnabled {
+                Button {
+                    copyValue()
+                } label: {
+                    rowContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                rowContent
             }
-            .buttonStyle(.tactilePlain)
-            .disabled(value.isEmpty)
-            .help("复制")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 3)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.adaptiveWhite(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onHover { hovered in
+            if isPassword {
+                withAnimation(AppMotion.hover) {
+                    isHovered = hovered
+                }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showsDivider {
+                Rectangle()
+                    .fill(AppTheme.hairline.opacity(0.62))
+                    .frame(height: 1)
+            }
+        }
+        .help(helpText)
+        .animation(AppMotion.status, value: didCopy)
+    }
+
+    private var isCopyEnabled: Bool {
+        canCopy && !value.isEmpty && !isLocked
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text(label)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(labelColor)
+                .frame(width: 82, alignment: .leading)
+
+            Spacer(minLength: 24)
+
+            valueView
+        }
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var valueView: some View {
+        if didCopy {
+            HStack(spacing: 7) {
+                Image(systemName: "doc.on.doc.fill")
+                    .font(.system(size: 13, weight: .bold))
+                Text("已拷贝")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.mutedInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(AppTheme.adaptiveWhite(0.82), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            if isPassword {
+                Text(displayValue)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.disabled)
+            } else {
+                Text(displayValue)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private var labelColor: Color {
+        isLocked ? AppTheme.mutedInk.opacity(0.82) : AppTheme.ink
+    }
+
+    private var valueColor: Color {
+        if isLocked || value.isEmpty {
+            return AppTheme.mutedInk.opacity(0.82)
+        }
+        return AppTheme.mutedInk
+    }
+
+    private var helpText: String {
+        if isLocked {
+            return "点击查看后可复制"
+        }
+        if !isCopyEnabled {
+            return ""
+        }
+        if isPassword {
+            return "悬停显示，点击复制"
+        }
+        return "点击复制"
+    }
+
+    private func copyValue() {
+        guard isCopyEnabled else {
+            return
+        }
+        onCopy(value)
+        didCopy = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            didCopy = false
+        }
     }
 }
 
