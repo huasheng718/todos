@@ -253,26 +253,23 @@ struct HandbookModuleView: View {
             }
         }
         .onAppear {
-            syncSelectedItemCache(from: store.handbookItems)
-        }
-        .onChange(of: selectedItemID) { _, _ in
-            syncSelectedItemCache(from: visibleHandbookItems)
+            reconcileSelection(with: store.handbookItems, fallbackToFirst: true)
         }
         .onChange(of: store.handbookItems) { _, newItems in
             if !hasVisibleHandbookSnapshot {
-                syncSelectedItemCache(from: newItems)
+                reconcileSelection(with: newItems, fallbackToFirst: true)
             } else {
                 refreshSelectedItemCache(from: newItems)
             }
         }
         .onChange(of: handbookCategory) { _, _ in
-            syncSelectedItemCache(from: visibleHandbookItems)
+            resetVisibleHandbookSnapshot()
         }
         .onChange(of: handbookFolder) { _, _ in
-            syncSelectedItemCache(from: visibleHandbookItems)
+            resetVisibleHandbookSnapshot()
         }
         .onChange(of: debouncedHandbookSearchText) { _, _ in
-            syncSelectedItemCache(from: visibleHandbookItems)
+            resetVisibleHandbookSnapshot()
         }
     }
 
@@ -289,13 +286,22 @@ struct HandbookModuleView: View {
     private func syncSelectionWithVisibleItems(_ items: [HandbookItem]) {
         visibleHandbookItems = items
         hasVisibleHandbookSnapshot = true
-        syncSelectedItemCache(from: items)
+        reconcileSelection(with: items, fallbackToFirst: true)
     }
 
-    private func syncSelectedItemCache(from items: [HandbookItem]) {
+    private func resetVisibleHandbookSnapshot() {
+        visibleHandbookItems = []
+        hasVisibleHandbookSnapshot = false
+    }
+
+    private func reconcileSelection(with items: [HandbookItem], fallbackToFirst: Bool) {
         if let selectedItemID {
             if let selectedItem = items.first(where: { $0.id == selectedItemID }) {
                 selectedItemCache = selectedItem
+                return
+            }
+
+            if !fallbackToFirst {
                 return
             }
         }
@@ -313,11 +319,11 @@ struct HandbookModuleView: View {
     private func refreshSelectedItemCache(from items: [HandbookItem]) {
         guard let selectedItemID,
               let selectedItem = items.first(where: { $0.id == selectedItemID }) else {
-            syncSelectedItemCache(from: visibleHandbookItems)
+            reconcileSelection(with: visibleHandbookItems, fallbackToFirst: hasVisibleHandbookSnapshot)
             return
         }
         guard isVisibleInCurrentHandbookScope(selectedItem) else {
-            syncSelectedItemCache(from: visibleHandbookItems)
+            reconcileSelection(with: visibleHandbookItems, fallbackToFirst: hasVisibleHandbookSnapshot)
             return
         }
         selectedItemCache = selectedItem

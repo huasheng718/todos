@@ -258,7 +258,7 @@ struct HandbookNotesListView: View {
                         .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
 
-                    Text("\(snapshot.visibleCount) 个备忘录")
+                    Text("\(snapshot.visibleCount) 条手记")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.secondaryText)
                         .monospacedDigit()

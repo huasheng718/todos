@@ -78,7 +78,6 @@ struct HandbookDetailPanel: View {
                     bodyText: $bodyText,
                     attachments: $attachments,
                     focusedField: $canvasFocus,
-                    lengthKind: bodyMetrics.lengthKind,
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
                     isBodyEmpty: bodyMetrics.isEmpty,
