@@ -13,7 +13,7 @@ struct HandbookSidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header
-                    SearchField(text: $searchText)
+                    SearchField(text: $searchText, placeholder: "搜索标题或正文")
                     categoryList(metrics: metrics)
                     folderList(metrics: metrics)
                 }
