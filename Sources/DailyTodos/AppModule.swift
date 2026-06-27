@@ -29,7 +29,8 @@ final class AppModuleRegistry: ObservableObject {
         // 注册内置模块
         let modules: [any AppModule] = [
             TodoAppModule(),
-            HandbookAppModule()
+            HandbookAppModule(),
+            CredentialsAppModule()
         ]
 
         // 从 UserDefaults 读取已安装模块

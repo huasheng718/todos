@@ -17,3 +17,20 @@ struct HandbookAppModule: AppModule {
     let isDefault = true
     let description = "沉淀业务规则、调研、会议纪要和灵感"
 }
+
+/// 凭证微应用模块
+struct CredentialsAppModule: AppModule {
+    let id = "credentials"
+    let displayName = "凭证"
+    let icon = "key.fill"
+    let isDefault = true
+    let description = "管理个人账号、密码、Key 和证书"
+
+    var navigationView: AnyView {
+        AnyView(EmptyView())
+    }
+
+    var contentView: AnyView {
+        AnyView(CredentialsModuleView())
+    }
+}

@@ -3,6 +3,7 @@ import Foundation
 enum AppSection: String, CaseIterable, Identifiable {
     case todos
     case handbook
+    case credentials
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .todos: "待办"
         case .handbook: "手记"
+        case .credentials: "凭证"
         }
     }
 
@@ -17,6 +19,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .todos: "checklist"
         case .handbook: "book.closed"
+        case .credentials: "key.fill"
         }
     }
 }
