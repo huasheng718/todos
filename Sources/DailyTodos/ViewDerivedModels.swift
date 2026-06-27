@@ -254,7 +254,8 @@ struct HandbookTreeSnapshotKey: Equatable {
                     item.category.rawValue,
                     item.trimmedFolder,
                     item.displayTitle,
-                    "\(item.attachments.count)"
+                    "\(item.attachments.count)",
+                    Self.timestampSignature(item.updatedAt)
                 ].joined(separator: "\u{1F}")
             }
             .joined(separator: "|")
@@ -265,15 +266,18 @@ struct HandbookTreeSnapshotKey: Equatable {
                 .map { item in
                     [
                         item.id.uuidString,
-                        item.displayTitle,
-                        item.trimmedBody,
                         item.trimmedFolder,
-                        item.category.rawValue
+                        item.category.rawValue,
+                        Self.timestampSignature(item.updatedAt)
                     ].joined(separator: "\u{1F}")
                 }
                 .joined(separator: "|")
         }
         self.query = query
+    }
+
+    private static func timestampSignature(_ date: Date) -> String {
+        String(Int64(date.timeIntervalSince1970 * 1000))
     }
 }
 
@@ -340,12 +344,14 @@ struct HandbookNotesListSnapshot: Equatable {
     static let empty = HandbookNotesListSnapshot()
 
     let groups: [HandbookNotesGroup]
+    let visibleItems: [HandbookItem]
     let scopedCount: Int
     let visibleCount: Int
     let cacheKey: HandbookNotesListSnapshotKey
 
     private init() {
         self.groups = []
+        self.visibleItems = []
         self.scopedCount = 0
         self.visibleCount = 0
         self.cacheKey = .empty
@@ -381,6 +387,7 @@ struct HandbookNotesListSnapshot: Equatable {
 
         self.scopedCount = scoped.count
         self.visibleCount = visible.count
+        self.visibleItems = visible
         self.groups = Self.groupRows(visible)
     }
 
@@ -475,12 +482,9 @@ struct HandbookNotesListSnapshotKey: Equatable {
                     item.id.uuidString,
                     item.category.rawValue,
                     item.trimmedFolder,
-                    String(item.trimmedTitle.count),
-                    Self.stableTextSignature(item.trimmedTitle),
-                    String(item.trimmedBody.count),
-                    Self.stableTextSignature(item.trimmedBody),
+                    item.trimmedTitle,
                     "\(item.attachments.count)",
-                    String(item.updatedAt.timeIntervalSince1970)
+                    Self.timestampSignature(item.updatedAt)
                 ].joined(separator: "\u{1F}")
             }
             .joined(separator: "\u{1E}")
@@ -489,11 +493,8 @@ struct HandbookNotesListSnapshotKey: Equatable {
         self.searchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func stableTextSignature(_ text: String) -> String {
-        let hash = text.utf8.reduce(UInt64(14_695_981_039_346_656_037)) { partial, byte in
-            (partial ^ UInt64(byte)) &* 1_099_511_628_211
-        }
-        return String(hash, radix: 16)
+    private static func timestampSignature(_ date: Date) -> String {
+        String(Int64(date.timeIntervalSince1970 * 1000))
     }
 }
 
@@ -525,12 +526,11 @@ struct HandbookNotesRowData: Equatable, Identifiable {
     }
 
     private static func previewText(for item: HandbookItem) -> String {
-        let body = item.trimmedBody
-            .split(whereSeparator: \.isNewline)
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty } ?? ""
-        if !body.isEmpty {
-            return String(body.prefix(80))
+        for line in item.body.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let body = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !body.isEmpty {
+                return String(body.prefix(80))
+            }
         }
         return item.category.subtitle
     }

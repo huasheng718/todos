@@ -34,6 +34,8 @@ struct ContentView: View {
     @State private var scrollTargetTodoID: TodoItem.ID?
     @State private var todoFeedback: TodoActionFeedback?
     @State private var filteredTodosCache: [TodoItem] = []
+    @State private var todoSearchDebounceTask: Task<Void, Never>?
+    @State private var handbookSearchDebounceTask: Task<Void, Never>?
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
@@ -108,9 +110,10 @@ struct ContentView: View {
         }
         .onChange(of: moduleRegistry.activeModuleID) { _, newValue in
             guard newValue == "handbook" else { return }
-            store.loadHandbookItemsIfNeeded()
+            store.scheduleLoadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
+            moduleRegistry.activate("todos")
             focusQuickCapture()
         }
         .onChange(of: searchText) { _, newValue in
@@ -325,6 +328,8 @@ struct ContentView: View {
         if aiSettings.canUseAI {
             isCreatingTodo = true
             aiStatusMessage = "AI 正在解析快记..."
+            quickCaptureAITrace = nil
+            quickCaptureAIResultSummary = nil
             Task {
                 do {
                     let aiResult = try await AIClient.shared.parseQuickInput(
@@ -500,7 +505,9 @@ struct ContentView: View {
         body: String,
         attachments: [HandbookAttachment]
     ) {
-        withAnimation(AppMotion.smooth) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
             store.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
             handbookCategory = category
             handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -681,8 +688,10 @@ struct ContentView: View {
     }
 
     private func debounceSearchText(_ value: String) {
-        Task {
+        todoSearchDebounceTask?.cancel()
+        todoSearchDebounceTask = Task {
             try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 if searchText == value {
                     withAnimation(AppMotion.quick) {
@@ -694,8 +703,10 @@ struct ContentView: View {
     }
 
     private func debounceHandbookSearchText(_ value: String) {
-        Task {
+        handbookSearchDebounceTask?.cancel()
+        handbookSearchDebounceTask = Task {
             try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 if handbookSearchText == value {
                     withAnimation(AppMotion.quick) {

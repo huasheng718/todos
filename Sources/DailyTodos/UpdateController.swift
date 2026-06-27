@@ -21,9 +21,11 @@ final class UpdateController: ObservableObject {
     private let minimumVisibleCheckDuration: TimeInterval = 0.35
     private let manifestClient = UpdateManifestClient()
     private var monitorTask: Task<Void, Never>?
+    private var downloadTask: Task<Void, Never>?
 
     deinit {
         monitorTask?.cancel()
+        downloadTask?.cancel()
     }
 
     var hasAvailableUpdate: Bool {
@@ -67,8 +69,15 @@ final class UpdateController: ObservableObject {
             return
         }
 
-        Task {
-            await downloadAndOpenInstaller(for: availableUpdate)
+        startDownload(for: availableUpdate)
+    }
+
+    private func startDownload(for manifest: AppUpdateManifest) {
+        guard !isDownloading else { return }
+        isDownloading = true
+        downloadProgress = AppUpdateDownloadProgress(receivedBytes: 0, expectedBytes: nil)
+        downloadTask = Task {
+            await downloadAndOpenInstaller(for: manifest)
         }
     }
 
@@ -143,9 +152,7 @@ final class UpdateController: ObservableObject {
         alert.addButton(withTitle: "稍后")
 
         if alert.runModal() == .alertFirstButtonReturn {
-            Task {
-                await downloadAndOpenInstaller(for: manifest)
-            }
+            startDownload(for: manifest)
         }
     }
 
@@ -174,11 +181,12 @@ final class UpdateController: ObservableObject {
     private func downloadAndOpenInstaller(for manifest: AppUpdateManifest) async {
         guard let url = URL(string: manifest.downloadURL) else {
             statusMessage = "下载地址无效"
+            downloadProgress = nil
+            isDownloading = false
+            downloadTask = nil
             return
         }
 
-        isDownloading = true
-        downloadProgress = AppUpdateDownloadProgress(receivedBytes: 0, expectedBytes: nil)
         do {
             statusMessage = "正在下载 v\(manifest.version)... 0%"
             let installerURL = try installerDestinationURL(for: manifest)
@@ -193,6 +201,7 @@ final class UpdateController: ObservableObject {
             statusMessage = "下载更新失败：\(error.localizedDescription)"
         }
         isDownloading = false
+        downloadTask = nil
     }
 
     private func installerDestinationURL(for manifest: AppUpdateManifest) throws -> URL {
@@ -233,61 +242,139 @@ struct UpdateDownloadClient {
         to destinationURL: URL,
         progressHandler: @escaping @MainActor (AppUpdateDownloadProgress) -> Void
     ) async throws {
-        let (bytes, response) = try await URLSession.shared.bytes(from: url)
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let downloader = UpdatePackageDownloader(progressHandler: progressHandler)
+        let (downloadedURL, response) = try await downloader.download(request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode) else {
+            try? FileManager.default.removeItem(at: downloadedURL)
             let statusCode = (response as? HTTPURLResponse)?.statusCode
             throw UpdateError.invalidResponse(statusCode: statusCode)
         }
 
         let expectedBytes = response.expectedContentLength > 0 ? response.expectedContentLength : nil
-        let temporaryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AntOrder-\(UUID().uuidString).pkg")
-        FileManager.default.createFile(atPath: temporaryURL.path, contents: nil)
-
-        var didMoveToDestination = false
+        let receivedBytes = max(Self.fileSize(at: downloadedURL), expectedBytes ?? 0)
+        await progressHandler(AppUpdateDownloadProgress(receivedBytes: receivedBytes, expectedBytes: expectedBytes))
+        try? FileManager.default.removeItem(at: destinationURL)
         do {
-            let fileHandle = try FileHandle(forWritingTo: temporaryURL)
-            defer {
-                try? fileHandle.close()
-            }
-
-            var receivedBytes: Int64 = 0
-            var lastReportedBytes: Int64 = 0
-            var buffer = Data()
-            buffer.reserveCapacity(64 * 1024)
-
-            await progressHandler(AppUpdateDownloadProgress(receivedBytes: 0, expectedBytes: expectedBytes))
-
-            for try await byte in bytes {
-                buffer.append(byte)
-                receivedBytes += 1
-
-                if buffer.count >= 64 * 1024 {
-                    try fileHandle.write(contentsOf: buffer)
-                    buffer.removeAll(keepingCapacity: true)
-                }
-
-                if receivedBytes - lastReportedBytes >= 128 * 1024 || receivedBytes == expectedBytes {
-                    lastReportedBytes = receivedBytes
-                    await progressHandler(AppUpdateDownloadProgress(receivedBytes: receivedBytes, expectedBytes: expectedBytes))
-                }
-            }
-
-            if !buffer.isEmpty {
-                try fileHandle.write(contentsOf: buffer)
-            }
-
-            await progressHandler(AppUpdateDownloadProgress(receivedBytes: receivedBytes, expectedBytes: expectedBytes))
-            try? FileManager.default.removeItem(at: destinationURL)
-            try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
-            didMoveToDestination = true
+            try FileManager.default.moveItem(at: downloadedURL, to: destinationURL)
         } catch {
-            if !didMoveToDestination {
-                try? FileManager.default.removeItem(at: temporaryURL)
-            }
+            try? FileManager.default.removeItem(at: downloadedURL)
             throw error
         }
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+        if let fileSize = values?.fileSize {
+            return Int64(fileSize)
+        }
+        if let allocatedSize = values?.totalFileAllocatedSize {
+            return Int64(allocatedSize)
+        }
+        return 0
+    }
+}
+
+private final class UpdatePackageDownloader: NSObject, @unchecked Sendable, URLSessionDownloadDelegate {
+    private let progressHandler: @MainActor (AppUpdateDownloadProgress) -> Void
+    private let stateLock = NSLock()
+    private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
+    private var session: URLSession?
+
+    init(progressHandler: @escaping @MainActor (AppUpdateDownloadProgress) -> Void) {
+        self.progressHandler = progressHandler
+    }
+
+    func download(_ request: URLRequest) async throws -> (URL, URLResponse) {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+                configuration.timeoutIntervalForRequest = 30
+                configuration.timeoutIntervalForResource = 20 * 60
+                configuration.urlCache = nil
+                let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+                stateLock.lock()
+                self.continuation = continuation
+                self.session = session
+                stateLock.unlock()
+                Task { await progressHandler(AppUpdateDownloadProgress(receivedBytes: 0, expectedBytes: nil)) }
+                session.downloadTask(with: request).resume()
+            }
+        } onCancel: {
+            cancel()
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let expectedBytes = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
+        Task {
+            await progressHandler(
+                AppUpdateDownloadProgress(
+                    receivedBytes: totalBytesWritten,
+                    expectedBytes: expectedBytes
+                )
+            )
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let response = downloadTask.response else {
+            finish(.failure(UpdateError.invalidResponse(statusCode: nil)))
+            return
+        }
+        let temporaryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AntOrder-\(UUID().uuidString).pkg")
+        do {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            try FileManager.default.moveItem(at: location, to: temporaryURL)
+            finish(.success((temporaryURL, response)))
+        } catch {
+            finish(.failure(error))
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        if let error {
+            finish(.failure(error))
+        }
+    }
+
+    private func finish(_ result: Result<(URL, URLResponse), Error>) {
+        stateLock.lock()
+        let continuation = self.continuation
+        let session = self.session
+        self.continuation = nil
+        self.session = nil
+        stateLock.unlock()
+
+        guard let continuation else { return }
+        session?.finishTasksAndInvalidate()
+        continuation.resume(with: result)
+    }
+
+    private func cancel() {
+        stateLock.lock()
+        let session = self.session
+        self.session = nil
+        stateLock.unlock()
+        session?.invalidateAndCancel()
     }
 }
 

@@ -149,6 +149,7 @@ final class AISettingsStore: ObservableObject {
     @Published private(set) var connectionMessage: String?
     @Published private(set) var connectionSucceeded = false
     @Published private(set) var lastTrace: AITrace?
+    private var apiKeyPersistTask: Task<Void, Never>?
 
     init() {
         configuration = Self.loadConfiguration()
@@ -166,6 +167,7 @@ final class AISettingsStore: ObservableObject {
         isTestingConnection = true
         connectionMessage = nil
         connectionSucceeded = false
+        lastTrace = nil
         var currentConfiguration = configuration
         currentConfiguration.isEnabled = true
         let currentAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -193,6 +195,7 @@ final class AISettingsStore: ObservableObject {
     }
 
     func saveAPIKey() throws {
+        apiKeyPersistTask?.cancel()
         let cleaned = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleaned.isEmpty {
             try LocalAISecretStore.deleteAPIKey()
@@ -202,7 +205,20 @@ final class AISettingsStore: ObservableObject {
     }
 
     private func persistAPIKeyQuietly() {
-        try? saveAPIKey()
+        apiKeyPersistTask?.cancel()
+        let key = apiKey
+        apiKeyPersistTask = Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            try? await Task.detached(priority: .utility) {
+                let cleaned = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                if cleaned.isEmpty {
+                    try LocalAISecretStore.deleteAPIKey()
+                } else {
+                    try LocalAISecretStore.saveAPIKey(cleaned)
+                }
+            }.value
+        }
     }
 
     private func save() {
