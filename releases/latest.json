@@ -1,6 +1,6 @@
 {
-  "version": "1.2.17",
-  "build": 46,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.17/AntOrder-1.2.17.pkg",
-  "releaseNotes": "修复手记自动保存回写时编辑器焦点丢失，避免输入停顿或切换输入法后中断输入。"
+  "version": "1.2.18",
+  "build": 47,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.18/AntOrder-1.2.18.pkg",
+  "releaseNotes": "凭证详情支持密码默认隐藏、悬停显示和点击复制；凭证导入、备份恢复、主密码验证统一迁入设置。"
 }
