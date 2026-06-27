@@ -1,36 +1,24 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 enum CredentialEditorMode: Equatable {
     case create(CredentialDraft)
     case edit(CredentialItem, CredentialDraft)
 }
 
-enum CredentialSecurityMode: Equatable {
-    case enableMasterPassword
-}
-
-struct CredentialNotice: Equatable {
-    let message: String
-    let isError: Bool
-}
-
 struct CredentialsModuleView: View {
     @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
     @State private var searchText = ""
     @State private var selectedType: CredentialType?
     @State private var selectedCredentialID: UUID?
     @State private var editorMode: CredentialEditorMode?
-    @State private var isBackupSheetPresented = false
     @State private var isResetConfirmationPresented = false
     @State private var unlockPassword = ""
     @State private var newMasterPassword = ""
     @State private var repeatedMasterPassword = ""
     @State private var initializationError: String?
-    @State private var importNotice: CredentialNotice?
     @State private var initializeRequiresMasterPassword = true
-    @State private var securityMode: CredentialSecurityMode?
 
     private var visibleCredentials: [CredentialItem] {
         credentialStore.credentials(matching: searchText, type: selectedType)
@@ -57,12 +45,9 @@ struct CredentialsModuleView: View {
                     status: credentialStore.status,
                     count: credentialStore.credentials.count,
                     requiresMasterPassword: credentialStore.requiresMasterPassword,
-                    notice: importNotice,
+                    notice: credentialActions.notice,
                     onNew: openNewCredential,
-                    onImportFile: importCredentialsFromFile,
-                    onLock: { credentialStore.lock() },
-                    onBackup: { isBackupSheetPresented = true },
-                    onSecurityModeChange: updateMasterPasswordRequirement
+                    onLock: { credentialStore.lock() }
                 )
                 .frame(height: 48)
 
@@ -76,10 +61,6 @@ struct CredentialsModuleView: View {
         }
         .onAppear {
             credentialStore.load()
-        }
-        .sheet(isPresented: $isBackupSheetPresented) {
-            CredentialBackupSheet()
-                .environmentObject(credentialStore)
         }
         .confirmationDialog(
             "重置会永久删除所有凭证",
@@ -124,7 +105,7 @@ struct CredentialsModuleView: View {
                 credentials: visibleCredentials,
                 selectedCredential: selectedCredential,
                 editorMode: $editorMode,
-                securityMode: $securityMode,
+                securityMode: $credentialActions.securityMode,
                 error: credentialStore.lastError,
                 auditEvents: credentialStore.auditEvents,
                 onSelect: { selectedCredentialID = $0.id },
@@ -133,8 +114,20 @@ struct CredentialsModuleView: View {
                     editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
                 },
                 onSaveDraft: saveEditorDraft,
-                onSaveSecurity: enableMasterPassword,
-                onImportDrafts: importDrafts,
+                onSaveSecurity: { password, repeatedPassword in
+                    credentialActions.enableMasterPassword(
+                        store: credentialStore,
+                        password: password,
+                        repeatedPassword: repeatedPassword
+                    )
+                },
+                onImportDrafts: { drafts in
+                    let importedCount = credentialActions.importDrafts(drafts, store: credentialStore)
+                    if importedCount > 0 {
+                        selectedCredentialID = credentialStore.credentials.first?.id
+                        editorMode = nil
+                    }
+                },
                 onDelete: { item in
                     credentialStore.deleteCredential(item)
                     if selectedCredentialID == item.id {
@@ -165,8 +158,8 @@ struct CredentialsModuleView: View {
 
     private func openNewCredential() {
         guard credentialStore.isUnlocked else { return }
-        importNotice = nil
-        securityMode = nil
+        credentialActions.notice = nil
+        credentialActions.clearTransientModes()
         editorMode = .create(CredentialDraft())
     }
 
@@ -176,74 +169,13 @@ struct CredentialsModuleView: View {
             if let item = credentialStore.addCredential(draft) {
                 selectedCredentialID = item.id
                 editorMode = nil
-                securityMode = nil
+                credentialActions.clearTransientModes()
             }
         case .edit(let item, let draft):
             credentialStore.updateCredential(item, draft: draft)
             selectedCredentialID = item.id
             editorMode = nil
-            securityMode = nil
-        }
-    }
-
-    private func enableMasterPassword(_ password: String, repeatedPassword: String) {
-        guard password == repeatedPassword else {
-            importNotice = CredentialNotice(message: "两次主密码输入不一致", isError: true)
-            return
-        }
-        credentialStore.setMasterPasswordRequired(true, newMasterPassword: password)
-        if credentialStore.requiresMasterPassword {
-            securityMode = nil
-            importNotice = CredentialNotice(message: "已开启主密码验证", isError: false)
-        }
-    }
-
-    private func updateMasterPasswordRequirement(_ required: Bool) {
-        importNotice = nil
-        editorMode = nil
-        if required {
-            securityMode = .enableMasterPassword
-        } else {
-            credentialStore.setMasterPasswordRequired(false)
-            if !credentialStore.requiresMasterPassword {
-                securityMode = nil
-                importNotice = CredentialNotice(message: "已关闭主密码验证", isError: false)
-            }
-        }
-    }
-
-    private func importDrafts(_ drafts: [CredentialDraft]) {
-        guard !drafts.isEmpty else {
-            importNotice = CredentialNotice(message: "没有识别到可导入的凭证", isError: true)
-            return
-        }
-        let importedCount = credentialStore.importCredentials(drafts)
-        if importedCount > 0 {
-            selectedCredentialID = credentialStore.credentials.first?.id
-            editorMode = nil
-            securityMode = nil
-            importNotice = CredentialNotice(message: "已导入 \(importedCount) 条凭证", isError: false)
-        } else {
-            importNotice = CredentialNotice(message: credentialStore.lastError ?? "导入失败，请检查文件内容", isError: true)
-        }
-    }
-
-    private func importCredentialsFromFile() {
-        guard credentialStore.isUnlocked else { return }
-        importNotice = nil
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.commaSeparatedText, .plainText, .text]
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                let text = try String(contentsOf: url, encoding: .utf8)
-                let drafts = CredentialImportParser.drafts(fromFileText: text)
-                importDrafts(drafts)
-            } catch {
-                importNotice = CredentialNotice(message: "读取文件失败：\(error.localizedDescription)", isError: true)
-            }
+            credentialActions.clearTransientModes()
         }
     }
 
@@ -397,10 +329,7 @@ struct CredentialTopBar: View {
     let requiresMasterPassword: Bool
     let notice: CredentialNotice?
     let onNew: () -> Void
-    let onImportFile: () -> Void
     let onLock: () -> Void
-    let onBackup: () -> Void
-    let onSecurityModeChange: (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -424,29 +353,6 @@ struct CredentialTopBar: View {
                         .truncationMode(.tail)
                         .frame(maxWidth: 260, alignment: .trailing)
                 }
-
-                Menu {
-                    Button(action: onImportFile) {
-                        Label("从 Chrome 导出的 CSV 或电脑文本导入", systemImage: "folder")
-                    }
-                    Button(action: onBackup) {
-                        Label("加密备份 / 恢复", systemImage: "externaldrive.badge.checkmark")
-                    }
-                    Divider()
-                    Toggle(isOn: Binding(
-                        get: { requiresMasterPassword },
-                        set: { value in onSecurityModeChange(value) }
-                    )) {
-                        Label("主密码验证", systemImage: requiresMasterPassword ? "lock.fill" : "lock.open")
-                    }
-                } label: {
-                    Label("管理", systemImage: "ellipsis.circle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(height: 30)
-                        .padding(.horizontal, 10)
-                        .background(AppTheme.adaptiveWhite(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .menuStyle(.borderlessButton)
 
                 if requiresMasterPassword {
                     Button(action: onLock) {
