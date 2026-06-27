@@ -21,6 +21,10 @@ final class CredentialStore: ObservableObject {
         status == .unlocked && sessionKey != nil
     }
 
+    var requiresMasterPassword: Bool {
+        vaultMetadata?.requiresMasterPassword ?? true
+    }
+
     init(storageURL: URL? = nil, autoLockInterval: TimeInterval = 10 * 60) {
         let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
@@ -37,24 +41,33 @@ final class CredentialStore: ObservableObject {
         do {
             try prepareDatabase()
             vaultMetadata = try fetchVaultMetadata()
-            status = vaultMetadata == nil ? .uninitialized : .locked
-            credentials = []
+            if let metadata = vaultMetadata, !metadata.requiresMasterPassword {
+                sessionKey = try CredentialCrypto.unlockLocal(metadata: metadata)
+                status = .unlocked
+                credentials = try fetchCredentials()
+                lastActivityAt = Date()
+            } else {
+                status = vaultMetadata == nil ? .uninitialized : .locked
+                credentials = []
+            }
             lastError = nil
         } catch {
             lastError = "读取凭证库失败：\(error.localizedDescription)"
         }
     }
 
-    func initialize(masterPassword: String) {
+    func initialize(masterPassword: String, requiresMasterPassword: Bool = true) {
         let password = masterPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard password.count >= 8 else {
+        guard !requiresMasterPassword || password.count >= 8 else {
             lastError = "主密码至少需要 8 个字符"
             return
         }
 
         do {
             try prepareDatabase()
-            let (metadata, key) = try CredentialCrypto.createVaultMetadata(masterPassword: password)
+            let (metadata, key) = try (requiresMasterPassword
+                ? CredentialCrypto.createVaultMetadata(masterPassword: password)
+                : CredentialCrypto.createLocalVaultMetadata())
             try saveVaultMetadata(metadata)
             vaultMetadata = metadata
             sessionKey = key
@@ -76,7 +89,9 @@ final class CredentialStore: ObservableObject {
                 status = .uninitialized
                 return
             }
-            sessionKey = try CredentialCrypto.unlock(masterPassword: masterPassword, metadata: metadata)
+            sessionKey = try (metadata.requiresMasterPassword
+                ? CredentialCrypto.unlock(masterPassword: masterPassword, metadata: metadata)
+                : CredentialCrypto.unlockLocal(metadata: metadata))
             vaultMetadata = metadata
             status = .unlocked
             lastActivityAt = Date()
@@ -92,6 +107,10 @@ final class CredentialStore: ObservableObject {
     }
 
     func lock() {
+        if vaultMetadata?.requiresMasterPassword == false {
+            status = .unlocked
+            return
+        }
         sessionKey = nil
         credentials = []
         if vaultMetadata == nil {
@@ -100,6 +119,54 @@ final class CredentialStore: ObservableObject {
             status = .locked
         }
         recordAudit(action: "锁定凭证库", credentialTitle: "凭证库")
+    }
+
+    func setMasterPasswordRequired(_ required: Bool, newMasterPassword: String = "") {
+        guard let currentKey = activeKey() else { return }
+        guard requiresMasterPassword != required else { return }
+        let password = newMasterPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !required || password.count >= 8 else {
+            lastError = "主密码至少需要 8 个字符"
+            return
+        }
+
+        do {
+            let decrypted = try credentials.map { item in
+                (item, try CredentialCrypto.open(item.encryptedPayload, as: CredentialSecretPayload.self, using: currentKey))
+            }
+            let (metadata, newKey) = try (required
+                ? CredentialCrypto.createVaultMetadata(masterPassword: password)
+                : CredentialCrypto.createLocalVaultMetadata())
+            let updatedItems = try decrypted.map { item, secret in
+                var updated = item
+                updated.encryptedPayload = try CredentialCrypto.seal(secret, using: newKey)
+                updated.updatedAt = Date()
+                updated.encryptionVersion = CredentialCrypto.version
+                return updated
+            }
+
+            try execute("BEGIN TRANSACTION")
+            do {
+                try saveVaultMetadata(metadata)
+                for item in updatedItems {
+                    try update(item)
+                }
+                try execute("COMMIT")
+            } catch {
+                try? execute("ROLLBACK")
+                throw error
+            }
+
+            vaultMetadata = metadata
+            sessionKey = newKey
+            credentials = updatedItems.sorted(by: sortCredentials)
+            status = .unlocked
+            touchActivity()
+            lastError = nil
+            recordAudit(action: required ? "开启主密码" : "关闭主密码", credentialTitle: "凭证库")
+        } catch {
+            lastError = "更新主密码设置失败：\(error.localizedDescription)"
+        }
     }
 
     func resetVault() {

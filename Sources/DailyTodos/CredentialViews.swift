@@ -7,6 +7,10 @@ enum CredentialEditorMode: Equatable {
     case edit(CredentialItem, CredentialDraft)
 }
 
+enum CredentialSecurityMode: Equatable {
+    case enableMasterPassword
+}
+
 struct CredentialNotice: Equatable {
     let message: String
     let isError: Bool
@@ -25,6 +29,8 @@ struct CredentialsModuleView: View {
     @State private var repeatedMasterPassword = ""
     @State private var initializationError: String?
     @State private var importNotice: CredentialNotice?
+    @State private var initializeRequiresMasterPassword = true
+    @State private var securityMode: CredentialSecurityMode?
 
     private var visibleCredentials: [CredentialItem] {
         credentialStore.credentials(matching: searchText, type: selectedType)
@@ -50,11 +56,13 @@ struct CredentialsModuleView: View {
                 CredentialTopBar(
                     status: credentialStore.status,
                     count: credentialStore.credentials.count,
+                    requiresMasterPassword: credentialStore.requiresMasterPassword,
                     notice: importNotice,
                     onNew: openNewCredential,
                     onImportFile: importCredentialsFromFile,
                     onLock: { credentialStore.lock() },
-                    onBackup: { isBackupSheetPresented = true }
+                    onBackup: { isBackupSheetPresented = true },
+                    onSecurityModeChange: updateMasterPasswordRequirement
                 )
                 .frame(height: 48)
 
@@ -97,6 +105,7 @@ struct CredentialsModuleView: View {
             CredentialInitializeView(
                 masterPassword: $newMasterPassword,
                 repeatedPassword: $repeatedMasterPassword,
+                requiresMasterPassword: $initializeRequiresMasterPassword,
                 error: initializationError ?? credentialStore.lastError,
                 onInitialize: initializeVault
             )
@@ -115,6 +124,7 @@ struct CredentialsModuleView: View {
                 credentials: visibleCredentials,
                 selectedCredential: selectedCredential,
                 editorMode: $editorMode,
+                securityMode: $securityMode,
                 error: credentialStore.lastError,
                 auditEvents: credentialStore.auditEvents,
                 onSelect: { selectedCredentialID = $0.id },
@@ -123,6 +133,7 @@ struct CredentialsModuleView: View {
                     editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
                 },
                 onSaveDraft: saveEditorDraft,
+                onSaveSecurity: enableMasterPassword,
                 onImportDrafts: importDrafts,
                 onDelete: { item in
                     credentialStore.deleteCredential(item)
@@ -142,12 +153,12 @@ struct CredentialsModuleView: View {
     }
 
     private func initializeVault() {
-        guard newMasterPassword == repeatedMasterPassword else {
+        guard !initializeRequiresMasterPassword || newMasterPassword == repeatedMasterPassword else {
             initializationError = "两次输入不一致"
             return
         }
         initializationError = nil
-        credentialStore.initialize(masterPassword: newMasterPassword)
+        credentialStore.initialize(masterPassword: newMasterPassword, requiresMasterPassword: initializeRequiresMasterPassword)
         newMasterPassword = ""
         repeatedMasterPassword = ""
     }
@@ -155,6 +166,7 @@ struct CredentialsModuleView: View {
     private func openNewCredential() {
         guard credentialStore.isUnlocked else { return }
         importNotice = nil
+        securityMode = nil
         editorMode = .create(CredentialDraft())
     }
 
@@ -164,11 +176,39 @@ struct CredentialsModuleView: View {
             if let item = credentialStore.addCredential(draft) {
                 selectedCredentialID = item.id
                 editorMode = nil
+                securityMode = nil
             }
         case .edit(let item, let draft):
             credentialStore.updateCredential(item, draft: draft)
             selectedCredentialID = item.id
             editorMode = nil
+            securityMode = nil
+        }
+    }
+
+    private func enableMasterPassword(_ password: String, repeatedPassword: String) {
+        guard password == repeatedPassword else {
+            importNotice = CredentialNotice(message: "两次主密码输入不一致", isError: true)
+            return
+        }
+        credentialStore.setMasterPasswordRequired(true, newMasterPassword: password)
+        if credentialStore.requiresMasterPassword {
+            securityMode = nil
+            importNotice = CredentialNotice(message: "已开启主密码验证", isError: false)
+        }
+    }
+
+    private func updateMasterPasswordRequirement(_ required: Bool) {
+        importNotice = nil
+        editorMode = nil
+        if required {
+            securityMode = .enableMasterPassword
+        } else {
+            credentialStore.setMasterPasswordRequired(false)
+            if !credentialStore.requiresMasterPassword {
+                securityMode = nil
+                importNotice = CredentialNotice(message: "已关闭主密码验证", isError: false)
+            }
         }
     }
 
@@ -181,6 +221,7 @@ struct CredentialsModuleView: View {
         if importedCount > 0 {
             selectedCredentialID = credentialStore.credentials.first?.id
             editorMode = nil
+            securityMode = nil
             importNotice = CredentialNotice(message: "已导入 \(importedCount) 条凭证", isError: false)
         } else {
             importNotice = CredentialNotice(message: credentialStore.lastError ?? "导入失败，请检查文件内容", isError: true)
@@ -353,11 +394,13 @@ struct CredentialTypeButton: View {
 struct CredentialTopBar: View {
     let status: CredentialVaultStatus
     let count: Int
+    let requiresMasterPassword: Bool
     let notice: CredentialNotice?
     let onNew: () -> Void
     let onImportFile: () -> Void
     let onLock: () -> Void
     let onBackup: () -> Void
+    let onSecurityModeChange: (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -389,8 +432,15 @@ struct CredentialTopBar: View {
                     Button(action: onBackup) {
                         Label("加密备份 / 恢复", systemImage: "externaldrive.badge.checkmark")
                     }
+                    Divider()
+                    Toggle(isOn: Binding(
+                        get: { requiresMasterPassword },
+                        set: { value in onSecurityModeChange(value) }
+                    )) {
+                        Label("主密码验证", systemImage: requiresMasterPassword ? "lock.fill" : "lock.open")
+                    }
                 } label: {
-                    Label("导入", systemImage: "tray.and.arrow.down")
+                    Label("管理", systemImage: "ellipsis.circle")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(height: 30)
                         .padding(.horizontal, 10)
@@ -398,14 +448,16 @@ struct CredentialTopBar: View {
                 }
                 .menuStyle(.borderlessButton)
 
-                Button(action: onLock) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 34, height: 30)
-                        .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
+                if requiresMasterPassword {
+                    Button(action: onLock) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .frame(width: 34, height: 30)
+                            .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
+                    }
+                    .buttonStyle(.tactilePlain)
+                    .help("锁定凭证库")
                 }
-                .buttonStyle(.tactilePlain)
-                .help("锁定凭证库")
 
                 Button(action: onNew) {
                     Label("录入", systemImage: "square.and.pencil")
@@ -424,9 +476,13 @@ struct CredentialTopBar: View {
 
     private var subtitle: String {
         switch status {
-        case .uninitialized: "设置主密码后开始保存个人凭证"
-        case .locked: "输入主密码解锁；主密码不会被保存"
-        case .unlocked: "\(count) 条凭证，敏感字段仅显式查看"
+        case .uninitialized:
+            return "设置凭证库后开始保存个人凭证"
+        case .locked:
+            return "输入主密码解锁；主密码不会被保存"
+        case .unlocked:
+            let security = requiresMasterPassword ? "已开启主密码" : "未开启主密码"
+            return "\(count) 条凭证，\(security)"
         }
     }
 }
@@ -434,6 +490,7 @@ struct CredentialTopBar: View {
 struct CredentialInitializeView: View {
     @Binding var masterPassword: String
     @Binding var repeatedPassword: String
+    @Binding var requiresMasterPassword: Bool
     let error: String?
     let onInitialize: () -> Void
 
@@ -441,12 +498,20 @@ struct CredentialInitializeView: View {
         CredentialAccessPanel(
             icon: "lock.shield.fill",
             title: "初始化凭证库",
-            subtitle: "主密码无法找回。忘记后只能重置并清空凭证库。"
+            subtitle: requiresMasterPassword ? "主密码无法找回。忘记后只能重置并清空凭证库。" : "关闭后打开凭证不再验证，仅适合个人可信设备。"
         ) {
-            SecureField("主密码，至少 8 位", text: $masterPassword)
-                .textFieldStyle(.roundedBorder)
-            SecureField("再次输入主密码", text: $repeatedPassword)
-                .textFieldStyle(.roundedBorder)
+            Toggle(isOn: $requiresMasterPassword) {
+                Text("开启主密码验证")
+                    .font(.system(size: 13, weight: .bold))
+            }
+            .toggleStyle(.switch)
+
+            if requiresMasterPassword {
+                SecureField("主密码，至少 8 位", text: $masterPassword)
+                    .textFieldStyle(.roundedBorder)
+                SecureField("再次输入主密码", text: $repeatedPassword)
+                    .textFieldStyle(.roundedBorder)
+            }
 
             if let error {
                 Text(error)
@@ -463,7 +528,7 @@ struct CredentialInitializeView: View {
                     .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.tactilePlain)
-            .disabled(masterPassword.isEmpty || repeatedPassword.isEmpty)
+            .disabled(requiresMasterPassword && (masterPassword.isEmpty || repeatedPassword.isEmpty))
         }
     }
 }
@@ -558,11 +623,13 @@ struct CredentialWorkArea: View {
     let credentials: [CredentialItem]
     let selectedCredential: CredentialItem?
     @Binding var editorMode: CredentialEditorMode?
+    @Binding var securityMode: CredentialSecurityMode?
     let error: String?
     let auditEvents: [CredentialAuditEvent]
     let onSelect: (CredentialItem) -> Void
     let onEdit: (CredentialItem) -> Void
     let onSaveDraft: (CredentialEditorMode) -> Void
+    let onSaveSecurity: (String, String) -> Void
     let onImportDrafts: ([CredentialDraft]) -> Void
     let onDelete: (CredentialItem) -> Void
     let onReveal: (CredentialItem) -> CredentialSecretPayload?
@@ -575,6 +642,7 @@ struct CredentialWorkArea: View {
                 selectedCredential: selectedCredential,
                 onSelect: { item in
                     editorMode = nil
+                    securityMode = nil
                     onSelect(item)
                 }
             )
@@ -583,7 +651,14 @@ struct CredentialWorkArea: View {
             Divider()
                 .overlay(AppTheme.hairline)
 
-            if let editorMode {
+            if securityMode != nil {
+                CredentialSecuritySettingsPane(
+                    error: error,
+                    onSave: onSaveSecurity,
+                    onCancel: { self.securityMode = nil }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let editorMode {
                 CredentialInlineEditor(
                     mode: editorMode,
                     error: error,
@@ -780,15 +855,6 @@ struct CredentialDetailPane: View {
                     .foregroundStyle(TodoPriority.high.displayColor)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                CredentialInfoRow(label: "账号", value: item.username.isEmpty ? "--" : item.username)
-                CredentialInfoRow(label: "网址/服务", value: item.serviceURL.isEmpty ? "--" : item.serviceURL)
-                CredentialInfoRow(label: "更新时间", value: item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
-            }
-
-            Divider()
-                .overlay(AppTheme.hairline)
-
             CredentialSecretSection(
                 item: item,
                 secret: revealedSecret,
@@ -802,6 +868,14 @@ struct CredentialDetailPane: View {
                     onCopy(item, value)
                 }
             )
+
+            VStack(alignment: .leading, spacing: 10) {
+                CredentialInfoRow(label: "网址/服务", value: item.serviceURL.isEmpty ? "--" : item.serviceURL)
+                CredentialInfoRow(label: "更新时间", value: item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
+            }
+
+            Divider()
+                .overlay(AppTheme.hairline)
 
             if !item.tags.isEmpty {
                 HStack(spacing: 6) {
@@ -883,21 +957,34 @@ struct CredentialSecretSection: View {
             }
 
             if let secret {
+                CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
                 CredentialSensitiveValue(label: "密码 / Key / Token", value: secret.secretValue, onCopy: onCopy)
                 CredentialSensitiveValue(label: "证书内容", value: secret.certificateBody, onCopy: onCopy)
                 CredentialSensitiveValue(label: "备注", value: secret.notes, onCopy: onCopy)
             } else {
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.fill")
-                    Text("已隐藏。点击查看后才会解密显示。")
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.adaptiveWhite(0.62), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
+                CredentialHiddenValue()
             }
         }
+    }
+}
+
+struct CredentialHiddenValue: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("密码 / Key / Token")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .frame(width: 112, alignment: .leading)
+            Image(systemName: "lock.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text("已隐藏，点击查看后显示")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundStyle(AppTheme.mutedInk)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.adaptiveWhite(0.62), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -905,33 +992,36 @@ struct CredentialSensitiveValue: View {
     let label: String
     let value: String
     let onCopy: (String) -> Void
+    var isSensitive = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                Spacer()
-                Button {
-                    onCopy(value)
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .frame(width: 28, height: 26)
-                }
-                .buttonStyle(.tactilePlain)
-                .disabled(value.isEmpty)
-                .help("复制")
-            }
+        HStack(alignment: .top, spacing: 10) {
+            Text(label)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .frame(width: 112, alignment: .leading)
+                .padding(.top, 7)
             Text(value.isEmpty ? "--" : value)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .font(.system(size: 12, weight: .medium, design: isSensitive ? .monospaced : .default))
                 .foregroundStyle(AppTheme.ink)
                 .textSelection(.enabled)
                 .lineLimit(4)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.adaptiveWhite(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .padding(.vertical, 7)
+            Spacer()
+            Button {
+                onCopy(value)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .frame(width: 28, height: 26)
+            }
+            .buttonStyle(.tactilePlain)
+            .disabled(value.isEmpty)
+            .help("复制")
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.adaptiveWhite(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -968,6 +1058,78 @@ struct CredentialAuditPanel: View {
         }
         .padding(12)
         .background(AppTheme.adaptiveWhite(0.52), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct CredentialSecuritySettingsPane: View {
+    let error: String?
+    let onSave: (String, String) -> Void
+    let onCancel: () -> Void
+    @State private var masterPassword = ""
+    @State private var repeatedPassword = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(width: 46, height: 46)
+                        .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("开启主密码验证")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                        Text("开启后，每次进入凭证库都需要输入主密码。")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                    }
+
+                    Spacer()
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    CredentialField(label: "主密码") {
+                        SecureField("至少 8 位", text: $masterPassword)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    CredentialField(label: "确认") {
+                        SecureField("再次输入主密码", text: $repeatedPassword)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+                .padding(14)
+                .background(AppTheme.panel.opacity(0.86), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppTheme.border.opacity(0.78))
+                )
+
+                if let error {
+                    Text(error)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(TodoPriority.high.displayColor)
+                }
+
+                HStack {
+                    Button("取消", action: onCancel)
+                        .buttonStyle(.borderless)
+                    Spacer()
+                    Button {
+                        onSave(masterPassword, repeatedPassword)
+                    } label: {
+                        Label("开启验证", systemImage: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(masterPassword.isEmpty || repeatedPassword.isEmpty)
+                }
+            }
+            .padding(24)
+        }
+        .background(AppTheme.workSurface)
     }
 }
 
