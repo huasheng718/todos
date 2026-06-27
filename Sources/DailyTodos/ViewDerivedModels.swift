@@ -336,6 +336,245 @@ enum HandbookTreeNodeID {
     }
 }
 
+struct HandbookNotesListSnapshot: Equatable {
+    static let empty = HandbookNotesListSnapshot()
+
+    let groups: [HandbookNotesGroup]
+    let scopedCount: Int
+    let visibleCount: Int
+    let cacheKey: HandbookNotesListSnapshotKey
+
+    private init() {
+        self.groups = []
+        self.scopedCount = 0
+        self.visibleCount = 0
+        self.cacheKey = .empty
+    }
+
+    init(
+        items: [HandbookItem],
+        selectedCategory: HandbookCategory?,
+        selectedFolder: String?,
+        searchText: String
+    ) {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.cacheKey = HandbookNotesListSnapshotKey(
+            items: items,
+            selectedCategory: selectedCategory,
+            selectedFolder: selectedFolder,
+            searchText: query
+        )
+
+        let scoped = items.filter { item in
+            Self.matchesScope(item, selectedCategory: selectedCategory, selectedFolder: selectedFolder)
+        }
+        let visible = scoped
+            .filter { item in
+                query.isEmpty || Self.matchesSearch(item, query: query)
+            }
+            .sorted { lhs, rhs in
+                if lhs.updatedAt == rhs.updatedAt {
+                    return lhs.createdAt > rhs.createdAt
+                }
+                return lhs.updatedAt > rhs.updatedAt
+            }
+
+        self.scopedCount = scoped.count
+        self.visibleCount = visible.count
+        self.groups = Self.groupRows(visible)
+    }
+
+    private static func matchesScope(
+        _ item: HandbookItem,
+        selectedCategory: HandbookCategory?,
+        selectedFolder: String?
+    ) -> Bool {
+        if let selectedCategory, item.category != selectedCategory {
+            return false
+        }
+
+        guard let selectedFolder else {
+            return true
+        }
+
+        let folder = selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        if folder.isEmpty {
+            return item.trimmedFolder.isEmpty
+        }
+        return item.trimmedFolder == folder
+    }
+
+    private static func matchesSearch(_ item: HandbookItem, query: String) -> Bool {
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        return item.displayTitle.range(of: query, options: options) != nil
+            || item.trimmedBody.range(of: query, options: options) != nil
+            || item.trimmedFolder.range(of: query, options: options) != nil
+            || item.category.title.range(of: query, options: options) != nil
+            || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
+    }
+
+    private static func groupRows(_ items: [HandbookItem]) -> [HandbookNotesGroup] {
+        var buckets: [(key: String, title: String, rows: [HandbookNotesRowData])] = []
+
+        for item in items {
+            let group = HandbookNotesDateGrouper.group(for: item.updatedAt)
+            let row = HandbookNotesRowData(item: item)
+
+            if let index = buckets.firstIndex(where: { $0.key == group.key }) {
+                buckets[index].rows.append(row)
+            } else {
+                buckets.append((key: group.key, title: group.title, rows: [row]))
+            }
+        }
+
+        return buckets.map { bucket in
+            HandbookNotesGroup(id: bucket.key, title: bucket.title, rows: bucket.rows)
+        }
+    }
+}
+
+struct HandbookNotesListSnapshotKey: Equatable {
+    static let empty = HandbookNotesListSnapshotKey(
+        itemCount: 0,
+        rowSignature: "",
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: ""
+    )
+
+    let itemCount: Int
+    let rowSignature: String
+    let selectedCategory: HandbookCategory?
+    let selectedFolder: String?
+    let searchText: String
+
+    private init(
+        itemCount: Int,
+        rowSignature: String,
+        selectedCategory: HandbookCategory?,
+        selectedFolder: String?,
+        searchText: String
+    ) {
+        self.itemCount = itemCount
+        self.rowSignature = rowSignature
+        self.selectedCategory = selectedCategory
+        self.selectedFolder = selectedFolder
+        self.searchText = searchText
+    }
+
+    init(
+        items: [HandbookItem],
+        selectedCategory: HandbookCategory?,
+        selectedFolder: String?,
+        searchText: String
+    ) {
+        self.itemCount = items.count
+        self.rowSignature = items
+            .map { item in
+                [
+                    item.id.uuidString,
+                    item.category.rawValue,
+                    item.trimmedFolder,
+                    String(item.trimmedTitle.count),
+                    Self.stableTextSignature(item.trimmedTitle),
+                    String(item.trimmedBody.count),
+                    Self.stableTextSignature(item.trimmedBody),
+                    "\(item.attachments.count)",
+                    String(item.updatedAt.timeIntervalSince1970)
+                ].joined(separator: "\u{1F}")
+            }
+            .joined(separator: "\u{1E}")
+        self.selectedCategory = selectedCategory
+        self.selectedFolder = selectedFolder
+        self.searchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func stableTextSignature(_ text: String) -> String {
+        let hash = text.utf8.reduce(UInt64(14_695_981_039_346_656_037)) { partial, byte in
+            (partial ^ UInt64(byte)) &* 1_099_511_628_211
+        }
+        return String(hash, radix: 16)
+    }
+}
+
+struct HandbookNotesGroup: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let rows: [HandbookNotesRowData]
+}
+
+struct HandbookNotesRowData: Equatable, Identifiable {
+    let item: HandbookItem
+    let title: String
+    let preview: String
+    let dateText: String
+    let folder: String
+    let category: HandbookCategory
+    let attachmentCount: Int
+
+    var id: UUID { item.id }
+
+    init(item: HandbookItem) {
+        self.item = item
+        self.title = item.displayTitle
+        self.preview = HandbookNotesRowData.previewText(for: item)
+        self.dateText = HandbookNotesRowData.dateText(for: item.updatedAt)
+        self.folder = item.trimmedFolder
+        self.category = item.category
+        self.attachmentCount = item.attachments.count
+    }
+
+    private static func previewText(for item: HandbookItem) -> String {
+        let body = item.trimmedBody
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+        if !body.isEmpty {
+            return String(body.prefix(80))
+        }
+        return item.category.subtitle
+    }
+
+    private static func dateText(for date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return date.formatted(.dateTime.hour().minute())
+        }
+        if calendar.isDateInYesterday(date) {
+            return "昨天"
+        }
+        return date.formatted(.dateTime.month().day())
+    }
+}
+
+enum HandbookNotesDateGrouper {
+    static func group(for date: Date) -> (key: String, title: String) {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return ("today", "今天")
+        }
+        if calendar.isDateInYesterday(date) {
+            return ("yesterday", "昨天")
+        }
+
+        let components = calendar.dateComponents([.year, .month], from: date)
+        let currentYear = calendar.component(.year, from: Date())
+        let year = components.year ?? currentYear
+        let month = components.month ?? 1
+
+        if year == currentYear {
+            return ("\(year)-\(month)", monthTitle(month))
+        }
+        return ("\(year)", "\(year)年")
+    }
+
+    private static func monthTitle(_ month: Int) -> String {
+        let titles = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"]
+        guard (1...12).contains(month) else { return "\(month)月" }
+        return titles[month - 1]
+    }
+}
+
 enum HandbookListFilter: String, CaseIterable, Identifiable {
     case all
     case recent

@@ -19,6 +19,7 @@ struct DailyTodosChecks {
                 try checkUpdateDownloadProgress()
                 try checkQuickInputParser()
                 try checkLazyStartupLoading()
+                try checkHandbookNotesSnapshotInvalidation()
                 try checkTodoStore()
             }
             try await checkScheduledHandbookLoading()
@@ -238,6 +239,76 @@ func checkLazyStartupLoading() throws {
 
     store.loadHandbookItemsIfNeeded()
     try expect(store.didLoadHandbookItems, "按需加载后应标记手记已加载")
+}
+
+func checkHandbookNotesSnapshotInvalidation() throws {
+    let calendar = makeCalendar()
+    let baseDate = try makeDate(DateComponents(year: 2026, month: 6, day: 23, hour: 9), calendar: calendar)
+    let firstID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    let middleID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    let lastID = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+
+    let first = HandbookItem(
+        id: firstID,
+        category: .businessRule,
+        folder: "合同",
+        title: "租赁合同",
+        body: "合同规则",
+        createdAt: baseDate.addingTimeInterval(-20),
+        updatedAt: baseDate.addingTimeInterval(-20)
+    )
+    let middle = HandbookItem(
+        id: middleID,
+        category: .research,
+        folder: "竞品",
+        title: "竞品调研",
+        body: "旧摘要",
+        createdAt: baseDate.addingTimeInterval(-10),
+        updatedAt: baseDate.addingTimeInterval(-10)
+    )
+    let last = HandbookItem(
+        id: lastID,
+        category: .meeting,
+        folder: "周会",
+        title: "周会纪要",
+        body: "会议内容",
+        createdAt: baseDate,
+        updatedAt: baseDate
+    )
+
+    let originalItems = [first, middle, last]
+    let originalKey = HandbookNotesListSnapshotKey(
+        items: originalItems,
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: ""
+    )
+
+    var updatedMiddle = middle
+    updatedMiddle.title = "竞品调研更新"
+    updatedMiddle.body = "新摘要应立即显示"
+    let updatedItems = [first, updatedMiddle, last]
+    let updatedKey = HandbookNotesListSnapshotKey(
+        items: updatedItems,
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: ""
+    )
+
+    try expect(originalKey != updatedKey, "中间手记内容变化必须让列表快照缓存键失效")
+
+    let snapshot = HandbookNotesListSnapshot(
+        items: updatedItems,
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: ""
+    )
+    let rows = snapshot.groups.flatMap(\.rows)
+    guard let updatedRow = rows.first(where: { $0.id == middleID }) else {
+        throw CheckFailure.failed("更新后的中间手记应出现在列表快照中")
+    }
+    try expect(updatedRow.title == "竞品调研更新", "列表行标题应读取中间手记的最新标题")
+    try expect(updatedRow.preview == "新摘要应立即显示", "列表行摘要应读取中间手记的最新正文")
 }
 
 @MainActor

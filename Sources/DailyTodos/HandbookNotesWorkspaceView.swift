@@ -70,7 +70,7 @@ struct HandbookFolderSidebarView: View {
 
                 Text("Mac")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
+                    .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(1)
             }
 
@@ -94,10 +94,8 @@ struct HandbookFolderSidebarView: View {
                 accentColor: AppTheme.accent,
                 isSelected: selectedCategory == nil && selectedFolder == nil,
                 onSelect: {
-                    withAnimation(AppMotion.sectionSwitch) {
-                        selectedCategory = nil
-                        selectedFolder = nil
-                    }
+                    selectedCategory = nil
+                    selectedFolder = nil
                 },
                 onDrop: { itemIDs in
                     moveDraggedItems(itemIDs, category: nil, folder: nil)
@@ -116,10 +114,8 @@ struct HandbookFolderSidebarView: View {
                     accentColor: category.accentColor,
                     isSelected: selectedCategory == category && selectedFolder == nil,
                     onSelect: {
-                        withAnimation(AppMotion.sectionSwitch) {
-                            selectedCategory = category
-                            selectedFolder = nil
-                        }
+                        selectedCategory = category
+                        selectedFolder = nil
                     },
                     onDrop: { itemIDs in
                         moveDraggedItems(itemIDs, category: category, folder: nil)
@@ -137,7 +133,7 @@ struct HandbookFolderSidebarView: View {
             if folderCounts.isEmpty {
                 Text("暂无二级目录")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.72))
+                    .foregroundStyle(AppTheme.secondaryText)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
             } else {
@@ -148,9 +144,7 @@ struct HandbookFolderSidebarView: View {
                             count: folder.count,
                             isSelected: selectedFolder == folder.name,
                             onSelect: {
-                                withAnimation(AppMotion.sectionSwitch) {
-                                    selectedFolder = folder.name
-                                }
+                                selectedFolder = folder.name
                             },
                             onDrop: { itemIDs in
                                 moveDraggedItems(itemIDs, category: selectedCategory, folder: folder.name)
@@ -246,7 +240,7 @@ struct HandbookNotesListView: View {
 
                     Text("\(snapshot.visibleCount) 个备忘录")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(AppTheme.secondaryText)
                         .monospacedDigit()
                 }
 
@@ -258,7 +252,7 @@ struct HandbookNotesListView: View {
                         .frame(width: 32, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
+                .foregroundStyle(AppTheme.secondaryText)
                 .help("新建手记")
             }
 
@@ -275,7 +269,7 @@ struct HandbookNotesListView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: "note.text")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
+                    .foregroundStyle(AppTheme.secondaryText)
 
                 Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "当前没有手记" : "没有匹配的手记")
                     .font(.system(size: 13, weight: .bold))
@@ -283,7 +277,7 @@ struct HandbookNotesListView: View {
 
                 Text("点击右上角新建，或切换左侧分类。")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
             .padding(18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -307,9 +301,7 @@ struct HandbookNotesListView: View {
                 .scrollIndicators(.hidden)
                 .onChange(of: selectedItemID) { _, newValue in
                     guard let newValue else { return }
-                    withAnimation(AppMotion.quick) {
-                        proxy.scrollTo(newValue, anchor: .center)
-                    }
+                    proxy.scrollTo(newValue, anchor: .center)
                 }
             }
         }
@@ -356,8 +348,11 @@ struct HandbookNotesListView: View {
         let sourceItems = items
 
         let applySnapshot: @MainActor (HandbookNotesListSnapshot) -> Void = { newSnapshot in
+            let previousCount = snapshot.visibleCount
             snapshot = newSnapshot
-            PerformanceMonitor.event("HandbookNotesListSnapshot.count", detail: "\(newSnapshot.visibleCount)")
+            if previousCount != newSnapshot.visibleCount {
+                PerformanceMonitor.event("HandbookNotesListSnapshot.count", detail: "\(newSnapshot.visibleCount)")
+            }
         }
 
         if immediate || snapshot.cacheKey == .empty {
@@ -374,7 +369,7 @@ struct HandbookNotesListView: View {
         }
 
         snapshotTask = Task {
-            try? await Task.sleep(for: .milliseconds(80))
+            try? await Task.sleep(for: .milliseconds(32))
             guard !Task.isCancelled else { return }
             let newSnapshot = await Task.detached(priority: .userInitiated) {
                 PerformanceMonitor.measure("HandbookNotesListSnapshot.build") {
@@ -445,13 +440,13 @@ struct HandbookNotesRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Text(row.dateText)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.ink.opacity(0.74))
+                            .foregroundStyle(AppTheme.secondaryText)
                             .monospacedDigit()
                             .lineLimit(1)
 
                         Text(row.preview)
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppTheme.mutedInk)
+                            .foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -470,7 +465,7 @@ struct HandbookNotesRow: View {
                         }
                     }
                     .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.82))
+                    .foregroundStyle(AppTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -507,12 +502,8 @@ struct HandbookNotesRow: View {
         }
         .draggable(row.id.uuidString)
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
-                isHovered = hovered
-            }
+            isHovered = hovered
         }
-        .animation(AppMotion.hover, value: isHovered)
-        .animation(AppMotion.quick, value: isSelected)
     }
 
     private var rowBackground: Color {
@@ -549,19 +540,19 @@ struct HandbookFolderSidebarRow: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? accentColor : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? accentColor : AppTheme.secondaryText)
                     .frame(width: 18)
 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .semibold))
-                    .foregroundStyle(isSelected ? accentColor : AppTheme.ink.opacity(0.90))
+                    .foregroundStyle(isSelected ? accentColor : AppTheme.ink)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
                 Text("\(count)")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk.opacity(0.74))
+                    .foregroundStyle(AppTheme.secondaryText)
                     .monospacedDigit()
             }
             .padding(.horizontal, 8)
@@ -574,9 +565,7 @@ struct HandbookFolderSidebarRow: View {
             onDrop(itemIDs)
         }
         .onHover { hovered in
-            withAnimation(AppMotion.hover) {
-                isHovered = hovered
-            }
+            isHovered = hovered
         }
     }
 
@@ -611,9 +600,9 @@ struct HandbookFolderTagButton: View {
                 Text("\(count)")
                     .font(.system(size: 10.5, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk.opacity(0.70))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.secondaryText)
             }
-            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.ink.opacity(0.82))
+            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.ink)
             .padding(.horizontal, 8)
             .frame(height: 26)
             .background(tagBackground, in: Capsule())
@@ -646,242 +635,9 @@ struct HandbookNotesSectionLabel: View {
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(AppTheme.mutedInk.opacity(0.76))
+            .foregroundStyle(AppTheme.secondaryText)
             .padding(.horizontal, 8)
             .padding(.bottom, 2)
-    }
-}
-
-struct HandbookNotesListSnapshot: Equatable {
-    static let empty = HandbookNotesListSnapshot()
-
-    let groups: [HandbookNotesGroup]
-    let scopedCount: Int
-    let visibleCount: Int
-    let cacheKey: HandbookNotesListSnapshotKey
-
-    private init() {
-        self.groups = []
-        self.scopedCount = 0
-        self.visibleCount = 0
-        self.cacheKey = .empty
-    }
-
-    init(
-        items: [HandbookItem],
-        selectedCategory: HandbookCategory?,
-        selectedFolder: String?,
-        searchText: String
-    ) {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.cacheKey = HandbookNotesListSnapshotKey(
-            items: items,
-            selectedCategory: selectedCategory,
-            selectedFolder: selectedFolder,
-            searchText: query
-        )
-
-        let scoped = items.filter { item in
-            Self.matchesScope(item, selectedCategory: selectedCategory, selectedFolder: selectedFolder)
-        }
-        let visible = scoped
-            .filter { item in
-                query.isEmpty || Self.matchesSearch(item, query: query)
-            }
-            .sorted { lhs, rhs in
-                if lhs.updatedAt == rhs.updatedAt {
-                    return lhs.createdAt > rhs.createdAt
-                }
-                return lhs.updatedAt > rhs.updatedAt
-            }
-
-        self.scopedCount = scoped.count
-        self.visibleCount = visible.count
-        self.groups = Self.groupRows(visible)
-    }
-
-    private static func matchesScope(
-        _ item: HandbookItem,
-        selectedCategory: HandbookCategory?,
-        selectedFolder: String?
-    ) -> Bool {
-        if let selectedCategory, item.category != selectedCategory {
-            return false
-        }
-
-        guard let selectedFolder else {
-            return true
-        }
-
-        let folder = selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-        if folder.isEmpty {
-            return item.trimmedFolder.isEmpty
-        }
-        return item.trimmedFolder == folder
-    }
-
-    private static func matchesSearch(_ item: HandbookItem, query: String) -> Bool {
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        return item.displayTitle.range(of: query, options: options) != nil
-            || item.trimmedBody.range(of: query, options: options) != nil
-            || item.trimmedFolder.range(of: query, options: options) != nil
-            || item.category.title.range(of: query, options: options) != nil
-            || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
-    }
-
-    private static func groupRows(_ items: [HandbookItem]) -> [HandbookNotesGroup] {
-        var buckets: [(key: String, title: String, rows: [HandbookNotesRowData])] = []
-
-        for item in items {
-            let group = HandbookNotesDateGrouper.group(for: item.updatedAt)
-            let row = HandbookNotesRowData(item: item)
-
-            if let index = buckets.firstIndex(where: { $0.key == group.key }) {
-                buckets[index].rows.append(row)
-            } else {
-                buckets.append((key: group.key, title: group.title, rows: [row]))
-            }
-        }
-
-        return buckets.map { bucket in
-            HandbookNotesGroup(id: bucket.key, title: bucket.title, rows: bucket.rows)
-        }
-    }
-}
-
-struct HandbookNotesListSnapshotKey: Equatable {
-    static let empty = HandbookNotesListSnapshotKey(
-        itemCount: 0,
-        firstItemID: nil,
-        firstUpdatedAt: nil,
-        lastItemID: nil,
-        lastUpdatedAt: nil,
-        selectedCategory: nil,
-        selectedFolder: nil,
-        searchText: ""
-    )
-
-    let itemCount: Int
-    let firstItemID: UUID?
-    let firstUpdatedAt: Date?
-    let lastItemID: UUID?
-    let lastUpdatedAt: Date?
-    let selectedCategory: HandbookCategory?
-    let selectedFolder: String?
-    let searchText: String
-
-    private init(
-        itemCount: Int,
-        firstItemID: UUID?,
-        firstUpdatedAt: Date?,
-        lastItemID: UUID?,
-        lastUpdatedAt: Date?,
-        selectedCategory: HandbookCategory?,
-        selectedFolder: String?,
-        searchText: String
-    ) {
-        self.itemCount = itemCount
-        self.firstItemID = firstItemID
-        self.firstUpdatedAt = firstUpdatedAt
-        self.lastItemID = lastItemID
-        self.lastUpdatedAt = lastUpdatedAt
-        self.selectedCategory = selectedCategory
-        self.selectedFolder = selectedFolder
-        self.searchText = searchText
-    }
-
-    init(
-        items: [HandbookItem],
-        selectedCategory: HandbookCategory?,
-        selectedFolder: String?,
-        searchText: String
-    ) {
-        self.itemCount = items.count
-        self.firstItemID = items.first?.id
-        self.firstUpdatedAt = items.first?.updatedAt
-        self.lastItemID = items.last?.id
-        self.lastUpdatedAt = items.last?.updatedAt
-        self.selectedCategory = selectedCategory
-        self.selectedFolder = selectedFolder
-        self.searchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-struct HandbookNotesGroup: Equatable, Identifiable {
-    let id: String
-    let title: String
-    let rows: [HandbookNotesRowData]
-}
-
-struct HandbookNotesRowData: Equatable, Identifiable {
-    let item: HandbookItem
-    let title: String
-    let preview: String
-    let dateText: String
-    let folder: String
-    let category: HandbookCategory
-    let attachmentCount: Int
-
-    var id: UUID { item.id }
-
-    init(item: HandbookItem) {
-        self.item = item
-        self.title = item.displayTitle
-        self.preview = HandbookNotesRowData.previewText(for: item)
-        self.dateText = HandbookNotesRowData.dateText(for: item.updatedAt)
-        self.folder = item.trimmedFolder
-        self.category = item.category
-        self.attachmentCount = item.attachments.count
-    }
-
-    private static func previewText(for item: HandbookItem) -> String {
-        let body = item.trimmedBody
-            .split(whereSeparator: \.isNewline)
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty } ?? ""
-        if !body.isEmpty {
-            return String(body.prefix(80))
-        }
-        return item.category.subtitle
-    }
-
-    private static func dateText(for date: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return date.formatted(.dateTime.hour().minute())
-        }
-        if calendar.isDateInYesterday(date) {
-            return "昨天"
-        }
-        return date.formatted(.dateTime.month().day())
-    }
-}
-
-enum HandbookNotesDateGrouper {
-    static func group(for date: Date) -> (key: String, title: String) {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return ("today", "今天")
-        }
-        if calendar.isDateInYesterday(date) {
-            return ("yesterday", "昨天")
-        }
-
-        let components = calendar.dateComponents([.year, .month], from: date)
-        let currentYear = calendar.component(.year, from: Date())
-        let year = components.year ?? currentYear
-        let month = components.month ?? 1
-
-        if year == currentYear {
-            return ("\(year)-\(month)", monthTitle(month))
-        }
-        return ("\(year)", "\(year)年")
-    }
-
-    private static func monthTitle(_ month: Int) -> String {
-        let titles = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"]
-        guard (1...12).contains(month) else { return "\(month)月" }
-        return titles[month - 1]
     }
 }
 

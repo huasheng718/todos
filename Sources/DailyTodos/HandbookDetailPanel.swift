@@ -144,7 +144,7 @@ struct HandbookDetailPanel: View {
 
             Text("左侧列表用于扫描，右侧用于完整阅读和编辑。")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
+                .foregroundStyle(AppTheme.secondaryText)
         }
         .padding(34)
     }

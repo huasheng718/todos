@@ -294,6 +294,24 @@ enum AppTheme {
         }
     }
 
+    static var secondaryText: Color {
+        if isDark {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.760, green: 0.830, blue: 0.882)
+            case .aurora: Color(red: 0.810, green: 0.785, blue: 0.878)
+            case .board: Color(red: 0.805, green: 0.800, blue: 0.780)
+            case .leafcutter: Color(red: 0.830, green: 0.760, blue: 0.640)
+            }
+        } else {
+            switch AppSkin.current {
+            case .ocean: Color(red: 0.150, green: 0.205, blue: 0.285)
+            case .aurora: Color(red: 0.205, green: 0.190, blue: 0.285)
+            case .board: Color(red: 0.160, green: 0.155, blue: 0.180)
+            case .leafcutter: Color(red: 0.220, green: 0.160, blue: 0.100)
+            }
+        }
+    }
+
     static var panel: Color {
         if isDark {
             switch AppSkin.current {
