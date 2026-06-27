@@ -1,6 +1,6 @@
 {
-  "version": "1.2.15",
-  "build": 44,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.15/AntOrder-1.2.15.pkg",
-  "releaseNotes": "凭证支持开启或关闭主密码验证；优化详情页账号密码布局；修复同一行账号和密码文本解析；消除 Swift 6 actor-isolation warning。"
+  "version": "1.2.16",
+  "build": 45,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.16/AntOrder-1.2.16.pkg",
+  "releaseNotes": "凭证详情新增泄露风险检查：邮箱通过 XposedOrNot 检查账号泄露；密码通过 HIBP k-anonymity SHA-1 前缀检查，避免上传明文。"
 }
