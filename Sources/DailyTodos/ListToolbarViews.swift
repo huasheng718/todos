@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchField: View {
     @Binding var text: String
+    var placeholder = "搜索标题或备注"
     @State private var isHovered = false
 
     var body: some View {
@@ -9,7 +10,7 @@ struct SearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(text.isEmpty ? AppTheme.mutedInk : AppTheme.accent)
-            TextField("搜索标题或备注", text: $text)
+            TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppTheme.ink)

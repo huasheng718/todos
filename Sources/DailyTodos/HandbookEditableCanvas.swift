@@ -43,7 +43,7 @@ struct HandbookEditableCanvas: View {
                     .frame(height: editorHeight)
                     .focused(focusedField, equals: .body)
 
-                if isBodyEmpty {
+                if shouldShowBodyPlaceholder {
                     Text("从这里开始写手记")
                         .font(.system(size: 15.5, weight: .regular))
                         .foregroundStyle(AppTheme.secondaryText)
@@ -53,6 +53,13 @@ struct HandbookEditableCanvas: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var shouldShowBodyPlaceholder: Bool {
+        HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(
+            isBodyEmpty: isBodyEmpty,
+            isBodyFocused: focusedField.wrappedValue == .body
+        )
     }
 }
 

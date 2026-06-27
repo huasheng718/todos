@@ -18,6 +18,7 @@ struct DailyTodosChecks {
                 try checkUpdateAvailability()
                 try checkUpdateDownloadProgress()
                 try checkQuickInputParser()
+                try checkHandbookEditorPlaceholderPolicy()
                 try checkLazyStartupLoading()
                 try checkHandbookNotesSnapshotInvalidation()
                 try checkTodoStore()
@@ -37,6 +38,21 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() {
         throw CheckFailure.failed(message)
     }
+}
+
+func checkHandbookEditorPlaceholderPolicy() throws {
+    try expect(
+        HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: true, isBodyFocused: false),
+        "空正文未聚焦时应显示手记输入提示"
+    )
+    try expect(
+        !HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: true, isBodyFocused: true),
+        "空正文已聚焦时不应同时显示输入提示和光标"
+    )
+    try expect(
+        !HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: false, isBodyFocused: false),
+        "正文已有内容时不应显示手记输入提示"
+    )
 }
 
 func makeCalendar() -> Calendar {
