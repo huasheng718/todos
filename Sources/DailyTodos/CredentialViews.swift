@@ -1,36 +1,24 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 enum CredentialEditorMode: Equatable {
     case create(CredentialDraft)
     case edit(CredentialItem, CredentialDraft)
 }
 
-enum CredentialSecurityMode: Equatable {
-    case enableMasterPassword
-}
-
-struct CredentialNotice: Equatable {
-    let message: String
-    let isError: Bool
-}
-
 struct CredentialsModuleView: View {
     @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
     @State private var searchText = ""
     @State private var selectedType: CredentialType?
     @State private var selectedCredentialID: UUID?
     @State private var editorMode: CredentialEditorMode?
-    @State private var isBackupSheetPresented = false
     @State private var isResetConfirmationPresented = false
     @State private var unlockPassword = ""
     @State private var newMasterPassword = ""
     @State private var repeatedMasterPassword = ""
     @State private var initializationError: String?
-    @State private var importNotice: CredentialNotice?
     @State private var initializeRequiresMasterPassword = true
-    @State private var securityMode: CredentialSecurityMode?
 
     private var visibleCredentials: [CredentialItem] {
         credentialStore.credentials(matching: searchText, type: selectedType)
@@ -57,12 +45,9 @@ struct CredentialsModuleView: View {
                     status: credentialStore.status,
                     count: credentialStore.credentials.count,
                     requiresMasterPassword: credentialStore.requiresMasterPassword,
-                    notice: importNotice,
+                    notice: credentialActions.notice,
                     onNew: openNewCredential,
-                    onImportFile: importCredentialsFromFile,
-                    onLock: { credentialStore.lock() },
-                    onBackup: { isBackupSheetPresented = true },
-                    onSecurityModeChange: updateMasterPasswordRequirement
+                    onLock: { credentialStore.lock() }
                 )
                 .frame(height: 48)
 
@@ -76,10 +61,6 @@ struct CredentialsModuleView: View {
         }
         .onAppear {
             credentialStore.load()
-        }
-        .sheet(isPresented: $isBackupSheetPresented) {
-            CredentialBackupSheet()
-                .environmentObject(credentialStore)
         }
         .confirmationDialog(
             "重置会永久删除所有凭证",
@@ -124,7 +105,7 @@ struct CredentialsModuleView: View {
                 credentials: visibleCredentials,
                 selectedCredential: selectedCredential,
                 editorMode: $editorMode,
-                securityMode: $securityMode,
+                securityMode: $credentialActions.securityMode,
                 error: credentialStore.lastError,
                 auditEvents: credentialStore.auditEvents,
                 onSelect: { selectedCredentialID = $0.id },
@@ -133,8 +114,20 @@ struct CredentialsModuleView: View {
                     editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
                 },
                 onSaveDraft: saveEditorDraft,
-                onSaveSecurity: enableMasterPassword,
-                onImportDrafts: importDrafts,
+                onSaveSecurity: { password, repeatedPassword in
+                    credentialActions.enableMasterPassword(
+                        store: credentialStore,
+                        password: password,
+                        repeatedPassword: repeatedPassword
+                    )
+                },
+                onImportDrafts: { drafts in
+                    let importedCount = credentialActions.importDrafts(drafts, store: credentialStore)
+                    if importedCount > 0 {
+                        selectedCredentialID = credentialStore.credentials.first?.id
+                        editorMode = nil
+                    }
+                },
                 onDelete: { item in
                     credentialStore.deleteCredential(item)
                     if selectedCredentialID == item.id {
@@ -165,8 +158,8 @@ struct CredentialsModuleView: View {
 
     private func openNewCredential() {
         guard credentialStore.isUnlocked else { return }
-        importNotice = nil
-        securityMode = nil
+        credentialActions.notice = nil
+        credentialActions.clearTransientModes()
         editorMode = .create(CredentialDraft())
     }
 
@@ -176,74 +169,13 @@ struct CredentialsModuleView: View {
             if let item = credentialStore.addCredential(draft) {
                 selectedCredentialID = item.id
                 editorMode = nil
-                securityMode = nil
+                credentialActions.clearTransientModes()
             }
         case .edit(let item, let draft):
             credentialStore.updateCredential(item, draft: draft)
             selectedCredentialID = item.id
             editorMode = nil
-            securityMode = nil
-        }
-    }
-
-    private func enableMasterPassword(_ password: String, repeatedPassword: String) {
-        guard password == repeatedPassword else {
-            importNotice = CredentialNotice(message: "两次主密码输入不一致", isError: true)
-            return
-        }
-        credentialStore.setMasterPasswordRequired(true, newMasterPassword: password)
-        if credentialStore.requiresMasterPassword {
-            securityMode = nil
-            importNotice = CredentialNotice(message: "已开启主密码验证", isError: false)
-        }
-    }
-
-    private func updateMasterPasswordRequirement(_ required: Bool) {
-        importNotice = nil
-        editorMode = nil
-        if required {
-            securityMode = .enableMasterPassword
-        } else {
-            credentialStore.setMasterPasswordRequired(false)
-            if !credentialStore.requiresMasterPassword {
-                securityMode = nil
-                importNotice = CredentialNotice(message: "已关闭主密码验证", isError: false)
-            }
-        }
-    }
-
-    private func importDrafts(_ drafts: [CredentialDraft]) {
-        guard !drafts.isEmpty else {
-            importNotice = CredentialNotice(message: "没有识别到可导入的凭证", isError: true)
-            return
-        }
-        let importedCount = credentialStore.importCredentials(drafts)
-        if importedCount > 0 {
-            selectedCredentialID = credentialStore.credentials.first?.id
-            editorMode = nil
-            securityMode = nil
-            importNotice = CredentialNotice(message: "已导入 \(importedCount) 条凭证", isError: false)
-        } else {
-            importNotice = CredentialNotice(message: credentialStore.lastError ?? "导入失败，请检查文件内容", isError: true)
-        }
-    }
-
-    private func importCredentialsFromFile() {
-        guard credentialStore.isUnlocked else { return }
-        importNotice = nil
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.commaSeparatedText, .plainText, .text]
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                let text = try String(contentsOf: url, encoding: .utf8)
-                let drafts = CredentialImportParser.drafts(fromFileText: text)
-                importDrafts(drafts)
-            } catch {
-                importNotice = CredentialNotice(message: "读取文件失败：\(error.localizedDescription)", isError: true)
-            }
+            credentialActions.clearTransientModes()
         }
     }
 
@@ -397,10 +329,7 @@ struct CredentialTopBar: View {
     let requiresMasterPassword: Bool
     let notice: CredentialNotice?
     let onNew: () -> Void
-    let onImportFile: () -> Void
     let onLock: () -> Void
-    let onBackup: () -> Void
-    let onSecurityModeChange: (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -424,29 +353,6 @@ struct CredentialTopBar: View {
                         .truncationMode(.tail)
                         .frame(maxWidth: 260, alignment: .trailing)
                 }
-
-                Menu {
-                    Button(action: onImportFile) {
-                        Label("从 Chrome 导出的 CSV 或电脑文本导入", systemImage: "folder")
-                    }
-                    Button(action: onBackup) {
-                        Label("加密备份 / 恢复", systemImage: "externaldrive.badge.checkmark")
-                    }
-                    Divider()
-                    Toggle(isOn: Binding(
-                        get: { requiresMasterPassword },
-                        set: { value in onSecurityModeChange(value) }
-                    )) {
-                        Label("主密码验证", systemImage: requiresMasterPassword ? "lock.fill" : "lock.open")
-                    }
-                } label: {
-                    Label("管理", systemImage: "ellipsis.circle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(height: 30)
-                        .padding(.horizontal, 10)
-                        .background(AppTheme.adaptiveWhite(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .menuStyle(.borderlessButton)
 
                 if requiresMasterPassword {
                     Button(action: onLock) {
@@ -882,14 +788,6 @@ struct CredentialDetailPane: View {
                 }
             )
 
-            VStack(alignment: .leading, spacing: 10) {
-                CredentialInfoRow(label: "网址/服务", value: item.serviceURL.isEmpty ? "--" : item.serviceURL)
-                CredentialInfoRow(label: "更新时间", value: item.updatedAt.formatted(.dateTime.year().month().day().hour().minute()))
-            }
-
-            Divider()
-                .overlay(AppTheme.hairline)
-
             if !item.tags.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(item.tags, id: \.self) { tag in
@@ -973,25 +871,6 @@ struct CredentialDetailPane: View {
     }
 }
 
-struct CredentialInfoRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(label)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 76, alignment: .leading)
-            Text(value)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.ink)
-                .textSelection(.enabled)
-            Spacer()
-        }
-    }
-}
-
 struct CredentialSecretSection: View {
     let item: CredentialItem
     let secret: CredentialSecretPayload?
@@ -1029,18 +908,22 @@ struct CredentialSecretSection: View {
             }
 
             if let secret {
-                CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
-                CredentialSensitiveValue(label: "密码 / Key / Token", value: secret.secretValue, onCopy: onCopy)
-                CredentialSensitiveValue(label: "证书内容", value: secret.certificateBody, onCopy: onCopy)
-                CredentialSensitiveValue(label: "备注", value: secret.notes, onCopy: onCopy)
+                CredentialDetailFieldsTable(
+                    item: item,
+                    secret: secret,
+                    onCopy: onCopy
+                )
                 CredentialBreachRiskPanel(
                     summary: breachCheckSummary,
                     isChecking: isCheckingBreachRisk,
                     message: breachCheckMessage
                 )
             } else {
-                CredentialSensitiveValue(label: "账号", value: item.username, onCopy: onCopy, isSensitive: false)
-                CredentialHiddenValue()
+                CredentialDetailFieldsTable(
+                    item: item,
+                    secret: nil,
+                    onCopy: onCopy
+                )
             }
         }
     }
@@ -1174,59 +1057,168 @@ struct CredentialBreachRiskPanel: View {
     }
 }
 
-struct CredentialHiddenValue: View {
+struct CredentialDetailFieldsTable: View {
+    let item: CredentialItem
+    let secret: CredentialSecretPayload?
+    let onCopy: (String) -> Void
+
     var body: some View {
-        HStack(spacing: 8) {
-            Text("密码 / Key / Token")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 112, alignment: .leading)
-            Image(systemName: "lock.fill")
-                .font(.system(size: 11, weight: .bold))
-            Text("已隐藏，点击查看后显示")
-                .font(.system(size: 13, weight: .semibold))
+        VStack(spacing: 0) {
+            CredentialCopyableFieldRow(label: "账号", value: item.username, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "密码", value: secret?.secretValue ?? "", isPassword: true, isLocked: secret == nil, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "网站", value: item.serviceURL, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "修改日期", value: item.updatedAt.formatted(.dateTime.year().month().day()), canCopy: false, onCopy: onCopy)
+            CredentialCopyableFieldRow(label: "备注", value: secret?.notes ?? "", canCopy: secret != nil, showsDivider: false, onCopy: onCopy)
         }
-        .foregroundStyle(AppTheme.mutedInk)
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.adaptiveWhite(0.62), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 14)
+        .background(AppTheme.adaptiveWhite(0.54), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AppTheme.hairline.opacity(0.48))
+        )
     }
 }
 
-struct CredentialSensitiveValue: View {
+struct CredentialCopyableFieldRow: View {
     let label: String
     let value: String
+    var isPassword = false
+    var isLocked = false
+    var canCopy = true
+    var showsDivider = true
     let onCopy: (String) -> Void
-    var isSensitive = true
+    @State private var isHovered = false
+    @State private var didCopy = false
+
+    private var displayValue: String {
+        if isLocked {
+            return "已隐藏"
+        }
+        if value.isEmpty {
+            return "--"
+        }
+        if isPassword && !isHovered && !didCopy {
+            return String(repeating: "•", count: min(max(value.count, 8), 18))
+        }
+        return value
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(label)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .frame(width: 112, alignment: .leading)
-                .padding(.top, 7)
-            Text(value.isEmpty ? "--" : value)
-                .font(.system(size: 12, weight: .medium, design: isSensitive ? .monospaced : .default))
-                .foregroundStyle(AppTheme.ink)
-                .textSelection(.enabled)
-                .lineLimit(4)
-                .padding(.vertical, 7)
-            Spacer()
-            Button {
-                onCopy(value)
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .frame(width: 28, height: 26)
+        Group {
+            if isCopyEnabled {
+                Button {
+                    copyValue()
+                } label: {
+                    rowContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                rowContent
             }
-            .buttonStyle(.tactilePlain)
-            .disabled(value.isEmpty)
-            .help("复制")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 3)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.adaptiveWhite(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onHover { hovered in
+            if isPassword {
+                withAnimation(AppMotion.hover) {
+                    isHovered = hovered
+                }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showsDivider {
+                Rectangle()
+                    .fill(AppTheme.hairline.opacity(0.62))
+                    .frame(height: 1)
+            }
+        }
+        .help(helpText)
+        .animation(AppMotion.status, value: didCopy)
+    }
+
+    private var isCopyEnabled: Bool {
+        canCopy && !value.isEmpty && !isLocked
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text(label)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(labelColor)
+                .frame(width: 82, alignment: .leading)
+
+            Spacer(minLength: 24)
+
+            valueView
+        }
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var valueView: some View {
+        if didCopy {
+            HStack(spacing: 7) {
+                Image(systemName: "doc.on.doc.fill")
+                    .font(.system(size: 13, weight: .bold))
+                Text("已拷贝")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.mutedInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(AppTheme.adaptiveWhite(0.82), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            if isPassword {
+                Text(displayValue)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.disabled)
+            } else {
+                Text(displayValue)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private var labelColor: Color {
+        isLocked ? AppTheme.mutedInk.opacity(0.82) : AppTheme.ink
+    }
+
+    private var valueColor: Color {
+        if isLocked || value.isEmpty {
+            return AppTheme.mutedInk.opacity(0.82)
+        }
+        return AppTheme.mutedInk
+    }
+
+    private var helpText: String {
+        if isLocked {
+            return "点击查看后可复制"
+        }
+        if !isCopyEnabled {
+            return ""
+        }
+        if isPassword {
+            return "悬停显示，点击复制"
+        }
+        return "点击复制"
+    }
+
+    private func copyValue() {
+        guard isCopyEnabled else {
+            return
+        }
+        onCopy(value)
+        didCopy = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            didCopy = false
+        }
     }
 }
 

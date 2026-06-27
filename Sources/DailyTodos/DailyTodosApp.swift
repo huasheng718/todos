@@ -4,6 +4,7 @@ import SwiftUI
 struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
     @StateObject private var credentialStore = CredentialStore()
+    @StateObject private var credentialManagementActions = CredentialManagementActions()
     @StateObject private var aiSettings = AISettingsStore()
     @StateObject private var updateController = UpdateController()
     @StateObject private var moduleRegistry = AppModuleRegistry()
@@ -14,6 +15,7 @@ struct DailyTodosApp: App {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(credentialStore)
+                .environmentObject(credentialManagementActions)
                 .environmentObject(aiSettings)
                 .environmentObject(updateController)
                 .environmentObject(moduleRegistry)

@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var updateController: UpdateController
     @EnvironmentObject private var moduleRegistry: AppModuleRegistry
@@ -137,6 +139,8 @@ struct ContentView: View {
                 .environmentObject(updateController)
                 .environmentObject(moduleRegistry)
                 .environmentObject(aiSettings)
+                .environmentObject(credentialStore)
+                .environmentObject(credentialActions)
         }
     }
 

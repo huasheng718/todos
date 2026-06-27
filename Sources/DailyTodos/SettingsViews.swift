@@ -2,6 +2,7 @@ import SwiftUI
 
 enum AppSettingsSection: String, CaseIterable, Identifiable {
     case appearance
+    case credentials
     case ai
     case modules
     case updates
@@ -11,6 +12,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .appearance: "外观"
+        case .credentials: "凭证"
         case .ai: "AI"
         case .modules: "模块"
         case .updates: "更新"
@@ -20,6 +22,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .appearance: "主题与视觉密度"
+        case .credentials: "导入、备份、安全"
         case .ai: "DeepSeek 连接"
         case .modules: "功能边界"
         case .updates: "版本与下载"
@@ -29,6 +32,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .appearance: "paintpalette.fill"
+        case .credentials: "key.fill"
         case .ai: "sparkles"
         case .modules: "puzzlepiece.extension.fill"
         case .updates: "arrow.triangle.2.circlepath"
@@ -40,6 +44,8 @@ struct AppSettingsSheet: View {
     @EnvironmentObject private var updateController: UpdateController
     @EnvironmentObject private var moduleRegistry: AppModuleRegistry
     @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
@@ -81,6 +87,10 @@ struct AppSettingsSheet: View {
         .frame(width: 820, height: 620)
         .background(AppTheme.workSurface)
         .foregroundStyle(AppTheme.ink)
+        .sheet(isPresented: $credentialActions.isBackupSheetPresented) {
+            CredentialBackupSheet()
+                .environmentObject(credentialStore)
+        }
     }
 
     private var settingsHeader: some View {
@@ -95,7 +105,7 @@ struct AppSettingsSheet: View {
                 Text("设置")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(AppTheme.ink)
-                Text("外观、AI、模块、更新")
+                Text("外观、凭证、AI、模块、更新")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.mutedInk)
             }
@@ -193,6 +203,8 @@ struct AppSettingsSheet: View {
         switch selectedSection {
         case .appearance:
             appearanceSettings
+        case .credentials:
+            credentialSettings
         case .ai:
             aiSettingsPanel
         case .modules:
@@ -227,6 +239,81 @@ struct AppSettingsSheet: View {
             )
 
             AISettingsContentView()
+        }
+    }
+
+    private var credentialSettings: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            settingsContentHeader(
+                title: "凭证",
+                subtitle: "统一管理凭证导入、加密备份和主密码验证。"
+            )
+
+            settingsPanel(title: "凭证库", icon: "key.fill") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
+                        CredentialSettingsStatusBadge(
+                            status: credentialStore.status,
+                            requiresMasterPassword: credentialStore.requiresMasterPassword,
+                            count: credentialStore.credentials.count
+                        )
+
+                        Spacer()
+
+                        Toggle(isOn: Binding(
+                            get: { credentialStore.requiresMasterPassword },
+                            set: { value in
+                                credentialActions.updateMasterPasswordRequirement(
+                                    store: credentialStore,
+                                    required: value
+                                )
+                            }
+                        )) {
+                            Text("主密码验证")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .toggleStyle(.switch)
+                        .disabled(!credentialStore.isUnlocked)
+                    }
+
+                    if let notice = credentialActions.notice {
+                        Label(notice.message, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(notice.isError ? TodoPriority.high.displayColor : AppTheme.accent)
+                    }
+
+                    HStack(spacing: 10) {
+                        credentialSettingsActionButton(
+                            title: "导入",
+                            icon: "folder",
+                            isPrimary: true,
+                            action: { credentialActions.importCredentialsFromFile(store: credentialStore) }
+                        )
+                        credentialSettingsActionButton(
+                            title: "备份 / 恢复",
+                            icon: "externaldrive.badge.checkmark",
+                            action: { credentialActions.showBackupSheet(store: credentialStore) }
+                        )
+                    }
+                    .disabled(!credentialStore.isUnlocked)
+
+                    if credentialActions.securityMode != nil {
+                        CredentialSecuritySettingsPane(
+                            error: credentialStore.lastError,
+                            onSave: { password, repeatedPassword in
+                                credentialActions.enableMasterPassword(
+                                    store: credentialStore,
+                                    password: password,
+                                    repeatedPassword: repeatedPassword
+                                )
+                            },
+                            onCancel: { credentialActions.clearTransientModes() }
+                        )
+                        .frame(minHeight: 300)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            }
         }
     }
 
@@ -337,6 +424,26 @@ struct AppSettingsSheet: View {
             .disabled(updateController.isChecking || updateController.isDownloading)
             .help("检查更新")
         }
+    }
+
+    private func credentialSettingsActionButton(
+        title: String,
+        icon: String,
+        isPrimary: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 12, weight: .bold))
+                .frame(minWidth: 112, minHeight: 34)
+        }
+        .buttonStyle(.tactilePlain)
+        .foregroundStyle(isPrimary ? .white : AppTheme.ink)
+        .background(isPrimary ? AppTheme.accent : AppTheme.adaptiveWhite(0.72), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(isPrimary ? AppTheme.adaptiveWhite(0.26) : AppTheme.hairline)
+        )
     }
 
     private func settingsContentHeader(title: String, subtitle: String) -> some View {
@@ -728,6 +835,73 @@ struct AISettingsContentView: View {
             AIUsageRow(icon: "command", title: "快记解析", detail: "自动拆出时间、优先级、状态、备注和固定周期。")
             AIUsageRow(icon: "sun.max", title: "每日建议", detail: "按当前未完成事项生成 1-3 条推进建议。")
             AIUsageRow(icon: "text.alignleft", title: "备注摘要", detail: "长备注压缩成适合扫读的一句话。")
+        }
+    }
+}
+
+private struct CredentialSettingsStatusBadge: View {
+    let status: CredentialVaultStatus
+    let requiresMasterPassword: Bool
+    let count: Int
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: iconName)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(statusColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(statusTitle)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                Text(statusSubtitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(AppTheme.adaptiveWhite(0.70), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(statusColor.opacity(0.22))
+        )
+    }
+
+    private var iconName: String {
+        switch status {
+        case .uninitialized: "key"
+        case .locked: "lock.fill"
+        case .unlocked: requiresMasterPassword ? "lock.open.fill" : "lock.open"
+        }
+    }
+
+    private var statusTitle: String {
+        switch status {
+        case .uninitialized: "尚未初始化"
+        case .locked: "凭证库已锁定"
+        case .unlocked: "\(count) 条凭证"
+        }
+    }
+
+    private var statusSubtitle: String {
+        switch status {
+        case .uninitialized:
+            return "先进入凭证模块完成初始化"
+        case .locked:
+            return "解锁后可导入、备份和调整安全设置"
+        case .unlocked:
+            return requiresMasterPassword ? "已开启主密码验证" : "未开启主密码验证"
+        }
+    }
+
+    private var statusColor: Color {
+        switch status {
+        case .uninitialized: AppTheme.mutedInk
+        case .locked: TodoPriority.medium.displayColor
+        case .unlocked: AppTheme.success
         }
     }
 }

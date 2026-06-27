@@ -1,5 +1,14 @@
 import Foundation
 
+enum CredentialSecurityMode: Equatable {
+    case enableMasterPassword
+}
+
+struct CredentialNotice: Equatable {
+    let message: String
+    let isError: Bool
+}
+
 enum CredentialType: String, CaseIterable, Codable, Identifiable {
     case website
     case software
