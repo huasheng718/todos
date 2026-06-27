@@ -30,6 +30,50 @@ struct CredentialVaultMetadata: Codable, Equatable {
     var verifier: CredentialEncryptedPayload
     var createdAt: Date
     var updatedAt: Date
+    var requiresMasterPassword: Bool
+
+    init(
+        version: Int,
+        kdf: String,
+        iterations: Int,
+        salt: Data,
+        verifier: CredentialEncryptedPayload,
+        createdAt: Date,
+        updatedAt: Date,
+        requiresMasterPassword: Bool
+    ) {
+        self.version = version
+        self.kdf = kdf
+        self.iterations = iterations
+        self.salt = salt
+        self.verifier = verifier
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.requiresMasterPassword = requiresMasterPassword
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case kdf
+        case iterations
+        case salt
+        case verifier
+        case createdAt
+        case updatedAt
+        case requiresMasterPassword
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        kdf = try container.decode(String.self, forKey: .kdf)
+        iterations = try container.decode(Int.self, forKey: .iterations)
+        salt = try container.decode(Data.self, forKey: .salt)
+        verifier = try container.decode(CredentialEncryptedPayload.self, forKey: .verifier)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        requiresMasterPassword = try container.decodeIfPresent(Bool.self, forKey: .requiresMasterPassword) ?? true
+    }
 }
 
 enum CredentialCrypto {
@@ -39,8 +83,9 @@ enum CredentialCrypto {
     private static let keyByteCount = 32
     private static let saltByteCount = 16
     private static let verifierPlaintext = Data("DailyTodos.CredentialVault.v1".utf8)
+    private static let localVaultPassword = "DailyTodos.CredentialVault.LocalMode.v1"
 
-    static func createVaultMetadata(masterPassword: String, now: Date = Date()) throws -> (CredentialVaultMetadata, SymmetricKey) {
+    static func createVaultMetadata(masterPassword: String, requiresMasterPassword: Bool = true, now: Date = Date()) throws -> (CredentialVaultMetadata, SymmetricKey) {
         let salt = try randomData(byteCount: saltByteCount)
         let key = try deriveKey(password: masterPassword, salt: salt, iterations: defaultIterations)
         let verifier = try seal(verifierPlaintext, using: key)
@@ -51,9 +96,18 @@ enum CredentialCrypto {
             salt: salt,
             verifier: verifier,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            requiresMasterPassword: requiresMasterPassword
         )
         return (metadata, key)
+    }
+
+    static func createLocalVaultMetadata(now: Date = Date()) throws -> (CredentialVaultMetadata, SymmetricKey) {
+        try createVaultMetadata(masterPassword: localVaultPassword, requiresMasterPassword: false, now: now)
+    }
+
+    static func unlockLocal(metadata: CredentialVaultMetadata) throws -> SymmetricKey {
+        try unlock(masterPassword: localVaultPassword, metadata: metadata)
     }
 
     static func unlock(masterPassword: String, metadata: CredentialVaultMetadata) throws -> SymmetricKey {

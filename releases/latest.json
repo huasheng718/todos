@@ -1,6 +1,6 @@
 {
-  "version": "1.2.14",
-  "build": 43,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.14/AntOrder-1.2.14.pkg",
-  "releaseNotes": "凭证入口收敛为单一录入按钮；新增 Chrome CSV、电脑文本文件和粘贴文本导入；录入改为右侧内联表单。"
+  "version": "1.2.15",
+  "build": 44,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.15/AntOrder-1.2.15.pkg",
+  "releaseNotes": "凭证支持开启或关闭主密码验证；优化详情页账号密码布局；修复同一行账号和密码文本解析；消除 Swift 6 actor-isolation warning。"
 }

@@ -557,6 +557,22 @@ func checkCredentialStore() throws {
     store.unlock(masterPassword: "correct horse battery staple")
     try expect(store.status == .unlocked, "正确主密码应重新解锁凭证库")
 
+    store.setMasterPasswordRequired(false)
+    try expect(!store.requiresMasterPassword, "应支持关闭主密码验证")
+    store.lock()
+    try expect(store.status == .unlocked, "关闭主密码后手动锁定不应要求验证")
+    let noPasswordStore = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
+    noPasswordStore.load()
+    try expect(noPasswordStore.status == .unlocked, "关闭主密码后重新加载应自动解锁")
+    try expect(noPasswordStore.credentials.count == 1, "关闭主密码后凭证仍应可加载")
+    noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
+    try expect(noPasswordStore.requiresMasterPassword, "应支持重新开启主密码验证")
+    noPasswordStore.lock()
+    noPasswordStore.unlock(masterPassword: "wrong password")
+    try expect(noPasswordStore.status == .locked, "重新开启主密码后错误密码不应解锁")
+    noPasswordStore.unlock(masterPassword: "new master password")
+    try expect(noPasswordStore.status == .unlocked, "重新开启主密码后正确密码应解锁")
+
     let importedURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("DailyTodosCredentialImportChecks-\(UUID().uuidString)", isDirectory: true)
         .appendingPathComponent("credentials.sqlite")
@@ -585,6 +601,17 @@ func checkCredentialStore() throws {
     try expect(parsedDraft.serviceURL == "http://s3.rootcloud.com/", "文本解析应识别 URL")
     try expect(parsedDraft.username == "HT008881", "文本解析应识别账号")
     try expect(parsedDraft.secretValue == "sample-login-password", "文本解析应识别密码")
+
+    let compactLooseText = """
+    星邦（剪叉）
+    http://s3.rootcloud.com/
+    账号：HT001密码：888888
+    """
+    guard let compactParsedDraft = CredentialImportParser.draft(fromLooseText: compactLooseText) else {
+        throw CheckFailure.failed("紧凑文本凭证解析失败")
+    }
+    try expect(compactParsedDraft.username == "HT001", "紧凑文本解析不应把密码吞进账号")
+    try expect(compactParsedDraft.secretValue == "888888", "紧凑文本解析应识别密码")
 
     let chromeCSV = """
     name,url,username,password,note

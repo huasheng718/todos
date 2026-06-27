@@ -12,8 +12,11 @@ enum CredentialImportParser {
         var noteLines: [String] = []
 
         for line in lines {
-            if let (key, value) = labeledValue(from: line) {
-                assign(value: value, for: key, to: &draft, notes: &noteLines)
+            let pairs = labeledValues(from: line)
+            if !pairs.isEmpty {
+                for (key, value) in pairs {
+                    assign(value: value, for: key, to: &draft, notes: &noteLines)
+                }
                 continue
             }
 
@@ -81,7 +84,7 @@ enum CredentialImportParser {
     }
 
     private static func labeledValue(from line: String) -> (String, String)? {
-        if looksLikeURL(line) {
+        if startsWithURL(line) {
             return nil
         }
 
@@ -94,6 +97,38 @@ enum CredentialImportParser {
             return (key, value)
         }
         return nil
+    }
+
+    private static func labeledValues(from line: String) -> [(String, String)] {
+        if startsWithURL(line) {
+            return []
+        }
+
+        let matches = knownLabelRegex.matches(in: line, range: NSRange(line.startIndex..., in: line))
+        if matches.isEmpty {
+            return labeledValue(from: line).map { [$0] } ?? []
+        }
+
+        return matches.indices.compactMap { index in
+            guard let keyRange = Range(matches[index].range(at: 1), in: line),
+                  let matchRange = Range(matches[index].range, in: line) else {
+                return nil
+            }
+
+            let valueStart = matchRange.upperBound
+            let valueEnd: String.Index
+            if matches.indices.contains(index + 1),
+               let nextRange = Range(matches[index + 1].range, in: line) {
+                valueEnd = nextRange.lowerBound
+            } else {
+                valueEnd = line.endIndex
+            }
+
+            let key = String(line[keyRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(line[valueStart..<valueEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty, !value.isEmpty else { return nil }
+            return (key, value)
+        }
     }
 
     private static func assign(value: String, for rawKey: String, to draft: inout CredentialDraft, notes: inout [String]) {
@@ -115,6 +150,10 @@ enum CredentialImportParser {
 
     private static func looksLikeURL(_ value: String) -> Bool {
         value.hasPrefix("http://") || value.hasPrefix("https://") || value.contains("://")
+    }
+
+    private static func startsWithURL(_ value: String) -> Bool {
+        value.hasPrefix("http://") || value.hasPrefix("https://")
     }
 
     private static func hostTitle(from urlText: String) -> String {
@@ -220,4 +259,9 @@ enum CredentialImportParser {
 
         return result
     }
+
+    private static let knownLabelRegex = try! NSRegularExpression(
+        pattern: "(账号|账户|用户名|user|username|login|email|密码|password|pass|token|key|密钥|网址|链接|url|地址|网站|名称|标题|name|title|备注|note|说明)\\s*[：:]",
+        options: [.caseInsensitive]
+    )
 }
