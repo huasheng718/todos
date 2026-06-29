@@ -33,6 +33,7 @@ struct HandbookDetailPanel: View {
         .onChange(of: item) { oldValue, newValue in
             if oldValue?.id == newValue?.id {
                 if let newValue {
+                    reconcileDraft(with: newValue)
                     isDirty = computeIsDirty(comparedTo: newValue)
                 } else {
                     isDirty = false
@@ -127,6 +128,23 @@ struct HandbookDetailPanel: View {
             .padding(.horizontal, 38)
             .padding(.top, 26)
             .padding(.bottom, 28)
+        }
+    }
+
+    private func reconcileDraft(with item: HandbookItem) {
+        isSyncingDraft = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if category != item.category { category = item.category }
+            if folder != item.folder { folder = item.folder }
+            if attachments != item.attachments { attachments = item.attachments }
+            if !(canvasFocus == .title && isDirty), title != item.title { title = item.title }
+            if !(canvasFocus == .body && isDirty), bodyText != item.body { bodyText = item.body }
+        }
+        scheduleBodyMetricsUpdate(for: bodyText)
+        Task { @MainActor in
+            isSyncingDraft = false
         }
     }
 

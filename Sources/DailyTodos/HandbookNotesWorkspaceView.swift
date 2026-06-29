@@ -1,36 +1,12 @@
 import SwiftUI
 
 struct HandbookFolderSidebarView: View {
-    let items: [HandbookItem]
+    let sidebarIndex: HandbookSidebarIndex
     @Binding var selectedCategory: HandbookCategory?
     @Binding var selectedFolder: String?
     @Binding var isSecondarySidebarCollapsed: Bool
     let isLoaded: Bool
-    let onMove: (HandbookItem, HandbookCategory, String) -> Void
-
-    private var totalCount: Int { items.count }
-
-    private var categoryCounts: [HandbookCategory: Int] {
-        Dictionary(grouping: items, by: \.category)
-            .mapValues(\.count)
-    }
-
-    private var folderCounts: [(name: String, count: Int)] {
-        let counts = Dictionary(
-            grouping: items
-                .filter { item in
-                    selectedCategory == nil || item.category == selectedCategory
-                }
-                .map(\.trimmedFolder)
-                .filter { !$0.isEmpty },
-            by: { $0 }
-        )
-        .mapValues(\.count)
-
-        return counts
-            .map { (name: $0.key, count: $0.value) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
+    let onMove: ([UUID], HandbookCategory?, String?) -> Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -90,7 +66,7 @@ struct HandbookFolderSidebarView: View {
             HandbookFolderSidebarRow(
                 title: "全部手记",
                 icon: "folder",
-                count: totalCount,
+                count: sidebarIndex.totalCount,
                 accentColor: AppTheme.accent,
                 isSelected: selectedCategory == nil && selectedFolder == nil,
                 onSelect: {
@@ -98,7 +74,7 @@ struct HandbookFolderSidebarView: View {
                     selectedFolder = nil
                 },
                 onDrop: { itemIDs in
-                    moveDraggedItems(itemIDs, category: nil, folder: nil)
+                    moveDraggedItems(itemIDs, category: nil, folder: "")
                 }
             )
         }
@@ -110,7 +86,7 @@ struct HandbookFolderSidebarView: View {
                 HandbookFolderSidebarRow(
                     title: category.title,
                     icon: "folder",
-                    count: categoryCounts[category, default: 0],
+                    count: sidebarIndex.categoryCounts[category, default: 0],
                     accentColor: category.accentColor,
                     isSelected: selectedCategory == category && selectedFolder == nil,
                     onSelect: {
@@ -118,7 +94,7 @@ struct HandbookFolderSidebarView: View {
                         selectedFolder = nil
                     },
                     onDrop: { itemIDs in
-                        moveDraggedItems(itemIDs, category: category, folder: nil)
+                        moveDraggedItems(itemIDs, category: category, folder: "")
                     }
                 )
             }
@@ -130,7 +106,7 @@ struct HandbookFolderSidebarView: View {
         VStack(alignment: .leading, spacing: 7) {
             HandbookNotesSectionLabel("标签")
 
-            if folderCounts.isEmpty {
+            if sidebarIndex.folders.isEmpty {
                 Text("暂无二级目录")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.secondaryText)
@@ -138,7 +114,7 @@ struct HandbookFolderSidebarView: View {
                     .padding(.vertical, 6)
             } else {
                 FlowLayout(spacing: 6, lineSpacing: 6) {
-                    ForEach(folderCounts, id: \.name) { folder in
+                    ForEach(sidebarIndex.folders) { folder in
                         HandbookFolderTagButton(
                             title: folder.name,
                             count: folder.count,
@@ -172,31 +148,22 @@ struct HandbookFolderSidebarView: View {
     }
 
     private func moveDraggedItems(_ itemIDs: [String], category: HandbookCategory?, folder: String?) -> Bool {
-        var didAccept = false
-        for idString in itemIDs {
-            guard let itemID = UUID(uuidString: idString),
-                  let item = items.first(where: { $0.id == itemID }) else { continue }
-            onMove(item, category ?? item.category, folder ?? "")
-            didAccept = true
-        }
-        return didAccept
+        let ids = itemIDs.compactMap(UUID.init(uuidString:))
+        guard !ids.isEmpty else { return false }
+        return onMove(ids, category, folder)
     }
 }
 
 struct HandbookNotesListView: View {
-    let items: [HandbookItem]
+    let snapshot: HandbookNotesListSnapshot
     @Binding var selectedCategory: HandbookCategory?
     @Binding var selectedFolder: String?
     @Binding var searchText: String
-    let debouncedSearchText: String
     let selectedItemID: UUID?
     let isLoaded: Bool
-    let onSelect: (HandbookItem) -> Void
+    let onSelect: (UUID) -> Void
     let onCreateDraft: () -> Void
-    let onDelete: (HandbookItem) -> Void
-
-    @State private var snapshot = HandbookNotesListSnapshot.empty
-    @State private var snapshotTask: Task<Void, Never>?
+    let onDelete: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -212,21 +179,6 @@ struct HandbookNotesListView: View {
             }
         }
         .background(notesListBackground)
-        .onAppear {
-            rebuildSnapshot(immediate: true)
-        }
-        .onChange(of: items) { _, _ in
-            rebuildSnapshot()
-        }
-        .onChange(of: selectedCategory) { _, _ in
-            rebuildSnapshot(immediate: true)
-        }
-        .onChange(of: selectedFolder) { _, _ in
-            rebuildSnapshot(immediate: true)
-        }
-        .onChange(of: debouncedSearchText) { _, _ in
-            rebuildSnapshot()
-        }
     }
 
     private var notesListHeader: some View {
@@ -332,66 +284,13 @@ struct HandbookNotesListView: View {
         AppTheme.isDark ? AppTheme.workSurface : Color(red: 0.976, green: 0.976, blue: 0.974)
     }
 
-    private func rebuildSnapshot(immediate: Bool = false) {
-        let newKey = HandbookNotesListSnapshotKey(
-            items: items,
-            selectedCategory: selectedCategory,
-            selectedFolder: selectedFolder,
-            searchText: debouncedSearchText
-        )
-        guard newKey != snapshot.cacheKey else { return }
-
-        snapshotTask?.cancel()
-        let category = selectedCategory
-        let folder = selectedFolder
-        let query = debouncedSearchText
-        let sourceItems = items
-
-        let applySnapshot: @MainActor (HandbookNotesListSnapshot) -> Void = { newSnapshot in
-            let previousCount = snapshot.visibleCount
-            snapshot = newSnapshot
-            if previousCount != newSnapshot.visibleCount {
-                PerformanceMonitor.event("HandbookNotesListSnapshot.count", detail: "\(newSnapshot.visibleCount)")
-            }
-        }
-
-        if immediate || snapshot.cacheKey == .empty {
-            let newSnapshot = PerformanceMonitor.measure("HandbookNotesListSnapshot.build.sync") {
-                HandbookNotesListSnapshot(
-                    items: sourceItems,
-                    selectedCategory: category,
-                    selectedFolder: folder,
-                    searchText: query
-                )
-            }
-            snapshot = newSnapshot
-            return
-        }
-
-        snapshotTask = Task {
-            try? await Task.sleep(for: .milliseconds(32))
-            guard !Task.isCancelled else { return }
-            let newSnapshot = await Task.detached(priority: .userInitiated) {
-                PerformanceMonitor.measure("HandbookNotesListSnapshot.build") {
-                    HandbookNotesListSnapshot(
-                        items: sourceItems,
-                        selectedCategory: category,
-                        selectedFolder: folder,
-                        searchText: query
-                    )
-                }
-            }.value
-            guard !Task.isCancelled else { return }
-            applySnapshot(newSnapshot)
-        }
-    }
 }
 
 struct HandbookNotesGroupView: View {
     let group: HandbookNotesGroup
     let selectedItemID: UUID?
-    let onSelect: (HandbookItem) -> Void
-    let onDelete: (HandbookItem) -> Void
+    let onSelect: (UUID) -> Void
+    let onDelete: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -407,10 +306,10 @@ struct HandbookNotesGroupView: View {
                     row: row,
                     isSelected: selectedItemID == row.id,
                     onSelect: {
-                        onSelect(row.item)
+                        onSelect(row.id)
                     },
                     onDelete: {
-                        onDelete(row.item)
+                        onDelete(row.id)
                     }
                 )
                 .id(row.id)

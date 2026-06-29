@@ -108,7 +108,7 @@ struct ContentView: View {
         }
         .onChange(of: moduleRegistry.activeModuleID) { _, newValue in
             guard newValue == "handbook" else { return }
-            store.loadHandbookItemsIfNeeded()
+            store.scheduleLoadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
             focusQuickCapture()

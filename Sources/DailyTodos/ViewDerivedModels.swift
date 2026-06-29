@@ -146,6 +146,134 @@ struct HandbookSidebarMetrics: Equatable {
     }
 }
 
+struct HandbookScope: Equatable, Sendable {
+    static let all = HandbookScope(category: nil, folder: nil, searchText: "")
+
+    let category: HandbookCategory?
+    let folder: String?
+    let searchText: String
+
+    init(category: HandbookCategory?, folder: String?, searchText: String) {
+        self.category = category
+        let cleanedFolder = folder?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.folder = cleanedFolder
+        self.searchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func contains(_ summary: HandbookNoteSummary) -> Bool {
+        if let category, summary.category != category {
+            return false
+        }
+
+        if let folder {
+            if folder.isEmpty {
+                guard summary.folder.isEmpty else { return false }
+            } else if summary.folder != folder {
+                return false
+            }
+        }
+
+        guard !searchText.isEmpty else { return true }
+        return summary.matches(searchText)
+    }
+}
+
+struct HandbookNoteSummary: Equatable, Identifiable, Sendable {
+    let id: UUID
+    let category: HandbookCategory
+    let folder: String
+    let title: String
+    let preview: String
+    let createdAt: Date
+    let updatedAt: Date
+    let attachmentCount: Int
+    let attachmentNames: [String]
+    fileprivate let searchIndex: String
+
+    init(item: HandbookItem) {
+        let trimmedBody = item.trimmedBody
+        self.id = item.id
+        self.category = item.category
+        self.folder = item.trimmedFolder
+        self.title = item.displayTitle
+        self.preview = Self.previewText(for: item)
+        self.createdAt = item.createdAt
+        self.updatedAt = item.updatedAt
+        self.attachmentCount = item.attachments.count
+        self.attachmentNames = item.attachments.map(\.name)
+        self.searchIndex = Self.searchIndex(for: item, trimmedBody: trimmedBody)
+    }
+
+    func matches(_ query: String) -> Bool {
+        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedQuery.isEmpty else { return true }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        return searchIndex.range(of: cleanedQuery, options: options) != nil
+    }
+
+    private static func previewText(for item: HandbookItem) -> String {
+        let body = item.trimmedBody
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+        if !body.isEmpty {
+            return String(body.prefix(80))
+        }
+        return item.category.subtitle
+    }
+
+    private static func searchIndex(for item: HandbookItem, trimmedBody: String) -> String {
+        ([item.displayTitle, trimmedBody, item.trimmedFolder, item.category.title] + item.attachments.map(\.name))
+            .joined(separator: "\n")
+    }
+}
+
+struct HandbookSidebarIndex: Equatable, Sendable {
+    static let empty = HandbookSidebarIndex(totalCount: 0, scopedCount: 0, categoryCounts: [:], folders: [])
+
+    let totalCount: Int
+    let scopedCount: Int
+    let categoryCounts: [HandbookCategory: Int]
+    let folders: [HandbookFolderSummary]
+
+    init(totalCount: Int, scopedCount: Int, categoryCounts: [HandbookCategory: Int], folders: [HandbookFolderSummary]) {
+        self.totalCount = totalCount
+        self.scopedCount = scopedCount
+        self.categoryCounts = categoryCounts
+        self.folders = folders
+    }
+
+    init(summaries: [HandbookNoteSummary], selectedCategory: HandbookCategory?) {
+        var categoryCounts: [HandbookCategory: Int] = [:]
+        var folderCounts: [String: Int] = [:]
+        var scopedCount = 0
+
+        for summary in summaries {
+            categoryCounts[summary.category, default: 0] += 1
+            guard selectedCategory == nil || summary.category == selectedCategory else { continue }
+            scopedCount += 1
+
+            if !summary.folder.isEmpty {
+                folderCounts[summary.folder, default: 0] += 1
+            }
+        }
+
+        self.totalCount = summaries.count
+        self.scopedCount = scopedCount
+        self.categoryCounts = categoryCounts
+        self.folders = folderCounts
+            .map { HandbookFolderSummary(name: $0.key, count: $0.value) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}
+
+struct HandbookFolderSummary: Equatable, Identifiable, Sendable {
+    let name: String
+    let count: Int
+
+    var id: String { name }
+}
+
 struct HandbookTreeSnapshot: Equatable {
     static let empty = HandbookTreeSnapshot()
 
@@ -357,26 +485,32 @@ struct HandbookNotesListSnapshot: Equatable {
         selectedFolder: String?,
         searchText: String
     ) {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(
+            summaries: items.map(HandbookNoteSummary.init),
+            scope: HandbookScope(category: selectedCategory, folder: selectedFolder, searchText: searchText)
+        )
+    }
+
+    init(
+        summaries: [HandbookNoteSummary],
+        scope: HandbookScope
+    ) {
         self.cacheKey = HandbookNotesListSnapshotKey(
-            items: items,
-            selectedCategory: selectedCategory,
-            selectedFolder: selectedFolder,
-            searchText: query
+            summaries: summaries,
+            scope: scope
         )
 
-        let scoped = items.filter { item in
-            Self.matchesScope(item, selectedCategory: selectedCategory, selectedFolder: selectedFolder)
+        let scoped = summaries.filter { summary in
+            let scopeWithoutSearch = HandbookScope(
+                category: scope.category,
+                folder: scope.folder,
+                searchText: ""
+            )
+            return scopeWithoutSearch.contains(summary)
         }
         let visible = scoped
-            .filter { item in
-                query.isEmpty || Self.matchesSearch(item, query: query)
-            }
-            .sorted { lhs, rhs in
-                if lhs.updatedAt == rhs.updatedAt {
-                    return lhs.createdAt > rhs.createdAt
-                }
-                return lhs.updatedAt > rhs.updatedAt
+            .filter { summary in
+                scope.searchText.isEmpty || summary.matches(scope.searchText)
             }
 
         self.scopedCount = scoped.count
@@ -384,41 +518,12 @@ struct HandbookNotesListSnapshot: Equatable {
         self.groups = Self.groupRows(visible)
     }
 
-    private static func matchesScope(
-        _ item: HandbookItem,
-        selectedCategory: HandbookCategory?,
-        selectedFolder: String?
-    ) -> Bool {
-        if let selectedCategory, item.category != selectedCategory {
-            return false
-        }
-
-        guard let selectedFolder else {
-            return true
-        }
-
-        let folder = selectedFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-        if folder.isEmpty {
-            return item.trimmedFolder.isEmpty
-        }
-        return item.trimmedFolder == folder
-    }
-
-    private static func matchesSearch(_ item: HandbookItem, query: String) -> Bool {
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        return item.displayTitle.range(of: query, options: options) != nil
-            || item.trimmedBody.range(of: query, options: options) != nil
-            || item.trimmedFolder.range(of: query, options: options) != nil
-            || item.category.title.range(of: query, options: options) != nil
-            || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
-    }
-
-    private static func groupRows(_ items: [HandbookItem]) -> [HandbookNotesGroup] {
+    private static func groupRows(_ summaries: [HandbookNoteSummary]) -> [HandbookNotesGroup] {
         var buckets: [(key: String, title: String, rows: [HandbookNotesRowData])] = []
 
-        for item in items {
-            let group = HandbookNotesDateGrouper.group(for: item.updatedAt)
-            let row = HandbookNotesRowData(item: item)
+        for summary in summaries {
+            let group = HandbookNotesDateGrouper.group(for: summary.updatedAt)
+            let row = HandbookNotesRowData(summary: summary)
 
             if let index = buckets.firstIndex(where: { $0.key == group.key }) {
                 buckets[index].rows.append(row)
@@ -468,25 +573,37 @@ struct HandbookNotesListSnapshotKey: Equatable {
         selectedFolder: String?,
         searchText: String
     ) {
-        self.itemCount = items.count
-        self.rowSignature = items
-            .map { item in
+        self.init(
+            summaries: items.map(HandbookNoteSummary.init),
+            scope: HandbookScope(category: selectedCategory, folder: selectedFolder, searchText: searchText)
+        )
+    }
+
+    init(
+        summaries: [HandbookNoteSummary],
+        scope: HandbookScope
+    ) {
+        let includesFullTextSearch = !scope.searchText.isEmpty
+        self.itemCount = summaries.count
+        self.rowSignature = summaries
+            .map { summary in
                 [
-                    item.id.uuidString,
-                    item.category.rawValue,
-                    item.trimmedFolder,
-                    String(item.trimmedTitle.count),
-                    Self.stableTextSignature(item.trimmedTitle),
-                    String(item.trimmedBody.count),
-                    Self.stableTextSignature(item.trimmedBody),
-                    "\(item.attachments.count)",
-                    String(item.updatedAt.timeIntervalSince1970)
+                    summary.id.uuidString,
+                    summary.category.rawValue,
+                    summary.folder,
+                    String(summary.title.count),
+                    Self.stableTextSignature(summary.title),
+                    String(summary.preview.count),
+                    Self.stableTextSignature(summary.preview),
+                    includesFullTextSearch ? Self.stableTextSignature(summary.searchIndex) : "",
+                    "\(summary.attachmentCount)",
+                    String(summary.updatedAt.timeIntervalSince1970)
                 ].joined(separator: "\u{1F}")
             }
             .joined(separator: "\u{1E}")
-        self.selectedCategory = selectedCategory
-        self.selectedFolder = selectedFolder
-        self.searchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.selectedCategory = scope.category
+        self.selectedFolder = scope.folder
+        self.searchText = scope.searchText
     }
 
     private static func stableTextSignature(_ text: String) -> String {
@@ -504,7 +621,7 @@ struct HandbookNotesGroup: Equatable, Identifiable {
 }
 
 struct HandbookNotesRowData: Equatable, Identifiable {
-    let item: HandbookItem
+    let id: UUID
     let title: String
     let preview: String
     let dateText: String
@@ -512,27 +629,18 @@ struct HandbookNotesRowData: Equatable, Identifiable {
     let category: HandbookCategory
     let attachmentCount: Int
 
-    var id: UUID { item.id }
-
     init(item: HandbookItem) {
-        self.item = item
-        self.title = item.displayTitle
-        self.preview = HandbookNotesRowData.previewText(for: item)
-        self.dateText = HandbookNotesRowData.dateText(for: item.updatedAt)
-        self.folder = item.trimmedFolder
-        self.category = item.category
-        self.attachmentCount = item.attachments.count
+        self.init(summary: HandbookNoteSummary(item: item))
     }
 
-    private static func previewText(for item: HandbookItem) -> String {
-        let body = item.trimmedBody
-            .split(whereSeparator: \.isNewline)
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty } ?? ""
-        if !body.isEmpty {
-            return String(body.prefix(80))
-        }
-        return item.category.subtitle
+    init(summary: HandbookNoteSummary) {
+        self.id = summary.id
+        self.title = summary.title
+        self.preview = summary.preview
+        self.dateText = HandbookNotesRowData.dateText(for: summary.updatedAt)
+        self.folder = summary.folder
+        self.category = summary.category
+        self.attachmentCount = summary.attachmentCount
     }
 
     private static func dateText(for date: Date) -> String {
