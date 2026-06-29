@@ -296,6 +296,17 @@ final class TodoStore: ObservableObject {
         updated.body = cleanedBody
         updated.attachments = attachments
         updated.updatedAt = Date()
+        updated.dirtyFields = mergedDirtyFields(
+            current.dirtyFields,
+            dirtyFields(
+                current: current,
+                category: category,
+                folder: cleanedFolder,
+                title: cleanedTitle,
+                body: cleanedBody,
+                attachments: attachments
+            )
+        )
 
         do {
             try PerformanceMonitor.measure("TodoStore.updateHandbookItem") {
@@ -318,7 +329,8 @@ final class TodoStore: ObservableObject {
         do {
             try PerformanceMonitor.measure("TodoStore.deleteHandbookItem") {
                 try loadHandbookItemsIfNeededInternal()
-                try deleteHandbookItem(id: item.id)
+                let current = handbookItems.first(where: { $0.id == item.id }) ?? item
+                try deleteHandbookItem(current)
                 handbookItems.removeAll { $0.id == item.id }
             }
             lastError = nil
@@ -455,12 +467,20 @@ final class TodoStore: ObservableObject {
                 body TEXT NOT NULL DEFAULT '',
                 attachments_json TEXT NOT NULL DEFAULT '[]',
                 created_at REAL NOT NULL,
-                updated_at REAL NOT NULL
+                updated_at REAL NOT NULL,
+                remote_id TEXT,
+                sync_version INTEGER NOT NULL DEFAULT 0,
+                deleted_at REAL,
+                dirty_fields_json TEXT NOT NULL DEFAULT '[]'
             )
             """
         )
         try addColumnIfNeeded(table: "handbook_items", name: "folder", definition: "TEXT NOT NULL DEFAULT ''")
         try addColumnIfNeeded(table: "handbook_items", name: "attachments_json", definition: "TEXT NOT NULL DEFAULT '[]'")
+        try addColumnIfNeeded(table: "handbook_items", name: "remote_id", definition: "TEXT")
+        try addColumnIfNeeded(table: "handbook_items", name: "sync_version", definition: "INTEGER NOT NULL DEFAULT 0")
+        try addColumnIfNeeded(table: "handbook_items", name: "deleted_at", definition: "REAL")
+        try addColumnIfNeeded(table: "handbook_items", name: "dirty_fields_json", definition: "TEXT NOT NULL DEFAULT '[]'")
         try execute("CREATE INDEX IF NOT EXISTS idx_handbook_category_updated ON handbook_items(category, updated_at)")
         try execute("CREATE INDEX IF NOT EXISTS idx_handbook_folder_updated ON handbook_items(folder, updated_at)")
         try execute("CREATE INDEX IF NOT EXISTS idx_handbook_updated_created ON handbook_items(updated_at DESC, created_at DESC)")
@@ -509,8 +529,10 @@ final class TodoStore: ObservableObject {
     private func fetchHandbookItems() throws -> [HandbookItem] {
         let sql =
             """
-            SELECT id, category, folder, title, body, attachments_json, created_at, updated_at
+            SELECT id, category, folder, title, body, attachments_json, created_at, updated_at,
+                   remote_id, sync_version, deleted_at, dirty_fields_json
             FROM handbook_items
+            WHERE deleted_at IS NULL
             ORDER BY updated_at DESC, created_at DESC
             """
         var statement: OpaquePointer?
@@ -550,8 +572,8 @@ final class TodoStore: ObservableObject {
         let sql =
             """
             INSERT OR REPLACE INTO handbook_items
-            (id, category, folder, title, body, attachments_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, category, folder, title, body, attachments_json, created_at, updated_at, remote_id, sync_version, deleted_at, dirty_fields_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
         try withPreparedStatement(sql) { statement in
             bind(item, to: statement)
@@ -612,7 +634,7 @@ final class TodoStore: ObservableObject {
         let sql =
             """
             UPDATE handbook_items
-            SET category = ?, folder = ?, title = ?, body = ?, attachments_json = ?, updated_at = ?
+            SET category = ?, folder = ?, title = ?, body = ?, attachments_json = ?, updated_at = ?, remote_id = ?, sync_version = ?, deleted_at = ?, dirty_fields_json = ?
             WHERE id = ?
             """
         try withPreparedStatement(sql) { statement in
@@ -622,7 +644,11 @@ final class TodoStore: ObservableObject {
             bindText(item.body, to: statement, at: 4)
             bindText(attachmentsJSON(for: item.attachments), to: statement, at: 5)
             sqlite3_bind_double(statement, 6, item.updatedAt.timeIntervalSince1970)
-            bindText(item.id.uuidString, to: statement, at: 7)
+            bindOptionalText(item.remoteID, to: statement, at: 7)
+            sqlite3_bind_int(statement, 8, Int32(item.syncVersion))
+            bindOptionalDate(item.deletedAt, to: statement, at: 9)
+            bindText(dirtyFieldsJSON(for: item.dirtyFields), to: statement, at: 10)
+            bindText(item.id.uuidString, to: statement, at: 11)
 
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw SQLiteStoreError.execute(message: databaseErrorMessage)
@@ -639,9 +665,19 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    private func deleteHandbookItem(id: UUID) throws {
-        try withPreparedStatement("DELETE FROM handbook_items WHERE id = ?") { statement in
-            bindText(id.uuidString, to: statement, at: 1)
+    private func deleteHandbookItem(_ item: HandbookItem) throws {
+        let deletedAt = Date()
+        try withPreparedStatement(
+            """
+            UPDATE handbook_items
+            SET deleted_at = ?, updated_at = ?, dirty_fields_json = ?
+            WHERE id = ?
+            """
+        ) { statement in
+            sqlite3_bind_double(statement, 1, deletedAt.timeIntervalSince1970)
+            sqlite3_bind_double(statement, 2, deletedAt.timeIntervalSince1970)
+            bindText(dirtyFieldsJSON(for: mergedDirtyFields(item.dirtyFields, ["deletedAt"])), to: statement, at: 3)
+            bindText(item.id.uuidString, to: statement, at: 4)
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw SQLiteStoreError.execute(message: databaseErrorMessage)
             }
@@ -717,10 +753,30 @@ final class TodoStore: ObservableObject {
         bindText(attachmentsJSON(for: item.attachments), to: statement, at: 6)
         sqlite3_bind_double(statement, 7, item.createdAt.timeIntervalSince1970)
         sqlite3_bind_double(statement, 8, item.updatedAt.timeIntervalSince1970)
+        bindOptionalText(item.remoteID, to: statement, at: 9)
+        sqlite3_bind_int(statement, 10, Int32(item.syncVersion))
+        bindOptionalDate(item.deletedAt, to: statement, at: 11)
+        bindText(dirtyFieldsJSON(for: item.dirtyFields), to: statement, at: 12)
     }
 
     private func bindText(_ value: String, to statement: OpaquePointer?, at index: Int32) {
         sqlite3_bind_text(statement, index, value, -1, SQLITE_TRANSIENT)
+    }
+
+    private func bindOptionalText(_ value: String?, to statement: OpaquePointer?, at index: Int32) {
+        guard let value else {
+            sqlite3_bind_null(statement, index)
+            return
+        }
+        bindText(value, to: statement, at: index)
+    }
+
+    private func bindOptionalDate(_ value: Date?, to statement: OpaquePointer?, at index: Int32) {
+        guard let value else {
+            sqlite3_bind_null(statement, index)
+            return
+        }
+        sqlite3_bind_double(statement, index, value.timeIntervalSince1970)
     }
 
     private func todo(from statement: OpaquePointer?) throws -> TodoItem {
@@ -778,7 +834,11 @@ final class TodoStore: ObservableObject {
             body: body,
             attachments: decodeAttachments(from: attachmentsJSON),
             createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6)),
-            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7)),
+            remoteID: optionalText(from: statement, at: 8),
+            syncVersion: Int(sqlite3_column_int(statement, 9)),
+            deletedAt: optionalDate(from: statement, at: 10),
+            dirtyFields: decodeDirtyFields(from: sqlite3_column_text(statement, 11).map { String(cString: $0) } ?? "[]")
         )
     }
 
@@ -809,8 +869,37 @@ final class TodoStore: ObservableObject {
         return item.trimmedFolder == folder.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func dirtyFields(
+        current: HandbookItem,
+        category: HandbookCategory,
+        folder: String,
+        title: String,
+        body: String,
+        attachments: [HandbookAttachment]
+    ) -> [String] {
+        var fields: [String] = []
+        if current.category != category { fields.append("category") }
+        if current.trimmedFolder != folder { fields.append("folder") }
+        if current.trimmedTitle != title { fields.append("title") }
+        if current.trimmedBody != body { fields.append("body") }
+        if current.attachments != attachments { fields.append("attachments") }
+        return fields
+    }
+
+    private func mergedDirtyFields(_ current: [String], _ changed: [String]) -> [String] {
+        Array(Set(current + changed)).sorted()
+    }
+
     private func attachmentsJSON(for attachments: [HandbookAttachment]) -> String {
         guard let data = try? JSONEncoder.todoEncoder.encode(attachments),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return json
+    }
+
+    private func dirtyFieldsJSON(for fields: [String]) -> String {
+        guard let data = try? JSONEncoder.todoEncoder.encode(fields),
               let json = String(data: data, encoding: .utf8) else {
             return "[]"
         }
@@ -823,6 +912,29 @@ final class TodoStore: ObservableObject {
             return []
         }
         return attachments
+    }
+
+    private func decodeDirtyFields(from json: String) -> [String] {
+        guard let data = json.data(using: .utf8),
+              let fields = try? JSONDecoder.todoDecoder.decode([String].self, from: data) else {
+            return []
+        }
+        return fields
+    }
+
+    private func optionalText(from statement: OpaquePointer?, at index: Int32) -> String? {
+        guard sqlite3_column_type(statement, index) != SQLITE_NULL,
+              let value = sqlite3_column_text(statement, index) else {
+            return nil
+        }
+        return String(cString: value)
+    }
+
+    private func optionalDate(from statement: OpaquePointer?, at index: Int32) -> Date? {
+        guard sqlite3_column_type(statement, index) != SQLITE_NULL else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: sqlite3_column_double(statement, index))
     }
 
     private func insertionIndex(for item: TodoItem) -> Int {
@@ -909,8 +1021,10 @@ private enum HandbookSQLiteBackgroundReader {
 
         let sql =
             """
-            SELECT id, category, folder, title, body, attachments_json, created_at, updated_at
+            SELECT id, category, folder, title, body, attachments_json, created_at, updated_at,
+                   remote_id, sync_version, deleted_at, dirty_fields_json
             FROM handbook_items
+            WHERE deleted_at IS NULL
             ORDER BY updated_at DESC, created_at DESC
             """
         var statement: OpaquePointer?
@@ -948,7 +1062,11 @@ private enum HandbookSQLiteBackgroundReader {
             body: body,
             attachments: decodeAttachments(from: attachmentsJSON),
             createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6)),
-            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 7)),
+            remoteID: optionalText(from: statement, at: 8),
+            syncVersion: Int(sqlite3_column_int(statement, 9)),
+            deletedAt: optionalDate(from: statement, at: 10),
+            dirtyFields: decodeDirtyFields(from: sqlite3_column_text(statement, 11).map { String(cString: $0) } ?? "[]")
         )
     }
 
@@ -958,6 +1076,29 @@ private enum HandbookSQLiteBackgroundReader {
             return []
         }
         return attachments
+    }
+
+    private static func decodeDirtyFields(from json: String) -> [String] {
+        guard let data = json.data(using: .utf8),
+              let fields = try? JSONDecoder.todoDecoder.decode([String].self, from: data) else {
+            return []
+        }
+        return fields
+    }
+
+    private static func optionalText(from statement: OpaquePointer?, at index: Int32) -> String? {
+        guard sqlite3_column_type(statement, index) != SQLITE_NULL,
+              let value = sqlite3_column_text(statement, index) else {
+            return nil
+        }
+        return String(cString: value)
+    }
+
+    private static func optionalDate(from statement: OpaquePointer?, at index: Int32) -> Date? {
+        guard sqlite3_column_type(statement, index) != SQLITE_NULL else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: sqlite3_column_double(statement, index))
     }
 
     private static func databaseErrorMessage(for db: OpaquePointer?) -> String {

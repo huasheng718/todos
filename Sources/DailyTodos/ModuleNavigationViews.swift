@@ -176,29 +176,31 @@ struct HandbookModuleView: View {
     let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
     let onDelete: (HandbookItem) -> Void
 
-    @State private var selectedItemID: UUID?
-    @State private var selectedItemCache: HandbookItem?
-    @State private var visibleHandbookItems: [HandbookItem] = []
-    @State private var hasVisibleHandbookSnapshot = false
+    @StateObject private var workspaceModel = HandbookWorkspaceViewModel()
 
     private let notesListWidth: CGFloat = 368
 
     private var selectedItem: HandbookItem? {
-        guard selectedItemID != nil else { return nil }
-        return selectedItemCache
+        workspaceModel.selectedItem
     }
 
     var body: some View {
         HStack(spacing: 0) {
             secondarySidebar {
                 HandbookFolderSidebarView(
-                    items: store.handbookItems,
+                    sidebarIndex: workspaceModel.sidebarIndex,
                     selectedCategory: $handbookCategory,
                     selectedFolder: $handbookFolder,
                     isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
                     isLoaded: store.didLoadHandbookItems,
-                    onMove: { item, category, folder in
-                        onUpdate(item, category, folder, item.title, item.body, item.attachments)
+                    onMove: { itemIDs, category, folder in
+                        var didMove = false
+                        for itemID in itemIDs {
+                            guard let item = workspaceModel.item(for: itemID) else { continue }
+                            onUpdate(item, category ?? item.category, folder ?? "", item.title, item.body, item.attachments)
+                            didMove = true
+                        }
+                        return didMove
                     }
                 )
             } collapsed: {
@@ -209,23 +211,21 @@ struct HandbookModuleView: View {
                 .overlay(AppTheme.hairline.opacity(0.72))
 
             HandbookNotesListView(
-                items: store.handbookItems,
+                snapshot: workspaceModel.listSnapshot,
                 selectedCategory: $handbookCategory,
                 selectedFolder: $handbookFolder,
                 searchText: $handbookSearchText,
-                debouncedSearchText: debouncedHandbookSearchText,
-                selectedItemID: selectedItemID,
+                selectedItemID: workspaceModel.selectedItemID,
                 isLoaded: store.didLoadHandbookItems,
-                onSelect: { item in
-                    selectedItemID = item.id
-                    selectedItemCache = item
+                onSelect: { itemID in
+                    workspaceModel.selectItem(id: itemID)
                 },
-                onVisibleItemsChange: syncSelectionWithVisibleItems,
                 onCreateDraft: createDraftHandbookItem,
-                onDelete: { item in
+                onDelete: { itemID in
+                    guard let item = workspaceModel.item(for: itemID) else { return }
                     onDelete(item)
-                    if selectedItemID == item.id {
-                        selectedItemID = nil
+                    if workspaceModel.selectedItemID == item.id {
+                        workspaceModel.selectItem(id: nil)
                     }
                 }
             )
@@ -241,8 +241,8 @@ struct HandbookModuleView: View {
                 },
                 onDelete: { item in
                     onDelete(item)
-                    if selectedItemID == item.id {
-                        selectedItemID = nil
+                    if workspaceModel.selectedItemID == item.id {
+                        workspaceModel.selectItem(id: nil)
                     }
                 }
             )
@@ -253,23 +253,41 @@ struct HandbookModuleView: View {
             }
         }
         .onAppear {
-            reconcileSelection(with: store.handbookItems, fallbackToFirst: true)
+            workspaceModel.refresh(
+                items: store.handbookItems,
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
         }
         .onChange(of: store.handbookItems) { _, newItems in
-            if !hasVisibleHandbookSnapshot {
-                reconcileSelection(with: newItems, fallbackToFirst: true)
-            } else {
-                refreshSelectedItemCache(from: newItems)
-            }
+            workspaceModel.refresh(
+                items: newItems,
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
         }
         .onChange(of: handbookCategory) { _, _ in
-            resetVisibleHandbookSnapshot()
+            workspaceModel.updateScope(
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
         }
         .onChange(of: handbookFolder) { _, _ in
-            resetVisibleHandbookSnapshot()
+            workspaceModel.updateScope(
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
         }
         .onChange(of: debouncedHandbookSearchText) { _, _ in
-            resetVisibleHandbookSnapshot()
+            workspaceModel.updateScope(
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
         }
     }
 
@@ -277,80 +295,15 @@ struct HandbookModuleView: View {
         let category = handbookCategory ?? .businessRule
         let folder = handbookFolder?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard let createdItem = onCreate(category, folder, "未命名手记", "", []) else { return }
-        selectedItemID = createdItem.id
-        selectedItemCache = createdItem
-        visibleHandbookItems = [createdItem]
-        hasVisibleHandbookSnapshot = true
-    }
-
-    private func syncSelectionWithVisibleItems(_ items: [HandbookItem]) {
-        visibleHandbookItems = items
-        hasVisibleHandbookSnapshot = true
-        reconcileSelection(with: items, fallbackToFirst: true)
-    }
-
-    private func resetVisibleHandbookSnapshot() {
-        visibleHandbookItems = []
-        hasVisibleHandbookSnapshot = false
-    }
-
-    private func reconcileSelection(with items: [HandbookItem], fallbackToFirst: Bool) {
-        if let selectedItemID {
-            if let selectedItem = items.first(where: { $0.id == selectedItemID }) {
-                selectedItemCache = selectedItem
-                return
-            }
-
-            if !fallbackToFirst {
-                return
-            }
-        }
-
-        guard let fallbackItem = items.first else {
-            selectedItemCache = nil
-            self.selectedItemID = nil
-            return
-        }
-
-        selectedItemCache = fallbackItem
-        self.selectedItemID = fallbackItem.id
-    }
-
-    private func refreshSelectedItemCache(from items: [HandbookItem]) {
-        guard let selectedItemID,
-              let selectedItem = items.first(where: { $0.id == selectedItemID }) else {
-            reconcileSelection(with: visibleHandbookItems, fallbackToFirst: hasVisibleHandbookSnapshot)
-            return
-        }
-        guard isVisibleInCurrentHandbookScope(selectedItem) else {
-            reconcileSelection(with: visibleHandbookItems, fallbackToFirst: hasVisibleHandbookSnapshot)
-            return
-        }
-        selectedItemCache = selectedItem
-    }
-
-    private func isVisibleInCurrentHandbookScope(_ item: HandbookItem) -> Bool {
-        if let handbookCategory, item.category != handbookCategory {
-            return false
-        }
-
-        if let folder = handbookFolder {
-            let normalizedFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
-            if normalizedFolder.isEmpty {
-                guard item.trimmedFolder.isEmpty else { return false }
-            } else if item.trimmedFolder != normalizedFolder {
-                return false
-            }
-        }
-
-        let query = debouncedHandbookSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return true }
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        return item.displayTitle.range(of: query, options: options) != nil
-            || item.trimmedBody.range(of: query, options: options) != nil
-            || item.trimmedFolder.range(of: query, options: options) != nil
-            || item.category.title.range(of: query, options: options) != nil
-            || item.attachments.contains { $0.name.range(of: query, options: options) != nil }
+        handbookCategory = category
+        handbookFolder = createdItem.trimmedFolder.isEmpty ? nil : createdItem.trimmedFolder
+        workspaceModel.refresh(
+            items: store.handbookItems,
+            selectedCategory: handbookCategory,
+            selectedFolder: handbookFolder,
+            searchText: debouncedHandbookSearchText
+        )
+        workspaceModel.selectItem(id: createdItem.id)
     }
 
     @ViewBuilder

@@ -9,6 +9,10 @@ struct HandbookItem: Identifiable, Codable, Equatable, Sendable {
     var attachments: [HandbookAttachment]
     var createdAt: Date
     var updatedAt: Date
+    var remoteID: String?
+    var syncVersion: Int
+    var deletedAt: Date?
+    var dirtyFields: [String]
 
     init(
         id: UUID = UUID(),
@@ -18,7 +22,11 @@ struct HandbookItem: Identifiable, Codable, Equatable, Sendable {
         body: String,
         attachments: [HandbookAttachment] = [],
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        remoteID: String? = nil,
+        syncVersion: Int = 0,
+        deletedAt: Date? = nil,
+        dirtyFields: [String] = []
     ) {
         self.id = id
         self.category = category
@@ -28,6 +36,10 @@ struct HandbookItem: Identifiable, Codable, Equatable, Sendable {
         self.attachments = attachments
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.remoteID = remoteID
+        self.syncVersion = syncVersion
+        self.deletedAt = deletedAt
+        self.dirtyFields = dirtyFields
     }
 }
 

@@ -21,7 +21,17 @@ struct DailyTodosChecks {
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
                 try checkLazyStartupLoading()
+                try checkHandbookActivationUsesScheduledLoading()
                 try checkHandbookNotesSnapshotInvalidation()
+                try checkHandbookNotesSnapshotPreservesSourceOrder()
+                try checkHandbookNotesRowsAreLightweight()
+                try checkHandbookSearchUsesFullBodyIndex()
+                try checkHandbookRepositorySummaryDetailBoundary()
+                try checkHandbookWorkspaceSelectionScope()
+                try checkHandbookWorkspaceSelectionUsesCurrentScope()
+                try checkHandbookCreateDraftTracksCreatedScope()
+                try checkHandbookDragTargetsClearFolder()
+                try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkTodoStore()
                 try checkCredentialBreachChecker()
                 try checkCredentialStore()
@@ -302,6 +312,20 @@ func checkQuickInputParser() throws {
     try expect(currentFallbackComponents.minute == 0, "未指定时间时应保留当前 fallback 分钟")
 }
 
+func checkHandbookActivationUsesScheduledLoading() throws {
+    let contentViewURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("Sources/DailyTodos/ContentView.swift")
+    let source = try String(contentsOf: contentViewURL, encoding: .utf8)
+    try expect(
+        source.contains("store.scheduleLoadHandbookItemsIfNeeded()"),
+        "切换到手记模块时应调度后台加载，避免同步 SQLite 阻塞 UI"
+    )
+    try expect(
+        !source.contains("guard newValue == \"handbook\" else { return }\n            store.loadHandbookItemsIfNeeded()"),
+        "手记模块激活路径不应同步调用 loadHandbookItemsIfNeeded"
+    )
+}
+
 @MainActor
 func checkLazyStartupLoading() throws {
     let (store, _) = try makeStore()
@@ -384,6 +408,223 @@ func checkHandbookNotesSnapshotInvalidation() throws {
     }
     try expect(updatedRow.title == "竞品调研更新", "列表行标题应读取中间手记的最新标题")
     try expect(updatedRow.preview == "新摘要应立即显示", "列表行摘要应读取中间手记的最新正文")
+}
+
+func checkHandbookNotesSnapshotPreservesSourceOrder() throws {
+    let calendar = makeCalendar()
+    let baseDate = try makeDate(DateComponents(year: 2026, month: 6, day: 24, hour: 9), calendar: calendar)
+    let stableFirst = HandbookItem(
+        category: .meeting,
+        folder: "供应商",
+        title: "先显示的手记",
+        body: "正文实时保存后仍然保持位置",
+        createdAt: baseDate,
+        updatedAt: baseDate
+    )
+    let newerButSecond = HandbookItem(
+        category: .meeting,
+        folder: "供应商",
+        title: "更新时间更新但仍排第二",
+        body: "快照应尊重 TodoStore 已维护的稳定顺序",
+        createdAt: baseDate.addingTimeInterval(10),
+        updatedAt: baseDate.addingTimeInterval(3_600)
+    )
+
+    let snapshot = HandbookNotesListSnapshot(
+        items: [stableFirst, newerButSecond],
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: ""
+    )
+    let rows = snapshot.groups.flatMap(\.rows)
+    try expect(rows.map(\.id) == [stableFirst.id, newerButSecond.id], "手记列表快照应尊重源顺序，避免实时保存后按 updatedAt 二次排序导致列表跳动")
+}
+
+func checkHandbookNotesRowsAreLightweight() throws {
+    let calendar = makeCalendar()
+    let baseDate = try makeDate(DateComponents(year: 2026, month: 6, day: 24, hour: 10), calendar: calendar)
+    let longBody = String(repeating: "正文内容", count: 2_000)
+    let item = HandbookItem(
+        category: .businessRule,
+        folder: "审批流",
+        title: "CRM-盘账要支持一键打印",
+        body: longBody,
+        createdAt: baseDate,
+        updatedAt: baseDate
+    )
+
+    let snapshot = HandbookNotesListSnapshot(
+        items: [item],
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: ""
+    )
+    guard let row = snapshot.groups.first?.rows.first else {
+        throw CheckFailure.failed("轻量列表快照应生成列表行")
+    }
+
+    let storedPropertyNames = Set(Mirror(reflecting: row).children.compactMap(\.label))
+    try expect(!storedPropertyNames.contains("item"), "列表行不应重新持有完整 HandbookItem")
+    try expect(!storedPropertyNames.contains("body"), "列表行不应持有完整正文 body")
+    try expect(row.preview.count <= 80, "列表行摘要应是短文本，不能携带完整正文")
+}
+
+func checkHandbookSearchUsesFullBodyIndex() throws {
+    let longPrefix = String(repeating: "前缀内容", count: 40)
+    let item = HandbookItem(
+        category: .businessRule,
+        folder: "合同",
+        title: "全文搜索",
+        body: "\(longPrefix) 末尾唯一关键词XYZ"
+    )
+    let snapshot = HandbookNotesListSnapshot(
+        items: [item],
+        selectedCategory: nil,
+        selectedFolder: nil,
+        searchText: "唯一关键词XYZ"
+    )
+    try expect(snapshot.visibleCount == 1, "手记搜索应匹配完整正文，不能只查 80 字列表摘要")
+    let row = snapshot.groups.flatMap(\.rows).first
+    try expect(row?.preview.contains("唯一关键词XYZ") == false, "回归用例应证明命中词不在短摘要里")
+}
+
+func checkHandbookRepositorySummaryDetailBoundary() throws {
+    let calendar = makeCalendar()
+    let baseDate = try makeDate(DateComponents(year: 2026, month: 6, day: 24, hour: 10), calendar: calendar)
+    let id = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
+    let body = String(repeating: "同步边界正文", count: 500)
+    let item = HandbookItem(
+        id: id,
+        category: .businessRule,
+        folder: "审批流",
+        title: "Repository 边界",
+        body: body,
+        createdAt: baseDate,
+        updatedAt: baseDate
+    )
+
+    let repository = LocalHandbookRepository(items: [item])
+    let summaries = repository.noteSummaries()
+    try expect(summaries.count == 1, "Repository 应提供列表摘要")
+    try expect(summaries[0].id == id, "摘要应保留稳定 ID")
+    try expect(summaries[0].preview.count <= 80, "摘要不应暴露完整正文")
+    try expect(repository.noteDetail(id: id)?.body == body, "详情应按 ID 单独读取完整正文")
+
+    let index = repository.sidebarIndex(selectedCategory: .businessRule)
+    try expect(index.totalCount == 1, "Repository 应提供侧边栏总数")
+    try expect(index.categoryCounts[.businessRule] == 1, "Repository 应提供分类计数")
+    try expect(index.folders.first?.name == "审批流", "Repository 应提供目录索引")
+}
+
+@MainActor
+func checkHandbookWorkspaceSelectionScope() throws {
+    let calendar = makeCalendar()
+    let baseDate = try makeDate(DateComponents(year: 2026, month: 6, day: 24, hour: 11), calendar: calendar)
+    let selectedID = UUID(uuidString: "10000000-0000-0000-0000-000000000001")!
+    let otherID = UUID(uuidString: "10000000-0000-0000-0000-000000000002")!
+    let business = HandbookItem(
+        id: selectedID,
+        category: .businessRule,
+        folder: "审批流",
+        title: "业务规则",
+        body: "规则",
+        createdAt: baseDate,
+        updatedAt: baseDate
+    )
+    let research = HandbookItem(
+        id: otherID,
+        category: .research,
+        folder: "竞品",
+        title: "竞品调研",
+        body: "调研",
+        createdAt: baseDate.addingTimeInterval(-10),
+        updatedAt: baseDate.addingTimeInterval(-10)
+    )
+
+    let model = HandbookWorkspaceViewModel()
+    model.refresh(items: [business, research], selectedCategory: nil, selectedFolder: nil, searchText: "")
+    model.selectItem(id: selectedID)
+    try expect(model.selectedItemID == selectedID, "选择列表行后应记录选中 ID")
+
+    model.updateScope(selectedCategory: .research, selectedFolder: nil, searchText: "")
+    try expect(model.selectedItemID == nil, "切换到不包含当前手记的分类时应清空选择，不应跳选第一条")
+    try expect(model.selectedItem == nil, "清空选择后详情应为空")
+
+    model.selectItem(id: otherID)
+    model.updateScope(selectedCategory: .research, selectedFolder: nil, searchText: "")
+    try expect(model.selectedItemID == otherID, "当前手记仍在范围内时应保持选择")
+}
+
+func checkHandbookWorkspaceSelectionUsesCurrentScope() throws {
+    let viewModelURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("Sources/DailyTodos/HandbookWorkspaceViewModel.swift")
+    let source = try String(contentsOf: viewModelURL, encoding: .utf8)
+    try expect(
+        source.contains("summaries.contains(where: { $0.id == selectedItemID && scope.contains($0) })"),
+        "手记选中项可见性应基于当前 scope 和 summaries 判断，不能依赖可能滞后的 listSnapshot"
+    )
+    try expect(
+        !source.contains("let visibleIDs = Set(listSnapshot.groups.flatMap"),
+        "手记选中项同步不应读取旧 listSnapshot，否则异步重建期间会清错或保留错详情"
+    )
+}
+
+func checkHandbookCreateDraftTracksCreatedScope() throws {
+    let moduleViewURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("Sources/DailyTodos/ModuleNavigationViews.swift")
+    let source = try String(contentsOf: moduleViewURL, encoding: .utf8)
+    try expect(
+        !source.contains("let previousCategory = handbookCategory"),
+        "新建手记后不应恢复旧分类，否则列表 scope 会和新建详情脱节"
+    )
+    try expect(
+        source.contains("handbookCategory = category"),
+        "新建手记后应定位到新建项分类，保证左侧菜单、列表和详情一致"
+    )
+    try expect(
+        source.contains("handbookFolder = createdItem.trimmedFolder.isEmpty ? nil : createdItem.trimmedFolder"),
+        "新建手记后应定位到新建项二级目录，保证创建后可在当前列表看到选中项"
+    )
+}
+
+func checkHandbookDragTargetsClearFolder() throws {
+    let sidebarURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("Sources/DailyTodos/HandbookNotesWorkspaceView.swift")
+    let sidebarSource = try String(contentsOf: sidebarURL, encoding: .utf8)
+    try expect(
+        sidebarSource.contains("moveDraggedItems(itemIDs, category: nil, folder: \"\")"),
+        "拖到全部手记应显式清空二级目录，不能把 nil 当成保留原目录"
+    )
+    try expect(
+        sidebarSource.contains("moveDraggedItems(itemIDs, category: category, folder: \"\")"),
+        "拖到分类行应显式清空二级目录，避免拖拽后仍停在旧标签"
+    )
+
+    let moduleURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("Sources/DailyTodos/ModuleNavigationViews.swift")
+    let moduleSource = try String(contentsOf: moduleURL, encoding: .utf8)
+    try expect(
+        moduleSource.contains("onUpdate(item, category ?? item.category, folder ?? \"\", item.title, item.body, item.attachments)"),
+        "拖拽更新应区分清空目录和保留分类，folder nil 不应写回旧目录"
+    )
+}
+
+func checkHandbookDetailReconcilesSameItemUpdates() throws {
+    let detailURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("Sources/DailyTodos/HandbookDetailPanel.swift")
+    let source = try String(contentsOf: detailURL, encoding: .utf8)
+    try expect(
+        source.contains("preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate"),
+        "同一手记回写时应通过同步策略保护本地输入和焦点"
+    )
+    try expect(
+        source.contains("if category != item.category { category = item.category }"),
+        "详情草稿应吸收同 ID 外部分类变化，避免自动保存写回旧分类"
+    )
+    try expect(
+        source.contains("if folder != item.folder { folder = item.folder }"),
+        "详情草稿应吸收同 ID 外部目录变化，避免自动保存写回旧目录"
+    )
 }
 
 @MainActor
@@ -544,6 +785,9 @@ func checkTodoStore() throws {
     try expect(item.category == .meeting, "手记分类应持久化")
     try expect(item.trimmedFolder == "供应商", "手记二级目录应持久化")
     try expect(item.attachments == [attachment], "手记附件应持久化")
+    try expect(item.remoteID == nil, "本地新增手记默认不应绑定远端 ID")
+    try expect(item.syncVersion == 0, "本地新增手记默认同步版本应为 0")
+    try expect(item.deletedAt == nil, "本地新增手记默认不应标记删除")
 
     Thread.sleep(forTimeInterval: 0.01)
     guard store.addHandbookItem(category: .research, folder: "竞品", title: "竞品资料", body: "后创建") != nil else {
@@ -561,6 +805,30 @@ func checkTodoStore() throws {
         attachments: olderItem.attachments
     )
     try expect(store.handbookItems.last?.id == item.id, "实时保存正文不应改变手记列表位置")
+    try expect(store.handbookItems.last?.dirtyFields == ["body"], "手记更新应记录同步脏字段")
+
+    guard let dirtyItem = store.handbookItems.last(where: { $0.id == item.id }) else {
+        throw CheckFailure.failed("未找到待验证脏字段累积的手记")
+    }
+    store.update(
+        dirtyItem,
+        category: dirtyItem.category,
+        folder: dirtyItem.folder,
+        title: "供应商对接更新",
+        body: dirtyItem.body,
+        attachments: dirtyItem.attachments
+    )
+    guard let mergedDirtyItem = store.handbookItems.last(where: { $0.id == item.id }) else {
+        throw CheckFailure.failed("未找到已合并脏字段的手记")
+    }
+    try expect(mergedDirtyItem.dirtyFields == ["body", "title"], "连续本地更新应累积同步脏字段，不能被本次 delta 覆盖")
+
+    store.delete(item)
+    try expect(!store.handbookItems.contains(where: { $0.id == item.id }), "软删除后 UI 内存列表不应保留手记")
+
+    let deletedReloadStore = TodoStore(storageURL: databaseURL)
+    deletedReloadStore.load()
+    try expect(!deletedReloadStore.handbookItems.contains(where: { $0.id == item.id }), "软删除后普通加载不应返回 tombstone")
 }
 
 @MainActor
