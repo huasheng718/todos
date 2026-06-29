@@ -166,8 +166,8 @@ extension HandbookItem {
         if !trimmedTitle.isEmpty {
             return trimmedTitle
         }
-        if let firstLine = trimmedBody.split(whereSeparator: \.isNewline).first {
-            let summary = String(firstLine).trimmingCharacters(in: .whitespacesAndNewlines)
+        for line in body.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let summary = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
             if !summary.isEmpty {
                 return String(summary.prefix(32))
             }

@@ -144,7 +144,7 @@ struct HandbookFolderSidebarView: View {
     }
 
     private var notesSidebarBackground: Color {
-        AppTheme.isDark ? AppTheme.sidebar : Color(red: 0.944, green: 0.946, blue: 0.950)
+        AppTheme.sidebar
     }
 
     private func moveDraggedItems(_ itemIDs: [String], category: HandbookCategory?, folder: String?) -> Bool {
@@ -190,7 +190,7 @@ struct HandbookNotesListView: View {
                         .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
 
-                    Text("\(snapshot.visibleCount) 个备忘录")
+                    Text("\(snapshot.visibleCount) 条手记")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.secondaryText)
                         .monospacedDigit()
@@ -208,7 +208,7 @@ struct HandbookNotesListView: View {
                 .help("新建手记")
             }
 
-            SearchField(text: $searchText)
+            SearchField(text: $searchText, placeholder: "搜索标题或正文")
         }
         .padding(.horizontal, 14)
         .padding(.top, 13)
@@ -281,7 +281,7 @@ struct HandbookNotesListView: View {
     }
 
     private var notesListBackground: Color {
-        AppTheme.isDark ? AppTheme.workSurface : Color(red: 0.976, green: 0.976, blue: 0.974)
+        AppTheme.workSurface
     }
 
 }

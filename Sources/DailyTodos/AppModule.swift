@@ -13,12 +13,6 @@ protocol AppModule: Identifiable {
     var isDefault: Bool { get }
     /// 模块描述
     var description: String { get }
-    /// 导航视图（左侧树/列表）
-    @ViewBuilder
-    var navigationView: AnyView { get }
-    /// 内容视图（右侧详情）
-    @ViewBuilder
-    var contentView: AnyView { get }
 }
 
 /// 微应用注册中心
@@ -35,7 +29,8 @@ final class AppModuleRegistry: ObservableObject {
         // 注册内置模块
         let modules: [any AppModule] = [
             TodoAppModule(),
-            HandbookAppModule()
+            HandbookAppModule(),
+            CredentialsAppModule()
         ]
 
         // 从 UserDefaults 读取已安装模块
@@ -48,8 +43,8 @@ final class AppModuleRegistry: ObservableObject {
             installed = Set(savedIDs)
         }
 
-        // 激活第一个已安装模块
-        let active = installed.first ?? modules.first!.id
+        // 激活第一个按注册顺序安装的模块，避免 Set.first 带来的启动页随机性。
+        let active = modules.first(where: { installed.contains($0.id) })?.id ?? modules.first!.id
 
         registeredModules = modules
         installedModuleIDs = installed

@@ -18,6 +18,8 @@ struct DailyTodosChecks {
                 try checkUpdateAvailability()
                 try checkUpdateDownloadProgress()
                 try checkQuickInputParser()
+                try checkHandbookEditorPlaceholderPolicy()
+                try checkHandbookEditorSyncPolicy()
                 try checkLazyStartupLoading()
                 try checkHandbookActivationUsesScheduledLoading()
                 try checkHandbookNotesSnapshotInvalidation()
@@ -31,6 +33,8 @@ struct DailyTodosChecks {
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkTodoStore()
+                try checkCredentialBreachChecker()
+                try checkCredentialStore()
             }
             try await checkScheduledHandbookLoading()
             try await checkHandbookLoadingStateConflict()
@@ -46,6 +50,77 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() {
         throw CheckFailure.failed(message)
     }
+}
+
+func checkCredentialBreachChecker() throws {
+    let passwordHash = CredentialBreachChecker.passwordSHA1PrefixSuffix("password")
+    try expect(passwordHash.prefix == "5BAA6", "HIBP 密码检查应使用 SHA-1 前 5 位")
+    try expect(passwordHash.suffix == "1E4C9B93F3F0682250B6CF8331B7EE68FD8", "HIBP 密码检查应在本地保留 SHA-1 后缀")
+
+    let rangeResponse = """
+    003CD215739D7C1B2218670D26F81408237:2
+    1E4C9B93F3F0682250B6CF8331B7EE68FD8:3303003
+    """
+    try expect(
+        CredentialBreachChecker.parsePwnedPasswordRangeResponse(rangeResponse, matching: passwordHash.suffix) == 3_303_003,
+        "HIBP range 响应应识别匹配后缀出现次数"
+    )
+    try expect(
+        CredentialBreachChecker.parsePwnedPasswordRangeResponse(rangeResponse, matching: "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF") == 0,
+        "HIBP range 响应未匹配后缀时应返回 0"
+    )
+
+    try expect(
+        CredentialBreachChecker.emailAddress(in: "账号 user@example.com") == "user@example.com",
+        "风险检查应能从账号字段中识别邮箱"
+    )
+    try expect(
+        CredentialBreachChecker.emailAddress(in: "HT008881") == nil,
+        "非邮箱账号应跳过邮箱泄露检查"
+    )
+
+    let xposedResponse = Data(#"{"breaches":[["Adobe","Dropbox"]]}"#.utf8)
+    let emailResult = try CredentialBreachChecker.parseXposedOrNotEmailResponse(xposedResponse, email: "user@example.com")
+    if case .exposed(let email, let names) = emailResult {
+        try expect(email == "user@example.com", "XposedOrNot 解析应保留被检查邮箱")
+        try expect(names == ["Adobe", "Dropbox"], "XposedOrNot 解析应提取泄露名称")
+    } else {
+        throw CheckFailure.failed("XposedOrNot 命中响应应解析为 exposed")
+    }
+
+    let notFoundResponse = Data(#"{"Error":"Not found"}"#.utf8)
+    let notFoundResult = try CredentialBreachChecker.parseXposedOrNotEmailResponse(notFoundResponse, email: "safe@example.com")
+    try expect(notFoundResult == .notFound(email: "safe@example.com"), "XposedOrNot 未命中响应应解析为 notFound")
+}
+
+func checkHandbookEditorPlaceholderPolicy() throws {
+    try expect(
+        HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: true, isBodyFocused: false),
+        "空正文未聚焦时应显示手记输入提示"
+    )
+    try expect(
+        !HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: true, isBodyFocused: true),
+        "空正文已聚焦时不应同时显示输入提示和光标"
+    )
+    try expect(
+        !HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(isBodyEmpty: false, isBodyFocused: false),
+        "正文已有内容时不应显示手记输入提示"
+    )
+}
+
+func checkHandbookEditorSyncPolicy() throws {
+    try expect(
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: true, isEditorFocused: false),
+        "同一条手记仍有未保存编辑时，应保留本地标题和正文"
+    )
+    try expect(
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: true),
+        "同一条手记自动保存回写时，即使已清空 dirty 状态，也应保留当前编辑焦点"
+    )
+    try expect(
+        !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
+        "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
+    )
 }
 
 func makeCalendar() -> Calendar {
@@ -539,8 +614,8 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
         .appendingPathComponent("Sources/DailyTodos/HandbookDetailPanel.swift")
     let source = try String(contentsOf: detailURL, encoding: .utf8)
     try expect(
-        source.contains("reconcileDraft(with: newValue)"),
-        "同一手记被外部移动分类/目录后，详情草稿应同步外部字段"
+        source.contains("preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate"),
+        "同一手记回写时应通过同步策略保护本地输入和焦点"
     )
     try expect(
         source.contains("if category != item.category { category = item.category }"),
@@ -754,6 +829,135 @@ func checkTodoStore() throws {
     let deletedReloadStore = TodoStore(storageURL: databaseURL)
     deletedReloadStore.load()
     try expect(!deletedReloadStore.handbookItems.contains(where: { $0.id == item.id }), "软删除后普通加载不应返回 tombstone")
+}
+
+@MainActor
+func checkCredentialStore() throws {
+    let databaseURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("DailyTodosCredentialChecks-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("credentials.sqlite")
+    try FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+    let store = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
+    store.load()
+    try expect(store.status == .uninitialized, "首次加载凭证库应处于未初始化状态")
+
+    store.initialize(masterPassword: "correct horse battery staple")
+    try expect(store.status == .unlocked, "初始化后应解锁凭证库")
+
+    var draft = CredentialDraft()
+    draft.title = "GitHub"
+    draft.type = .apiKey
+    draft.username = "dev@example.com"
+    draft.serviceURL = "https://github.com"
+    draft.secretValue = "sample-sensitive-token"
+    draft.notes = "恢复码"
+    draft.tagsText = "dev, code"
+
+    guard let item = store.addCredential(draft) else {
+        throw CheckFailure.failed("新增凭证失败：\(store.lastError ?? "unknown")")
+    }
+    try expect(store.credentials.count == 1, "新增凭证后内存列表应有 1 条")
+    try expect(store.credentials(matching: "github", type: nil).count == 1, "凭证应支持标题搜索")
+    try expect(store.credentials(matching: "sample-sensitive-token", type: nil).isEmpty, "敏感字段不应进入普通搜索")
+
+    guard let secret = store.secretPayload(for: item, auditAction: "测试查看") else {
+        throw CheckFailure.failed("解密凭证失败")
+    }
+    try expect(secret.secretValue == "sample-sensitive-token", "正确主密码应解密敏感字段")
+
+    let databaseData = try Data(contentsOf: databaseURL)
+    let databaseText = String(data: databaseData, encoding: .utf8) ?? ""
+    try expect(!databaseText.contains("sample-sensitive-token"), "SQLite 文件不应包含敏感字段明文")
+    try expect(!databaseText.contains("恢复码"), "SQLite 文件不应包含敏感备注明文")
+
+    guard let backup = store.exportBackup(password: "backup password") else {
+        throw CheckFailure.failed("导出凭证备份失败：\(store.lastError ?? "unknown")")
+    }
+    try expect(!backup.contains("sample-sensitive-token"), "备份文件不应包含敏感字段明文")
+
+    store.lock()
+    try expect(store.status == .locked, "手动锁定后状态应为 locked")
+    store.unlock(masterPassword: "wrong password")
+    try expect(store.status == .locked, "错误主密码不应解锁凭证库")
+    store.unlock(masterPassword: "correct horse battery staple")
+    try expect(store.status == .unlocked, "正确主密码应重新解锁凭证库")
+
+    store.setMasterPasswordRequired(false)
+    try expect(!store.requiresMasterPassword, "应支持关闭主密码验证")
+    store.lock()
+    try expect(store.status == .unlocked, "关闭主密码后手动锁定不应要求验证")
+    let noPasswordStore = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
+    noPasswordStore.load()
+    try expect(noPasswordStore.status == .unlocked, "关闭主密码后重新加载应自动解锁")
+    try expect(noPasswordStore.credentials.count == 1, "关闭主密码后凭证仍应可加载")
+    noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
+    try expect(noPasswordStore.requiresMasterPassword, "应支持重新开启主密码验证")
+    noPasswordStore.lock()
+    noPasswordStore.unlock(masterPassword: "wrong password")
+    try expect(noPasswordStore.status == .locked, "重新开启主密码后错误密码不应解锁")
+    noPasswordStore.unlock(masterPassword: "new master password")
+    try expect(noPasswordStore.status == .unlocked, "重新开启主密码后正确密码应解锁")
+
+    let importedURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("DailyTodosCredentialImportChecks-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("credentials.sqlite")
+    try FileManager.default.createDirectory(at: importedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let importedStore = CredentialStore(storageURL: importedURL, autoLockInterval: 60)
+    importedStore.load()
+    importedStore.importBackup(backup, password: "backup password", replaceExisting: true)
+    importedStore.unlock(masterPassword: "correct horse battery staple")
+    try expect(importedStore.credentials.count == 1, "导入备份后应恢复凭证")
+    guard let importedItem = importedStore.credentials.first,
+          let importedSecret = importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
+        throw CheckFailure.failed("导入备份后无法解密凭证")
+    }
+    try expect(importedSecret.secretValue == "sample-sensitive-token", "导入备份后敏感字段应保持一致")
+
+    let looseText = """
+    星邦（剪叉）
+    http://s3.rootcloud.com/
+    账号：HT008881
+    密码：sample-login-password
+    """
+    guard let parsedDraft = CredentialImportParser.draft(fromLooseText: looseText) else {
+        throw CheckFailure.failed("文本凭证解析失败")
+    }
+    try expect(parsedDraft.title == "星邦（剪叉）", "文本解析应识别第一行为标题")
+    try expect(parsedDraft.serviceURL == "http://s3.rootcloud.com/", "文本解析应识别 URL")
+    try expect(parsedDraft.username == "HT008881", "文本解析应识别账号")
+    try expect(parsedDraft.secretValue == "sample-login-password", "文本解析应识别密码")
+
+    let compactLooseText = """
+    星邦（剪叉）
+    http://s3.rootcloud.com/
+    账号：HT001密码：888888
+    """
+    guard let compactParsedDraft = CredentialImportParser.draft(fromLooseText: compactLooseText) else {
+        throw CheckFailure.failed("紧凑文本凭证解析失败")
+    }
+    try expect(compactParsedDraft.username == "HT001", "紧凑文本解析不应把密码吞进账号")
+    try expect(compactParsedDraft.secretValue == "888888", "紧凑文本解析应识别密码")
+
+    let chromeCSV = """
+    name,url,username,password,note
+    RootCloud,http://s3.rootcloud.com/,HT008881,sample-login-password,剪叉车平台
+    """
+    let chromeDrafts = CredentialImportParser.drafts(fromChromeCSV: chromeCSV)
+    try expect(chromeDrafts.count == 1, "Chrome CSV 应解析 1 条凭证")
+    try expect(chromeDrafts[0].title == "RootCloud", "Chrome CSV 应识别 name")
+    try expect(chromeDrafts[0].username == "HT008881", "Chrome CSV 应识别 username")
+    try expect(chromeDrafts[0].secretValue == "sample-login-password", "Chrome CSV 应识别 password")
+
+    let importedCount = store.importCredentials([parsedDraft] + chromeDrafts)
+    try expect(importedCount == 2, "批量导入应返回成功条数")
+    try expect(store.credentials.count == 3, "批量导入后凭证数量应增加")
+    let databaseDataAfterImport = try Data(contentsOf: databaseURL)
+    let databaseTextAfterImport = String(data: databaseDataAfterImport, encoding: .utf8) ?? ""
+    try expect(!databaseTextAfterImport.contains("sample-login-password"), "导入凭证后 SQLite 不应包含密码明文")
+
+    store.deleteCredential(item)
+    try expect(!store.credentials.contains { $0.id == item.id }, "删除凭证后内存列表不应保留该条")
 }
 
 @MainActor

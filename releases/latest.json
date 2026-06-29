@@ -1,6 +1,6 @@
 {
-  "version": "1.2.9",
-  "build": 38,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.9/AntOrder-1.2.9.pkg",
-  "releaseNotes": "手记性能与交互优化：修复中间手记编辑后列表可能显示旧数据的问题；减少手记分类、标签、列表选中和模块切换的过度动画；提升手记列表、编辑区和模块栏文字对比度，改善阅读与点击响应。"
+  "version": "1.2.18",
+  "build": 47,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.18/AntOrder-1.2.18.pkg",
+  "releaseNotes": "凭证详情支持密码默认隐藏、悬停显示和点击复制；凭证导入、备份恢复、主密码验证统一迁入设置。"
 }

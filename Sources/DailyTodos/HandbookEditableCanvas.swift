@@ -8,7 +8,6 @@ struct HandbookEditableCanvas: View {
     @Binding var bodyText: String
     @Binding var attachments: [HandbookAttachment]
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
-    let lengthKind: HandbookLengthKind
     let characterCount: Int
     let editorHeight: CGFloat
     let isBodyEmpty: Bool
@@ -28,7 +27,6 @@ struct HandbookEditableCanvas: View {
             HandbookDetailMetaBar(
                 category: $category,
                 folder: $folder,
-                lengthKind: lengthKind,
                 characterCount: characterCount,
                 formattedDate: formattedDate,
                 attachmentCount: attachmentCount
@@ -45,7 +43,7 @@ struct HandbookEditableCanvas: View {
                     .frame(height: editorHeight)
                     .focused(focusedField, equals: .body)
 
-                if isBodyEmpty {
+                if shouldShowBodyPlaceholder {
                     Text("从这里开始写手记")
                         .font(.system(size: 15.5, weight: .regular))
                         .foregroundStyle(AppTheme.secondaryText)
@@ -55,6 +53,13 @@ struct HandbookEditableCanvas: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var shouldShowBodyPlaceholder: Bool {
+        HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(
+            isBodyEmpty: isBodyEmpty,
+            isBodyFocused: focusedField.wrappedValue == .body
+        )
     }
 }
 
@@ -313,7 +318,6 @@ struct HandbookEditorToolButton: View {
 struct HandbookDetailMetaBar: View {
     @Binding var category: HandbookCategory
     @Binding var folder: String
-    let lengthKind: HandbookLengthKind
     let characterCount: Int
     let formattedDate: String
     let attachmentCount: Int
@@ -348,7 +352,6 @@ struct HandbookDetailMetaBar: View {
 
     private var passiveMetaCards: some View {
         HStack(spacing: 6) {
-            HandbookMetaCard(icon: lengthKind.icon, text: lengthKind.title)
             HandbookMetaCard(icon: "character.cursor.ibeam", text: "\(characterCount) 字")
             if attachmentCount > 0 {
                 HandbookMetaCard(icon: "paperclip", text: "\(attachmentCount) 个附件")

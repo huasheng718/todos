@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var updateController: UpdateController
     @EnvironmentObject private var moduleRegistry: AppModuleRegistry
@@ -34,6 +36,8 @@ struct ContentView: View {
     @State private var scrollTargetTodoID: TodoItem.ID?
     @State private var todoFeedback: TodoActionFeedback?
     @State private var filteredTodosCache: [TodoItem] = []
+    @State private var todoSearchDebounceTask: Task<Void, Never>?
+    @State private var handbookSearchDebounceTask: Task<Void, Never>?
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
@@ -41,6 +45,7 @@ struct ContentView: View {
     private var activeSection: AppSection {
         switch moduleRegistry.activeModuleID {
         case "handbook": return .handbook
+        case "credentials": return .credentials
         default: return .todos
         }
     }
@@ -111,6 +116,7 @@ struct ContentView: View {
             store.scheduleLoadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
+            moduleRegistry.activate("todos")
             focusQuickCapture()
         }
         .onChange(of: searchText) { _, newValue in
@@ -133,6 +139,8 @@ struct ContentView: View {
                 .environmentObject(updateController)
                 .environmentObject(moduleRegistry)
                 .environmentObject(aiSettings)
+                .environmentObject(credentialStore)
+                .environmentObject(credentialActions)
         }
     }
 
@@ -184,6 +192,8 @@ struct ContentView: View {
                 onUpdate: updateHandbookItem,
                 onDelete: deleteHandbookItem
             )
+        case "credentials":
+            CredentialsModuleView()
         default:
             Text("未知模块")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -216,6 +226,8 @@ struct ContentView: View {
             return dayTitle
         case .handbook:
             return handbookCategory?.title ?? "手记"
+        case .credentials:
+            return "凭证"
         }
     }
 
@@ -228,6 +240,8 @@ struct ContentView: View {
                 return "\(handbookCategory.subtitle)，用于沉淀可复用信息"
             }
             return "收集业务规则、调研、会议和灵感"
+        case .credentials:
+            return "账号、密码、Key 和证书"
         }
     }
 
@@ -325,6 +339,8 @@ struct ContentView: View {
         if aiSettings.canUseAI {
             isCreatingTodo = true
             aiStatusMessage = "AI 正在解析快记..."
+            quickCaptureAITrace = nil
+            quickCaptureAIResultSummary = nil
             Task {
                 do {
                     let aiResult = try await AIClient.shared.parseQuickInput(
@@ -500,10 +516,10 @@ struct ContentView: View {
         body: String,
         attachments: [HandbookAttachment]
     ) {
-        withAnimation(AppMotion.smooth) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
             store.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
-            handbookCategory = category
-            handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 
@@ -681,8 +697,10 @@ struct ContentView: View {
     }
 
     private func debounceSearchText(_ value: String) {
-        Task {
+        todoSearchDebounceTask?.cancel()
+        todoSearchDebounceTask = Task {
             try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 if searchText == value {
                     withAnimation(AppMotion.quick) {
@@ -694,8 +712,10 @@ struct ContentView: View {
     }
 
     private func debounceHandbookSearchText(_ value: String) {
-        Task {
+        handbookSearchDebounceTask?.cancel()
+        handbookSearchDebounceTask = Task {
             try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 if handbookSearchText == value {
                     withAnimation(AppMotion.quick) {

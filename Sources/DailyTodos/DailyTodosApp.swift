@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct DailyTodosApp: App {
     @StateObject private var store = TodoStore()
+    @StateObject private var credentialStore = CredentialStore()
+    @StateObject private var credentialManagementActions = CredentialManagementActions()
     @StateObject private var aiSettings = AISettingsStore()
     @StateObject private var updateController = UpdateController()
     @StateObject private var moduleRegistry = AppModuleRegistry()
@@ -12,6 +14,8 @@ struct DailyTodosApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(credentialStore)
+                .environmentObject(credentialManagementActions)
                 .environmentObject(aiSettings)
                 .environmentObject(updateController)
                 .environmentObject(moduleRegistry)
@@ -20,6 +24,7 @@ struct DailyTodosApp: App {
                 .task {
                     store.loadStartupData()
                     store.scheduleLoadHandbookItemsIfNeeded()
+                    credentialStore.load()
                     updateController.startMonitoring()
                     try? await Task.sleep(for: .milliseconds(900))
                     updateController.checkForUpdatesIfNeeded()

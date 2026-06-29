@@ -33,8 +33,13 @@ struct HandbookDetailPanel: View {
         .onChange(of: item) { oldValue, newValue in
             if oldValue?.id == newValue?.id {
                 if let newValue {
-                    reconcileDraft(with: newValue)
-                    isDirty = computeIsDirty(comparedTo: newValue)
+                    syncDraft(
+                        with: newValue,
+                        preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(
+                            isDirty: isDirty,
+                            isEditorFocused: canvasFocus != nil
+                        )
+                    )
                 } else {
                     isDirty = false
                 }
@@ -79,7 +84,6 @@ struct HandbookDetailPanel: View {
                     bodyText: $bodyText,
                     attachments: $attachments,
                     focusedField: $canvasFocus,
-                    lengthKind: bodyMetrics.lengthKind,
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
                     isBodyEmpty: bodyMetrics.isEmpty,
@@ -131,23 +135,6 @@ struct HandbookDetailPanel: View {
         }
     }
 
-    private func reconcileDraft(with item: HandbookItem) {
-        isSyncingDraft = true
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            if category != item.category { category = item.category }
-            if folder != item.folder { folder = item.folder }
-            if attachments != item.attachments { attachments = item.attachments }
-            if !(canvasFocus == .title && isDirty), title != item.title { title = item.title }
-            if !(canvasFocus == .body && isDirty), bodyText != item.body { bodyText = item.body }
-        }
-        scheduleBodyMetricsUpdate(for: bodyText)
-        Task { @MainActor in
-            isSyncingDraft = false
-        }
-    }
-
     private var detailPlaceholder: some View {
         VStack(alignment: .leading, spacing: 9) {
             Image(systemName: "book.closed")
@@ -180,24 +167,27 @@ struct HandbookDetailPanel: View {
         isDirty = false
     }
 
-    private func syncDraft(with item: HandbookItem?) {
+    private func syncDraft(with item: HandbookItem?, preservesLocalTextEdits: Bool = false) {
         guard let item else { return }
-        autoSaveTask?.cancel()
+        if !preservesLocalTextEdits {
+            autoSaveTask?.cancel()
+        }
         isSyncingDraft = true
         PerformanceMonitor.event("HandbookDetail.syncDraft", detail: "\(item.id.uuidString) chars=\(item.body.count)")
         PerformanceMonitor.measure("HandbookDetail.syncDraft.apply") {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if canvasFocus != nil { canvasFocus = nil }
+                if !preservesLocalTextEdits, canvasFocus != nil { canvasFocus = nil }
                 if category != item.category { category = item.category }
                 if folder != item.folder { folder = item.folder }
-                if title != item.title { title = item.title }
-                if bodyText != item.body { bodyText = item.body }
+                if !preservesLocalTextEdits, title != item.title { title = item.title }
+                if !preservesLocalTextEdits, bodyText != item.body { bodyText = item.body }
                 if attachments != item.attachments { attachments = item.attachments }
             }
         }
-        scheduleBodyMetricsUpdate(for: item.body)
+        scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyText : item.body)
+        isDirty = preservesLocalTextEdits ? computeIsDirty(comparedTo: item) : false
         Task { @MainActor in
             isSyncingDraft = false
         }

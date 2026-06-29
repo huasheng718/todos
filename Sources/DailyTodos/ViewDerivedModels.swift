@@ -382,7 +382,8 @@ struct HandbookTreeSnapshotKey: Equatable {
                     item.category.rawValue,
                     item.trimmedFolder,
                     item.displayTitle,
-                    "\(item.attachments.count)"
+                    "\(item.attachments.count)",
+                    Self.timestampSignature(item.updatedAt)
                 ].joined(separator: "\u{1F}")
             }
             .joined(separator: "|")
@@ -393,15 +394,18 @@ struct HandbookTreeSnapshotKey: Equatable {
                 .map { item in
                     [
                         item.id.uuidString,
-                        item.displayTitle,
-                        item.trimmedBody,
                         item.trimmedFolder,
-                        item.category.rawValue
+                        item.category.rawValue,
+                        Self.timestampSignature(item.updatedAt)
                     ].joined(separator: "\u{1F}")
                 }
                 .joined(separator: "|")
         }
         self.query = query
+    }
+
+    private static func timestampSignature(_ date: Date) -> String {
+        String(Int64(date.timeIntervalSince1970 * 1000))
     }
 }
 
@@ -597,13 +601,17 @@ struct HandbookNotesListSnapshotKey: Equatable {
                     Self.stableTextSignature(summary.preview),
                     includesFullTextSearch ? Self.stableTextSignature(summary.searchIndex) : "",
                     "\(summary.attachmentCount)",
-                    String(summary.updatedAt.timeIntervalSince1970)
+                    Self.timestampSignature(summary.updatedAt)
                 ].joined(separator: "\u{1F}")
             }
             .joined(separator: "\u{1E}")
         self.selectedCategory = scope.category
         self.selectedFolder = scope.folder
         self.searchText = scope.searchText
+    }
+
+    private static func timestampSignature(_ date: Date) -> String {
+        String(Int64(date.timeIntervalSince1970 * 1000))
     }
 
     private static func stableTextSignature(_ text: String) -> String {
