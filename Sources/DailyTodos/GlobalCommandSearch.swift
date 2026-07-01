@@ -179,6 +179,7 @@ struct GlobalCommandSearchEngine {
 struct GlobalCommandSearchPanel: View {
     let query: String
     let groupedResults: [GlobalSearchModule: [GlobalSearchResult]]
+    let selectedResultID: GlobalSearchResult.ID?
     let didLoadHandbookItems: Bool
     let isLoadingHandbookItems: Bool
     let isCredentialVaultUnlocked: Bool
@@ -259,9 +260,13 @@ struct GlobalCommandSearchPanel: View {
                 .padding(.horizontal, 4)
 
             ForEach(results) { result in
-                GlobalSearchResultRow(result: result) {
-                    onSelect(result)
-                }
+                GlobalSearchResultRow(
+                    result: result,
+                    isSelected: result.id == selectedResultID,
+                    onSelect: {
+                        onSelect(result)
+                    }
+                )
             }
         }
     }
@@ -269,6 +274,7 @@ struct GlobalCommandSearchPanel: View {
 
 struct GlobalSearchResultRow: View {
     let result: GlobalSearchResult
+    let isSelected: Bool
     let onSelect: () -> Void
     @State private var isHovered = false
 
@@ -296,11 +302,21 @@ struct GlobalSearchResultRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
-                isHovered ? AppTheme.workspaceTokens.listRowHover : Color.clear,
+                rowBackground,
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+
+    private var rowBackground: Color {
+        if isSelected {
+            return AppTheme.workspaceTokens.accentSoft
+        }
+        if isHovered {
+            return AppTheme.workspaceTokens.listRowHover
+        }
+        return .clear
     }
 }

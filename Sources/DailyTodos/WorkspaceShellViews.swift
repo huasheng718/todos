@@ -84,6 +84,11 @@ struct GlobalTopBar: View {
     let onSearchFocused: () -> Void
     let onSearchDismiss: () -> Void
     let onSelectResult: (GlobalSearchResult) -> Void
+    @State private var selectedGlobalSearchResultID: GlobalSearchResult.ID?
+
+    private var displayedResults: [GlobalSearchResult] {
+        GlobalSearchModule.allCases.flatMap { groupedResults[$0] ?? [] }
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -110,6 +115,7 @@ struct GlobalTopBar: View {
                     if focused {
                         isSearchPresented = true
                         onSearchFocused()
+                        syncSelectedSearchResult()
                     }
                 }
                 .onChange(of: searchText) { _, newValue in
@@ -117,26 +123,27 @@ struct GlobalTopBar: View {
                         isSearchPresented = true
                         onSearchFocused()
                     }
+                    syncSelectedSearchResult()
                 }
                 .onExitCommand {
                     searchText = ""
                     isSearchPresented = false
                     isSearchFocused.wrappedValue = false
                     onSearchDismiss()
+                    selectedGlobalSearchResultID = nil
                 }
 
                 if isSearchPresented {
                     GlobalCommandSearchPanel(
                         query: searchText,
                         groupedResults: groupedResults,
+                        selectedResultID: selectedGlobalSearchResultID,
                         didLoadHandbookItems: searchContext.didLoadHandbookItems,
                         isLoadingHandbookItems: searchContext.isLoadingHandbookItems,
                         isCredentialVaultUnlocked: searchContext.isCredentialVaultUnlocked,
                         onSelect: { result in
-                            onSelectResult(result)
-                            searchText = ""
-                            isSearchPresented = false
-                            isSearchFocused.wrappedValue = false
+                            selectedGlobalSearchResultID = result.id
+                            handleSelectedResult(result)
                         }
                     )
                     .offset(y: 38)
@@ -144,6 +151,18 @@ struct GlobalTopBar: View {
                 }
             }
             .frame(maxWidth: 520)
+            .onMoveCommand(perform: handleMoveCommand)
+            .onSubmit(handleSubmit)
+            .onChange(of: groupedResults) { _, _ in
+                syncSelectedSearchResult()
+            }
+            .onChange(of: isSearchPresented) { _, presented in
+                if presented {
+                    syncSelectedSearchResult()
+                } else {
+                    selectedGlobalSearchResultID = nil
+                }
+            }
 
             Spacer(minLength: 16)
 
@@ -169,6 +188,58 @@ struct GlobalTopBar: View {
         }
         .padding(.horizontal, 14)
         .background(AppTheme.workspaceTokens.topBar)
+    }
+
+    private func handleMoveCommand(_ direction: MoveCommandDirection) {
+        guard isSearchPresented, !displayedResults.isEmpty else { return }
+        syncSelectedSearchResult()
+        guard let currentIndex = displayedResults.firstIndex(where: { $0.id == selectedGlobalSearchResultID }) else {
+            selectedGlobalSearchResultID = displayedResults.first?.id
+            return
+        }
+
+        switch direction {
+        case .down:
+            selectedGlobalSearchResultID = displayedResults[min(currentIndex + 1, displayedResults.count - 1)].id
+        case .up:
+            selectedGlobalSearchResultID = displayedResults[max(currentIndex - 1, 0)].id
+        default:
+            break
+        }
+    }
+
+    private func handleSubmit() {
+        guard isSearchPresented,
+              let selectedResult = displayedResults.first(where: { $0.id == selectedGlobalSearchResultID })
+        else { return }
+        handleSelectedResult(selectedResult)
+    }
+
+    private func handleSelectedResult(_ result: GlobalSearchResult) {
+        onSelectResult(result)
+        searchText = ""
+        isSearchPresented = false
+        isSearchFocused.wrappedValue = false
+        selectedGlobalSearchResultID = nil
+    }
+
+    private func syncSelectedSearchResult() {
+        guard isSearchPresented else {
+            selectedGlobalSearchResultID = nil
+            return
+        }
+
+        guard !displayedResults.isEmpty else {
+            selectedGlobalSearchResultID = nil
+            return
+        }
+
+        if let selectedGlobalSearchResultID,
+           displayedResults.contains(where: { $0.id == selectedGlobalSearchResultID }) {
+            return
+        }
+
+        self.selectedGlobalSearchResultID = displayedResults.first?.id
     }
 }
 
