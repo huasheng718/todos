@@ -329,7 +329,7 @@ struct CredentialSidebar: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(statusText)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
+                    .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                     .lineLimit(2)
             }
             .padding(.horizontal, 17)
@@ -365,17 +365,17 @@ struct CredentialTypeButton: View {
 
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
                     .frame(width: 18)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink)
+                        .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
                         .lineLimit(1)
                 }
 
@@ -516,10 +516,10 @@ struct CredentialAccessPanel<Content: View>: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(title)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(AppTheme.ink)
+                        .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
                     Text(subtitle)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -1201,14 +1201,14 @@ struct CredentialCopyableFieldRow: View {
     }
 
     private var labelColor: Color {
-        isLocked ? AppTheme.mutedInk.opacity(0.82) : AppTheme.ink
+        isLocked ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textPrimary
     }
 
     private var valueColor: Color {
         if isLocked || value.isEmpty {
-            return AppTheme.mutedInk.opacity(0.82)
+            return AppTheme.workspaceTokens.textSecondary
         }
-        return AppTheme.mutedInk
+        return AppTheme.workspaceTokens.textMuted
     }
 
     private var helpText: String {

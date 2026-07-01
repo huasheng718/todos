@@ -145,11 +145,11 @@ struct HandbookDetailPanel: View {
 
             Text("选择一条手记阅读")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
+                .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
 
             Text("左侧列表用于扫描，右侧用于完整阅读和编辑。")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.secondaryText)
+                .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
         }
         .padding(34)
     }
@@ -178,7 +178,6 @@ struct HandbookDetailPanel: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if !preservesLocalTextEdits, canvasFocus != nil { canvasFocus = nil }
                 if category != item.category { category = item.category }
                 if folder != item.folder { folder = item.folder }
                 if !preservesLocalTextEdits, title != item.title { title = item.title }

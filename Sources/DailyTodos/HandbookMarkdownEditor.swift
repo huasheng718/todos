@@ -25,7 +25,7 @@ struct HandbookBodyEditor: View {
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(placeholder)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.mutedInk)
+                    .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 10)
                     .allowsHitTesting(false)
@@ -60,7 +60,7 @@ struct HandbookFolderEditor: View {
         HStack(spacing: 7) {
             Image(systemName: "folder")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
+                .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                 .frame(width: 14)
 
             TextField("二级目录", text: $folder)
@@ -151,7 +151,7 @@ struct MarkdownHandbookEditor: View {
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("支持 Markdown：## 标题、- 列表、> 引用、**重点**、链接和代码块")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.mutedInk)
+                            .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 13)
                             .allowsHitTesting(false)
@@ -235,7 +235,7 @@ struct MarkdownToolbarButton: View {
             .frame(width: 28, height: 26)
         }
         .buttonStyle(.tactilePlain)
-        .foregroundStyle(AppTheme.ink.opacity(0.84))
+        .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
         .help(help)
     }
 }
@@ -246,7 +246,7 @@ struct MarkdownPreview: View {
     var body: some View {
         Text(markdown)
             .font(.system(size: 14, weight: .regular))
-            .foregroundStyle(AppTheme.ink)
+            .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
             .lineSpacing(5)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
