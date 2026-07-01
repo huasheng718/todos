@@ -96,6 +96,7 @@ enum AppSkin: String, CaseIterable, Identifiable {
     case aurora
     case board
     case leafcutter
+    case workspace
 
     static let storageKey = "dailyTodos.selectedSkin"
 
@@ -107,6 +108,7 @@ enum AppSkin: String, CaseIterable, Identifiable {
         case .aurora: "柔紫课程"
         case .board: "看板粉彩"
         case .leafcutter: "切叶森工"
+        case .workspace: "工作台"
         }
     }
 
@@ -116,6 +118,7 @@ enum AppSkin: String, CaseIterable, Identifiable {
         case .aurora: "柔紫"
         case .board: "粉彩"
         case .leafcutter: "切叶"
+        case .workspace: "工作台"
         }
     }
 
@@ -125,6 +128,7 @@ enum AppSkin: String, CaseIterable, Identifiable {
         case .aurora: "sparkles"
         case .board: "square.grid.2x2.fill"
         case .leafcutter: "leaf.fill"
+        case .workspace: "rectangle.3.group"
         }
     }
 
@@ -187,6 +191,11 @@ enum AppTheme {
                     Color(red: 0.070, green: 0.078, blue: 0.052),
                     Color(red: 0.126, green: 0.076, blue: 0.040)
                 ]
+            case .workspace:
+                return [
+                    Color(red: 0.070, green: 0.074, blue: 0.082),
+                    Color(red: 0.112, green: 0.096, blue: 0.090)
+                ]
             }
         }
         switch AppSkin.current {
@@ -210,6 +219,11 @@ enum AppTheme {
                 Color(red: 0.938, green: 0.962, blue: 0.895),
                 Color(red: 0.984, green: 0.902, blue: 0.812)
             ]
+        case .workspace:
+            return [
+                Color(red: 0.957, green: 0.961, blue: 0.969),
+                Color(red: 0.933, green: 0.941, blue: 0.953)
+            ]
         }
     }
 
@@ -220,6 +234,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.060, green: 0.052, blue: 0.082)
             case .board: Color(red: 0.070, green: 0.070, blue: 0.076)
             case .leafcutter: Color(red: 0.070, green: 0.064, blue: 0.044)
+            case .workspace: Color(red: 0.070, green: 0.074, blue: 0.082)
             }
         } else {
             switch AppSkin.current {
@@ -227,6 +242,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.987, green: 0.984, blue: 0.996)
             case .board: Color(red: 0.984, green: 0.984, blue: 0.978)
             case .leafcutter: Color(red: 0.982, green: 0.968, blue: 0.928)
+            case .workspace: Color.white
             }
         }
     }
@@ -238,6 +254,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.078, green: 0.064, blue: 0.108)
             case .board: Color(red: 0.084, green: 0.082, blue: 0.092)
             case .leafcutter: Color(red: 0.084, green: 0.074, blue: 0.048)
+            case .workspace: Color(red: 0.084, green: 0.082, blue: 0.092)
             }
         } else {
             switch AppSkin.current {
@@ -245,6 +262,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.952, green: 0.928, blue: 0.985)
             case .board: Color(red: 0.935, green: 0.932, blue: 0.952)
             case .leafcutter: Color(red: 0.938, green: 0.910, blue: 0.805)
+            case .workspace: Color(red: 0.933, green: 0.941, blue: 0.953)
             }
         }
     }
@@ -255,6 +273,7 @@ enum AppTheme {
         case .aurora: AppTheme.adaptiveWhite(0.72)
         case .board: AppTheme.adaptiveWhite(0.68)
         case .leafcutter: AppTheme.adaptiveWhite(0.64)
+        case .workspace: AppTheme.adaptiveWhite(0.68)
         }
     }
 
@@ -265,6 +284,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.942, green: 0.932, blue: 0.974)
             case .board: Color(red: 0.932, green: 0.930, blue: 0.918)
             case .leafcutter: Color(red: 0.958, green: 0.928, blue: 0.870)
+            case .workspace: Color(red: 0.932, green: 0.930, blue: 0.918)
             }
         } else {
             switch AppSkin.current {
@@ -272,6 +292,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.045, green: 0.042, blue: 0.070)
             case .board: Color(red: 0.060, green: 0.058, blue: 0.062)
             case .leafcutter: Color(red: 0.095, green: 0.060, blue: 0.035)
+            case .workspace: Color(red: 0.141, green: 0.153, blue: 0.180)
             }
         }
     }
@@ -283,6 +304,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.716, green: 0.680, blue: 0.800)
             case .board: Color(red: 0.710, green: 0.704, blue: 0.690)
             case .leafcutter: Color(red: 0.744, green: 0.676, blue: 0.560)
+            case .workspace: Color(red: 0.710, green: 0.704, blue: 0.690)
             }
         } else {
             switch AppSkin.current {
@@ -290,6 +312,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.315, green: 0.300, blue: 0.405)
             case .board: Color(red: 0.245, green: 0.240, blue: 0.270)
             case .leafcutter: Color(red: 0.315, green: 0.245, blue: 0.165)
+            case .workspace: Color(red: 0.541, green: 0.565, blue: 0.600)
             }
         }
     }
@@ -301,6 +324,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.810, green: 0.785, blue: 0.878)
             case .board: Color(red: 0.805, green: 0.800, blue: 0.780)
             case .leafcutter: Color(red: 0.830, green: 0.760, blue: 0.640)
+            case .workspace: Color(red: 0.805, green: 0.800, blue: 0.780)
             }
         } else {
             switch AppSkin.current {
@@ -308,6 +332,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.205, green: 0.190, blue: 0.285)
             case .board: Color(red: 0.160, green: 0.155, blue: 0.180)
             case .leafcutter: Color(red: 0.220, green: 0.160, blue: 0.100)
+            case .workspace: Color(red: 0.420, green: 0.447, blue: 0.502)
             }
         }
     }
@@ -319,12 +344,14 @@ enum AppTheme {
             case .aurora: Color(red: 0.092, green: 0.078, blue: 0.126)
             case .board: Color(red: 0.104, green: 0.104, blue: 0.112)
             case .leafcutter: Color(red: 0.102, green: 0.088, blue: 0.060)
+            case .workspace: Color(red: 0.104, green: 0.104, blue: 0.112)
             }
         } else {
             switch AppSkin.current {
             case .ocean, .aurora: AppTheme.adaptiveWhite(0.985)
             case .board: AppTheme.adaptiveWhite(0.970)
             case .leafcutter: Color(red: 1.0, green: 0.988, blue: 0.950).opacity(0.985)
+            case .workspace: Color.white
             }
         }
     }
@@ -336,6 +363,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.110, green: 0.092, blue: 0.150)
             case .board: Color(red: 0.124, green: 0.124, blue: 0.132)
             case .leafcutter: Color(red: 0.120, green: 0.102, blue: 0.066)
+            case .workspace: Color(red: 0.124, green: 0.124, blue: 0.132)
             }
         } else {
             switch AppSkin.current {
@@ -343,6 +371,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.990, green: 0.982, blue: 1.0)
             case .board: Color(red: 0.980, green: 0.988, blue: 0.998)
             case .leafcutter: Color(red: 1.0, green: 0.986, blue: 0.942)
+            case .workspace: Color(red: 0.980, green: 0.980, blue: 0.984)
             }
         }
     }
@@ -362,6 +391,7 @@ enum AppTheme {
                 case .aurora: return Color(red: 0.132, green: 0.096, blue: 0.230).opacity(0.96)
                 case .board: return Color(red: 0.168, green: 0.148, blue: 0.102).opacity(0.96)
                 case .leafcutter: return Color(red: 0.174, green: 0.112, blue: 0.062).opacity(0.96)
+                case .workspace: return Color(red: 0.168, green: 0.148, blue: 0.102).opacity(0.96)
                 }
             case .low:
                 return Color(red: 0.085, green: 0.158, blue: 0.112).opacity(0.94)
@@ -401,6 +431,15 @@ enum AppTheme {
             case .medium: return Color(red: 0.965, green: 0.952, blue: 0.870)
             case .low: return Color(red: 0.910, green: 0.965, blue: 0.860)
             }
+        case .workspace:
+            if isOverdue {
+                return Color(red: 1.0, green: 0.945, blue: 0.955)
+            }
+            switch priority {
+            case .high: return Color(red: 1.0, green: 0.910, blue: 0.900)
+            case .medium: return Color(red: 0.900, green: 0.940, blue: 1.0)
+            case .low: return Color(red: 0.890, green: 0.980, blue: 0.930)
+            }
         }
     }
 
@@ -411,6 +450,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.320, green: 0.260, blue: 0.450)
             case .board: Color(red: 0.330, green: 0.326, blue: 0.340)
             case .leafcutter: Color(red: 0.365, green: 0.288, blue: 0.176)
+            case .workspace: Color(red: 0.330, green: 0.326, blue: 0.340)
             }
         } else {
             switch AppSkin.current {
@@ -418,6 +458,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.760, green: 0.705, blue: 0.880)
             case .board: Color(red: 0.745, green: 0.740, blue: 0.765)
             case .leafcutter: Color(red: 0.720, green: 0.640, blue: 0.500)
+            case .workspace: Color(red: 0.894, green: 0.906, blue: 0.925)
             }
         }
     }
@@ -429,6 +470,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.250, green: 0.206, blue: 0.355)
             case .board: Color(red: 0.250, green: 0.248, blue: 0.260)
             case .leafcutter: Color(red: 0.286, green: 0.224, blue: 0.132)
+            case .workspace: Color(red: 0.250, green: 0.248, blue: 0.260)
             }
         } else {
             switch AppSkin.current {
@@ -436,6 +478,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.825, green: 0.770, blue: 0.925)
             case .board: Color(red: 0.805, green: 0.800, blue: 0.820)
             case .leafcutter: Color(red: 0.780, green: 0.700, blue: 0.560)
+            case .workspace: Color(red: 0.894, green: 0.906, blue: 0.925)
             }
         }
     }
@@ -447,6 +490,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.680, green: 0.560, blue: 1.000)
             case .board: Color(red: 0.860, green: 0.790, blue: 0.620)
             case .leafcutter: Color(red: 0.980, green: 0.515, blue: 0.210)
+            case .workspace: Color(red: 0.860, green: 0.790, blue: 0.620)
             }
         } else {
             switch AppSkin.current {
@@ -454,6 +498,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.430, green: 0.300, blue: 0.850)
             case .board: Color(red: 0.075, green: 0.070, blue: 0.080)
             case .leafcutter: Color(red: 0.705, green: 0.210, blue: 0.090)
+            case .workspace: Color(red: 0.145, green: 0.388, blue: 0.922)
             }
         }
     }
@@ -465,6 +510,7 @@ enum AppTheme {
             case .aurora: Color(red: 1.000, green: 0.520, blue: 0.800)
             case .board: Color(red: 0.620, green: 0.520, blue: 1.000)
             case .leafcutter: Color(red: 0.540, green: 0.820, blue: 0.340)
+            case .workspace: Color(red: 0.620, green: 0.520, blue: 1.000)
             }
         } else {
             switch AppSkin.current {
@@ -472,6 +518,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.975, green: 0.390, blue: 0.740)
             case .board: Color(red: 0.455, green: 0.330, blue: 0.930)
             case .leafcutter: Color(red: 0.410, green: 0.720, blue: 0.230)
+            case .workspace: Color(red: 0.145, green: 0.388, blue: 0.922)
             }
         }
     }
@@ -482,6 +529,7 @@ enum AppTheme {
         case .aurora: accent.opacity(isDark ? 0.20 : 0.12)
         case .board: accent.opacity(isDark ? 0.18 : 0.08)
         case .leafcutter: accent.opacity(isDark ? 0.20 : 0.11)
+        case .workspace: accent.opacity(isDark ? 0.18 : 0.10)
         }
     }
 
@@ -492,12 +540,14 @@ enum AppTheme {
             case .aurora: Color(red: 0.280, green: 0.220, blue: 0.420).opacity(0.90)
             case .board: Color(red: 0.320, green: 0.310, blue: 0.300).opacity(0.88)
             case .leafcutter: Color(red: 0.330, green: 0.250, blue: 0.140).opacity(0.88)
+            case .workspace: Color(red: 0.320, green: 0.310, blue: 0.300).opacity(0.88)
             }
         } else {
             switch AppSkin.current {
             case .ocean, .aurora: AppTheme.adaptiveWhite(0.95)
             case .board: AppTheme.adaptiveWhite(0.82)
             case .leafcutter: AppTheme.adaptiveWhite(0.86)
+            case .workspace: Color(red: 0.894, green: 0.906, blue: 0.925)
             }
         }
     }
@@ -512,6 +562,7 @@ enum AppTheme {
         case .aurora: return Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.12)
         case .board: return AppTheme.adaptiveBlack(0.10)
         case .leafcutter: return Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.13)
+        case .workspace: return AppTheme.adaptiveBlack(0.10)
         }
     }
 
@@ -525,6 +576,7 @@ enum AppTheme {
         case .aurora: return Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.07)
         case .board: return AppTheme.adaptiveBlack(0.05)
         case .leafcutter: return Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.07)
+        case .workspace: return AppTheme.adaptiveBlack(0.05)
         }
     }
 
@@ -535,6 +587,7 @@ enum AppTheme {
             case .aurora: Color(red: 1.000, green: 0.470, blue: 0.670)
             case .board: Color(red: 1.000, green: 0.630, blue: 0.360)
             case .leafcutter: Color(red: 1.000, green: 0.605, blue: 0.245)
+            case .workspace: Color(red: 1.000, green: 0.630, blue: 0.360)
             }
         } else {
             switch AppSkin.current {
@@ -542,6 +595,7 @@ enum AppTheme {
             case .aurora: Color(red: 0.905, green: 0.300, blue: 0.520)
             case .board: Color(red: 0.790, green: 0.310, blue: 0.130)
             case .leafcutter: Color(red: 0.920, green: 0.395, blue: 0.085)
+            case .workspace: Color(red: 0.790, green: 0.310, blue: 0.130)
             }
         }
     }
@@ -554,6 +608,31 @@ enum AppTheme {
         isDark ? Color(red: 0.070, green: 0.190, blue: 0.120).opacity(0.96) : Color(red: 0.900, green: 0.970, blue: 0.910)
     }
 
+    static var workspaceCanvas: Color {
+        isDark ? workSurface : Color(red: 0.957, green: 0.961, blue: 0.969)
+    }
+
+    static var topBar: Color {
+        if isDark {
+            return Color(red: 0.064, green: 0.070, blue: 0.078)
+        }
+        return AppSkin.current == .workspace
+            ? Color(red: 0.949, green: 0.953, blue: 0.961)
+            : sidebar.opacity(0.92)
+    }
+
+    static var workspaceSidebar: Color {
+        AppSkin.current == .workspace && !isDark
+            ? Color(red: 0.980, green: 0.980, blue: 0.984)
+            : sidebar
+    }
+
+    static var workspaceSurface: Color {
+        AppSkin.current == .workspace && !isDark
+            ? Color.white
+            : workSurface
+    }
+
     private static var darkOverlayBase: Color {
         switch AppSkin.current {
         case .ocean:
@@ -564,6 +643,8 @@ enum AppTheme {
             Color(red: 0.210, green: 0.205, blue: 0.200)
         case .leafcutter:
             Color(red: 0.205, green: 0.155, blue: 0.090)
+        case .workspace:
+            Color(red: 0.210, green: 0.205, blue: 0.200)
         }
     }
 }

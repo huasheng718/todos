@@ -164,6 +164,13 @@ extension TodoProgress {
             case .waiting: return Color(red: 0.86, green: 0.44, blue: 0.16)
             case .done: return Color(red: 0.28, green: 0.62, blue: 0.24)
             }
+        case .workspace:
+            switch self {
+            case .pending: return Color(red: 0.25, green: 0.25, blue: 0.28)
+            case .inProgress: return AppTheme.accent
+            case .waiting: return Color(red: 0.24, green: 0.42, blue: 0.78)
+            case .done: return Color(red: 0.14, green: 0.58, blue: 0.34)
+            }
         }
     }
 }
@@ -202,6 +209,12 @@ extension TodoPriority {
             case .low: return Color(red: 0.32, green: 0.64, blue: 0.22)
             case .medium: return Color(red: 0.78, green: 0.42, blue: 0.16)
             case .high: return Color(red: 0.86, green: 0.16, blue: 0.10)
+            }
+        case .workspace:
+            switch self {
+            case .low: return Color(red: 0.15, green: 0.60, blue: 0.34)
+            case .medium: return AppTheme.accent
+            case .high: return Color(red: 0.88, green: 0.28, blue: 0.30)
             }
         }
     }
