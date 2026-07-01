@@ -621,6 +621,161 @@ struct AppSettingsSheet: View {
     }
 }
 
+struct SettingsContextSidebar: View {
+    @Binding var selectedSection: AppSettingsSection
+    @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var aiSettings: AISettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("设置")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                    Text("外观、凭证、AI、模块、更新")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 48)
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(AppSettingsSection.allCases) { section in
+                    settingsNavigationButton(section)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+        }
+        .frame(width: secondarySidebarWidth)
+        .frame(maxHeight: .infinity)
+        .background(AppTheme.sidebar)
+    }
+
+    private func settingsNavigationButton(_ section: AppSettingsSection) -> some View {
+        let isSelected = section == selectedSection
+
+        return Button {
+            withAnimation(AppMotion.smooth) {
+                selectedSection = section
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(section.title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                    Text(section.subtitle)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                if section == .ai {
+                    Circle()
+                        .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
+                        .frame(width: 6, height: 6)
+                } else if section == .updates, updateController.hasAvailableUpdate {
+                    Circle()
+                        .fill(TodoPriority.high.displayColor)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 46)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(isSelected ? AppTheme.sidebarSelected : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : Color.clear)
+            )
+        }
+        .buttonStyle(.tactilePlain)
+    }
+}
+
+struct SettingsModuleView: View {
+    @Binding var selectedSkinRawValue: String
+    @Binding var selectedSection: AppSettingsSection
+    @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
+
+    var body: some View {
+        WorkspaceContentContainer {
+            ContentHeader(
+                title: "设置",
+                subtitle: "外观、凭证、AI、模块、更新"
+            )
+        } toolbar: {
+            ContentToolbar {
+                Label(selectedSection.title, systemImage: selectedSection.icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+        } bodyContent: {
+            ScrollView {
+                AppSettingsSheetContent(
+                    selectedSkinRawValue: $selectedSkinRawValue,
+                    selectedSection: $selectedSection
+                )
+                .environmentObject(updateController)
+                .environmentObject(moduleRegistry)
+                .environmentObject(aiSettings)
+                .environmentObject(credentialStore)
+                .environmentObject(credentialActions)
+                .padding(22)
+            }
+            .scrollIndicators(.visible)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppTheme.workSurface)
+        }
+    }
+}
+
+private struct AppSettingsSheetContent: View {
+    @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
+    @Binding var selectedSkinRawValue: String
+    @Binding var selectedSection: AppSettingsSection
+
+    var body: some View {
+        AppSettingsSheet(
+            selectedSkinRawValue: $selectedSkinRawValue,
+            selectedSection: $selectedSection
+        )
+        .environmentObject(updateController)
+        .environmentObject(moduleRegistry)
+        .environmentObject(aiSettings)
+        .environmentObject(credentialStore)
+        .environmentObject(credentialActions)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 struct AISettingsContentView: View {
     @EnvironmentObject private var aiSettings: AISettingsStore
 

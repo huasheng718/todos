@@ -190,6 +190,23 @@ struct CredentialsModuleView: View {
     }
 }
 
+struct CredentialContextSidebar: View {
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @State private var searchText = ""
+    @State private var selectedType: CredentialType?
+
+    var body: some View {
+        CredentialSidebar(
+            searchText: $searchText,
+            selectedType: $selectedType,
+            credentials: credentialStore.credentials,
+            status: credentialStore.status
+        )
+        .frame(width: secondarySidebarWidth)
+        .background(AppTheme.sidebar)
+    }
+}
+
 struct CredentialSidebar: View {
     @Binding var searchText: String
     @Binding var selectedType: CredentialType?

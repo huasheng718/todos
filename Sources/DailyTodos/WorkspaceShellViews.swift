@@ -249,3 +249,24 @@ struct WorkspaceIconButton: View {
         .onHover { isHovered = $0 }
     }
 }
+
+struct EmptyWorkspaceContextSidebar: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+            Text("该模块暂未提供辅导航。")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .frame(width: secondarySidebarWidth)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.sidebar)
+    }
+}

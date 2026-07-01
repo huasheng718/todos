@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var debouncedSearchText = ""
     @State private var handbookSearchText = ""
     @State private var debouncedHandbookSearchText = ""
+    @State private var globalSearchText = ""
     @State private var newTitle = ""
     @State private var newPriority: TodoPriority = .medium
     @State private var newProgress: TodoProgress = .pending
@@ -51,28 +52,21 @@ struct ContentView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ModuleSwitcherBar(
-                activeModuleID: Binding(
-                    get: { moduleRegistry.activeModuleID },
-                    set: { moduleRegistry.activate($0) }
-                ),
-                installedModules: moduleRegistry.installedModules,
-                onOpenSettings: { openSettings(.appearance) },
-                hasUpdate: updateController.hasAvailableUpdate
-            )
-
-            activeModuleView
-        }
-        .background(AppTheme.sidebar.ignoresSafeArea())
-        .ignoresSafeArea(.container, edges: .top)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(AppTheme.hairline)
-                .frame(width: 1)
-                .offset(x: primarySidebarWidth)
-                .ignoresSafeArea(.container, edges: .vertical)
-        }
+        WorkspaceShell(
+            installedModules: moduleRegistry.installedModules,
+            activeModuleID: Binding(
+                get: { moduleRegistry.activeModuleID },
+                set: { moduleRegistry.activate($0) }
+            ),
+            globalSearchText: $globalSearchText,
+            activeModuleTitle: contentTitle,
+            activeModuleSubtitle: contentSubtitle,
+            hasUpdate: updateController.hasAvailableUpdate,
+            onOpenSettings: { activateSettings(.appearance) },
+            onActivateModule: { moduleRegistry.activate($0) },
+            contextSidebar: { activeContextSidebarView },
+            content: { activeWorkspaceContentView }
+        )
         .overlay(alignment: .bottom) {
             if let todoFeedback {
                 TodoFeedbackBanner(
@@ -200,6 +194,108 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var activeContextSidebarView: some View {
+        switch moduleRegistry.activeModuleID {
+        case "todos":
+            TodoContextSidebar(scope: $scope, isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed)
+        case "handbook":
+            HandbookContextSidebar(
+                handbookCategory: $handbookCategory,
+                handbookFolder: $handbookFolder,
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed
+            )
+            .environmentObject(store)
+        case "credentials":
+            CredentialContextSidebar()
+                .environmentObject(credentialStore)
+        case "settings":
+            SettingsContextSidebar(selectedSection: $appSettingsSection)
+                .environmentObject(updateController)
+                .environmentObject(aiSettings)
+        case "account":
+            EmptyWorkspaceContextSidebar(title: "账户")
+        default:
+            EmptyWorkspaceContextSidebar(title: "模块")
+        }
+    }
+
+    @ViewBuilder
+    private var activeWorkspaceContentView: some View {
+        switch moduleRegistry.activeModuleID {
+        case "todos":
+            todoWorkspaceContentView
+        case "handbook":
+            handbookWorkspaceContentView
+        case "credentials":
+            CredentialsModuleView()
+        case "settings":
+            SettingsModuleView(
+                selectedSkinRawValue: $selectedSkinRawValue,
+                selectedSection: $appSettingsSection
+            )
+            .environmentObject(updateController)
+            .environmentObject(moduleRegistry)
+            .environmentObject(aiSettings)
+            .environmentObject(credentialStore)
+            .environmentObject(credentialActions)
+        case "account":
+            AccountModuleView()
+        default:
+            Text("未知模块")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var todoWorkspaceContentView: some View {
+        TodoModuleView(
+            scope: $scope,
+            searchText: $searchText,
+            allTodosViewMode: $allTodosViewMode,
+            filteredTodosCache: filteredTodosCache,
+            debouncedSearchText: debouncedSearchText,
+            highlightedTodoID: highlightedTodoID,
+            scrollTargetTodoID: $scrollTargetTodoID,
+            newTitle: $newTitle,
+            newPriority: $newPriority,
+            newProgress: $newProgress,
+            newDate: quickCaptureDateBinding,
+            previewDate: quickCaptureFallbackDate(),
+            newNotes: $newNotes,
+            newIsWeekly: $newIsWeekly,
+            isQuickCaptureExpanded: $isQuickCaptureExpanded,
+            focusedField: $focusedField,
+            isCreatingTodo: isCreatingTodo,
+            aiStatusMessage: aiStatusMessage,
+            quickCaptureAITrace: quickCaptureAITrace,
+            quickCaptureAIResultSummary: quickCaptureAIResultSummary,
+            isAIEnabled: aiSettings.canUseAI,
+            contentTitle: contentTitle,
+            contentSubtitle: contentSubtitle,
+            isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+            onActivate: focusQuickCapture,
+            onCreate: createTodo,
+            onClear: cancelCreate,
+            onUpdate: updateTodo,
+            onProgressChange: updateProgress,
+            onToggle: toggleTodo,
+            onDelete: deleteTodo
+        )
+    }
+
+    private var handbookWorkspaceContentView: some View {
+        HandbookModuleView(
+            handbookCategory: $handbookCategory,
+            handbookFolder: $handbookFolder,
+            handbookSearchText: $handbookSearchText,
+            debouncedHandbookSearchText: debouncedHandbookSearchText,
+            isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+            onCreate: createHandbookItem,
+            onUpdate: updateHandbookItem,
+            onDelete: deleteHandbookItem
+        )
+    }
+
     private func rebuildFilteredTodos() {
         switch scope {
         case .dashboard:
@@ -218,6 +314,11 @@ struct ContentView: View {
     private func openSettings(_ section: AppSettingsSection) {
         appSettingsSection = section
         isAppSettingsPresented = true
+    }
+
+    private func activateSettings(_ section: AppSettingsSection) {
+        appSettingsSection = section
+        moduleRegistry.activate("settings")
     }
 
     private var contentTitle: String {

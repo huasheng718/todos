@@ -181,6 +181,20 @@ struct TodoSidebarView: View {
     }
 }
 
+struct TodoContextSidebar: View {
+    @Binding var scope: TodoScope
+    @Binding var isSecondarySidebarCollapsed: Bool
+
+    var body: some View {
+        if isSecondarySidebarCollapsed {
+            CollapsedSecondarySidebarRail(title: "待办", isCollapsed: $isSecondarySidebarCollapsed)
+        } else {
+            TodoSidebarView(scope: $scope, isCollapsed: $isSecondarySidebarCollapsed)
+                .frame(width: secondarySidebarWidth)
+        }
+    }
+}
+
 struct DateButton: View {
     let title: String
     let subtitle: String

@@ -148,6 +148,25 @@ struct HandbookSidebarView: View {
     }
 }
 
+struct HandbookContextSidebar: View {
+    @Binding var handbookCategory: HandbookCategory?
+    @Binding var handbookFolder: String?
+    @Binding var isSecondarySidebarCollapsed: Bool
+
+    var body: some View {
+        if isSecondarySidebarCollapsed {
+            CollapsedSecondarySidebarRail(title: "手记", isCollapsed: $isSecondarySidebarCollapsed)
+        } else {
+            HandbookSidebarView(
+                selectedCategory: $handbookCategory,
+                selectedFolder: $handbookFolder,
+                searchText: .constant("")
+            )
+            .frame(width: secondarySidebarWidth)
+        }
+    }
+}
+
 struct HandbookCategoryButton: View {
     let title: String
     let subtitle: String
