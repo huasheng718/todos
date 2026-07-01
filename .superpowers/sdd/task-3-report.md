@@ -27,3 +27,15 @@ Implemented Task 3 in `Sources/DailyTodos/AppModule.swift`, `Sources/DailyTodos/
 ## Commit
 
 - `feat: register workspace modules`
+
+## Fix Update
+
+Addressed the review finding in `Sources/DailyTodos/AppModule.swift` by reconciling persisted installed module IDs with the current default module set during registry initialization.
+
+- First launch still installs all default modules when no saved IDs exist.
+- Existing installs now backfill newly added default modules `settings` and `account` on load.
+- Persisted installed IDs are rewritten in registry order when defaults are added, keeping future launches stable and deterministic.
+
+## Build
+
+- `swift build` completed successfully after the fix.

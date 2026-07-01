@@ -37,20 +37,24 @@ final class AppModuleRegistry: ObservableObject {
 
         // 从 UserDefaults 读取已安装模块
         let savedIDs = UserDefaults.standard.stringArray(forKey: Self.installedModulesKey) ?? []
+        let defaultIDs = modules.filter { $0.isDefault }.map { $0.id }
         let installed: Set<String>
         if savedIDs.isEmpty {
             // 首次启动，安装所有默认模块
-            installed = Set(modules.filter { $0.isDefault }.map { $0.id })
+            installed = Set(defaultIDs)
         } else {
-            installed = Set(savedIDs)
+            installed = Set(savedIDs).union(defaultIDs)
         }
-
-        // 激活第一个按注册顺序安装的模块，避免 Set.first 带来的启动页随机性。
-        let active = modules.first(where: { installed.contains($0.id) })?.id ?? modules.first!.id
 
         registeredModules = modules
         installedModuleIDs = installed
-        activeModuleID = active
+
+        // 激活第一个按注册顺序安装的模块，避免 Set.first 带来的启动页随机性。
+        activeModuleID = modules.first(where: { installed.contains($0.id) })?.id ?? modules.first!.id
+
+        if !savedIDs.isEmpty, installed != Set(savedIDs) {
+            persistInstalledModules(installed)
+        }
     }
 
     /// 已安装的模块（按注册顺序）
@@ -66,7 +70,7 @@ final class AppModuleRegistry: ObservableObject {
     /// 安装模块
     func install(_ moduleID: String) {
         installedModuleIDs.insert(moduleID)
-        persistInstalledModules()
+        persistInstalledModules(installedModuleIDs)
     }
 
     /// 卸载模块（默认模块不可卸载）
@@ -74,7 +78,7 @@ final class AppModuleRegistry: ObservableObject {
         guard let module = registeredModules.first(where: { $0.id == moduleID }),
               !module.isDefault else { return }
         installedModuleIDs.remove(moduleID)
-        persistInstalledModules()
+        persistInstalledModules(installedModuleIDs)
 
         // 如果卸载的是当前激活模块，切换到第一个已安装模块
         if activeModuleID == moduleID {
@@ -93,7 +97,8 @@ final class AppModuleRegistry: ObservableObject {
         installedModuleIDs.contains(moduleID)
     }
 
-    private func persistInstalledModules() {
-        UserDefaults.standard.set(Array(installedModuleIDs), forKey: Self.installedModulesKey)
+    private func persistInstalledModules(_ installed: Set<String>) {
+        let orderedIDs = registeredModules.map(\.id).filter { installed.contains($0) }
+        UserDefaults.standard.set(orderedIDs, forKey: Self.installedModulesKey)
     }
 }
