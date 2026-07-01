@@ -68,6 +68,7 @@ struct GlobalCommandSearchContext {
 
 struct GlobalCommandSearchEngine {
     private let calendar = Calendar.current
+    private let credentialDetailTagLimit = 3
 
     func results(query rawQuery: String, context: GlobalCommandSearchContext) -> [GlobalSearchModule: [GlobalSearchResult]] {
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -138,26 +139,40 @@ struct GlobalCommandSearchEngine {
 
     private func credentialResults(query: String, credentials: [CredentialItem]) -> [GlobalSearchResult] {
         credentials.compactMap { item in
-            let haystack = [
-                item.title,
-                item.username,
-                item.serviceURL,
-                item.displayService,
-                item.type.title,
-                item.tags.joined(separator: " ")
-            ].joined(separator: " ").localizedLowercase
+            let haystack = credentialSearchHaystack(for: item)
             guard haystack.contains(query) else { return nil }
 
             return GlobalSearchResult(
                 module: .credentials,
                 title: item.trimmedTitle.isEmpty ? "未命名凭证" : item.trimmedTitle,
                 subtitle: item.type.title,
-                detail: item.displayService,
+                detail: credentialSearchDetail(for: item),
                 target: .credential(item.id, type: item.type)
             )
         }
         .prefix(5)
         .map { $0 }
+    }
+
+    private func credentialSearchHaystack(for item: CredentialItem) -> String {
+        [
+            item.title,
+            item.type.title,
+            item.tags.joined(separator: " ")
+        ].joined(separator: " ").localizedLowercase
+    }
+
+    private func credentialSearchDetail(for item: CredentialItem) -> String {
+        let visibleTags = item.tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !visibleTags.isEmpty else {
+            return "敏感字段默认隐藏"
+        }
+
+        let cappedTags = visibleTags.prefix(credentialDetailTagLimit).joined(separator: "、")
+        return "标签：\(cappedTags)"
     }
 }
 
