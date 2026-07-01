@@ -6,24 +6,18 @@ struct ListToolbar: View {
     let scope: TodoScope
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             SearchField(text: $searchText)
-                .frame(maxWidth: .infinity)
+                .frame(minWidth: 160, maxWidth: .infinity)
+                .frame(height: 30)
 
             if scope == .all {
                 Divider()
-                    .frame(height: 24)
+                    .frame(height: 22)
                     .overlay(AppTheme.adaptiveBlack(0.10))
                 AllTodosViewModePicker(selection: $allTodosViewMode)
             }
         }
-        .padding(5)
-        .background(AppTheme.adaptiveWhite(0.72), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(AppTheme.hairline.opacity(0.85))
-        )
-        .shadow(color: AppTheme.rowShadow.opacity(0.72), radius: 9, x: 0, y: 5)
     }
 }
 

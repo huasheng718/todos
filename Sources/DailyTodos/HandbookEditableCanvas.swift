@@ -18,7 +18,7 @@ struct HandbookEditableCanvas: View {
         VStack(alignment: .leading, spacing: 14) {
             TextField("手记标题", text: $title, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 25, weight: .bold))
+                .font(.system(size: 23, weight: .bold))
                 .foregroundStyle(AppTheme.ink)
                 .lineLimit(1...3)
                 .focused(focusedField, equals: .title)
@@ -122,9 +122,9 @@ struct HandbookEditorToolbar: View {
             .padding(.vertical, 6)
         }
         .scrollIndicators(.hidden)
-        .background(toolbarBackground, in: Capsule())
+        .background(toolbarBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
-            Capsule()
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(AppTheme.hairline.opacity(AppTheme.isDark ? 0.62 : 0.34))
         )
     }

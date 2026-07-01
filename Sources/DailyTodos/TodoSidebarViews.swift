@@ -27,11 +27,6 @@ struct TodoSidebarView: View {
                 .padding(.bottom, 14)
             }
             .scrollIndicators(.hidden)
-
-            Divider()
-                .overlay(AppTheme.hairline.opacity(0.7))
-
-            sidebarSummary
         }
         .background(AppTheme.sidebar)
         .foregroundStyle(AppTheme.ink)
@@ -54,7 +49,7 @@ struct TodoSidebarView: View {
     private var sidebarHeader: some View {
         WorkspaceContextHeader(
             title: "待办",
-            subtitle: "今日、等待、固定、全部",
+            subtitle: "推进、反馈、固定、全部",
             isCollapsed: $isCollapsed
         )
     }
@@ -133,19 +128,6 @@ struct TodoSidebarView: View {
                 scope = .day(date)
             }
         )
-    }
-
-    private var sidebarSummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("待办")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-            Text("未完成 \(metrics.activeCount) · 逾期 \(metrics.overdueCount)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-        }
-        .padding(.horizontal, 17)
-        .padding(.vertical, 13)
     }
 
     private var quickDates: [Date] {

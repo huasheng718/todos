@@ -6,8 +6,8 @@ let priorityColumnWidth: CGFloat = 78
 let followUpColumnWidth: CGFloat = 154
 let todoActionColumnWidth: CGFloat = 128
 let compactHitTargetSize: CGFloat = 38
-let primarySidebarWidth: CGFloat = 76
-let secondarySidebarWidth: CGFloat = 250
+let primarySidebarWidth: CGFloat = 184
+let secondarySidebarWidth: CGFloat = 264
 let collapsedSecondarySidebarWidth: CGFloat = 46
 
 enum AppMotion {
