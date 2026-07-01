@@ -30,7 +30,9 @@ final class AppModuleRegistry: ObservableObject {
         let modules: [any AppModule] = [
             TodoAppModule(),
             HandbookAppModule(),
-            CredentialsAppModule()
+            CredentialsAppModule(),
+            SettingsAppModule(),
+            AccountAppModule()
         ]
 
         // 从 UserDefaults 读取已安装模块
