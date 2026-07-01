@@ -248,7 +248,7 @@ struct CredentialWorkspaceContent<BodyContent: View>: View {
     let onLock: () -> Void
 
     var body: some View {
-        WorkspaceContentContainer {
+        WorkspaceContentContainer(showsHeader: false) {
             WorkspaceContentHeader(title: "凭证", subtitle: credentialSubtitle)
         } toolbar: {
             WorkspaceLocalToolbar {
@@ -321,30 +321,13 @@ struct CredentialSidebar: View {
                     }
                 }
             }
-            .padding(.horizontal, 17)
+            .padding(.horizontal, 14)
             .padding(.top, 12)
 
             Spacer(minLength: 0)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(statusText)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.workspaceTokens.textMuted)
-                    .lineLimit(2)
-            }
-            .padding(.horizontal, 17)
-            .padding(.vertical, 13)
         }
         .background(AppTheme.workspaceTokens.contextSidebar)
         .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
-    }
-
-    private var statusText: String {
-        switch status {
-        case .uninitialized: "尚未初始化凭证库"
-        case .locked: "凭证库已锁定"
-        case .unlocked: "已解锁，敏感字段默认隐藏"
-        }
     }
 }
 
@@ -358,11 +341,7 @@ struct CredentialTypeButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(isSelected ? AppTheme.accentWarm : Color.clear)
-                    .frame(width: 3, height: 30)
-
+            HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
@@ -381,17 +360,12 @@ struct CredentialTypeButton: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 9)
+            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
             .contentShape(Rectangle())
-            .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(isHovered ? 0.36 : 0.0))
-            )
+            .background(navBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .buttonStyle(.tactilePlain)
+        .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .animation(AppMotion.hover, value: isHovered)
         .animation(AppMotion.smooth, value: isSelected)
@@ -402,7 +376,7 @@ struct CredentialTypeButton: View {
             return AppTheme.sidebarSelected
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(0.46)
+            return AppTheme.workspaceTokens.listRowHover.opacity(AppTheme.isDark ? 0.65 : 0.74)
         }
         return Color.clear
     }
@@ -612,7 +586,7 @@ struct CredentialListPane: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 0) {
                 if credentials.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "key.slash")
@@ -626,15 +600,24 @@ struct CredentialListPane: View {
                     .padding(.top, 80)
                 } else {
                     ForEach(credentials) { item in
-                        CredentialListRow(
-                            item: item,
-                            isSelected: selectedCredential?.id == item.id,
-                            action: { onSelect(item) }
-                        )
+                        VStack(spacing: 0) {
+                            CredentialListRow(
+                                item: item,
+                                isSelected: selectedCredential?.id == item.id,
+                                action: { onSelect(item) }
+                            )
+
+                            if item.id != credentials.last?.id {
+                                Divider()
+                                    .overlay(AppTheme.hairline.opacity(0.58))
+                                    .padding(.leading, 44)
+                            }
+                        }
                     }
                 }
             }
-            .padding(18)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
         }
         .background(AppTheme.workSurface)
     }
@@ -648,48 +631,50 @@ struct CredentialListRow: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: item.type.icon)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
-                    Text(item.title)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(AppTheme.ink)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: item.type.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(item.title)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 8)
+
+                        Text(item.type.title)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(typeBadgeFill, in: Capsule())
+                    }
+
+                    Text(item.displayService)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
                         .lineLimit(1)
-                    Spacer()
-                    Text(item.type.title)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(AppTheme.accent)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(AppTheme.accentSoft, in: Capsule())
-                }
 
-                Text(item.displayService)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                    .lineLimit(1)
-
-                if !item.tags.isEmpty {
-                    HStack(spacing: 5) {
-                        ForEach(item.tags.prefix(3), id: \.self) { tag in
-                            Text(tag)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(AppTheme.mutedInk)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(AppTheme.adaptiveWhite(0.58), in: Capsule())
-                        }
+                    if !item.tags.isEmpty {
+                        Text(item.tags.prefix(3).joined(separator: " · "))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk.opacity(0.86))
+                            .lineLimit(1)
                     }
                 }
             }
-            .padding(12)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(minHeight: 64)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? AppTheme.workspaceTokens.accent.opacity(0.28) : AppTheme.workspaceTokens.hairline.opacity(isHovered ? 0.92 : 0.55))
+                    .stroke(rowBorder)
             )
         }
         .buttonStyle(.tactilePlain)
@@ -706,6 +691,26 @@ struct CredentialListRow: View {
             return AppTheme.workspaceTokens.listRowHover
         }
         return AppTheme.workspaceTokens.listRow
+    }
+
+    private var rowBorder: Color {
+        if isSelected {
+            return AppTheme.workspaceTokens.accent.opacity(0.24)
+        }
+        if isHovered {
+            return AppTheme.workspaceTokens.hairline.opacity(0.72)
+        }
+        return Color.clear
+    }
+
+    private var typeBadgeFill: Color {
+        if isSelected {
+            return AppTheme.accentSoft
+        }
+        if isHovered {
+            return AppTheme.adaptiveWhite(0.62)
+        }
+        return Color.clear
     }
 }
 
@@ -725,16 +730,25 @@ struct CredentialDetailPane: View {
     @State private var isDeleteConfirmationPresented = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        Group {
             if let item {
-                detail(for: item)
+                ScrollView {
+                    detail(for: item)
+                        .frame(maxWidth: 760, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 22)
+                }
+                .scrollIndicators(.hidden)
             } else {
-                Spacer()
-                ContentUnavailableView("选择一条凭证", systemImage: "key", description: Text("凭证解锁后可查看摘要，敏感字段需要单独点击显示。"))
-                Spacer()
+                VStack(spacing: 0) {
+                    Spacer()
+                    ContentUnavailableView("选择一条凭证", systemImage: "key", description: Text("凭证解锁后可查看摘要，敏感字段需要单独点击显示。"))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .padding(24)
         .onChange(of: item?.id) { _, _ in
             revealedSecret = nil
             resetBreachCheck()
@@ -742,7 +756,7 @@ struct CredentialDetailPane: View {
     }
 
     private func detail(for item: CredentialItem) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: item.type.icon)
                     .font(.system(size: 22, weight: .bold))
@@ -816,9 +830,9 @@ struct CredentialDetailPane: View {
                 }
             }
 
-            Spacer(minLength: 12)
-
-            CredentialAuditPanel(events: auditEvents)
+            if !auditEvents.isEmpty {
+                CredentialAuditPanel(events: auditEvents)
+            }
         }
         .confirmationDialog(
             "删除「\(item.title)」？",
@@ -1241,35 +1255,37 @@ struct CredentialAuditPanel: View {
     let events: [CredentialAuditEvent]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("本地操作记录")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(AppTheme.ink)
 
-            if events.isEmpty {
-                Text("暂无操作记录")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            } else {
-                ForEach(events.prefix(5)) { event in
-                    HStack {
-                        Text(event.action)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.ink)
-                        Text(event.credentialTitle)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppTheme.mutedInk)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(event.createdAt.formatted(.dateTime.hour().minute()))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AppTheme.mutedInk)
-                    }
+            ForEach(events.prefix(5)) { event in
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .frame(width: 16)
+
+                    Text(event.action)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.ink)
+
+                    Text(event.credentialTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text(event.createdAt.formatted(.dateTime.hour().minute()))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.mutedInk)
                 }
             }
         }
-        .padding(12)
-        .background(AppTheme.adaptiveWhite(0.52), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.top, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

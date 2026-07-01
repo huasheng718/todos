@@ -17,7 +17,7 @@ struct HandbookFolderSidebarView: View {
 
             if isLoaded {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         sourceSection
                         categorySection
                         folderTagSection
@@ -129,7 +129,7 @@ struct HandbookFolderSidebarView: View {
     }
 
     private var notesSidebarBackground: Color {
-        AppTheme.sidebar
+        AppTheme.workspaceTokens.contextSidebar
     }
 
     private func moveDraggedItems(_ itemIDs: [String], category: HandbookCategory?, folder: String?) -> Bool {
@@ -143,11 +143,10 @@ struct HandbookNotesListView: View {
     let snapshot: HandbookNotesListSnapshot
     @Binding var selectedCategory: HandbookCategory?
     @Binding var selectedFolder: String?
-    @Binding var searchText: String
+    let searchText: String
     let selectedItemID: UUID?
     let isLoaded: Bool
     let onSelect: (UUID) -> Void
-    let onCreateDraft: () -> Void
     let onDelete: (UUID) -> Void
 
     var body: some View {
@@ -167,37 +166,16 @@ struct HandbookNotesListView: View {
     }
 
     private var notesListHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(contextTitle)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppTheme.ink)
-                        .lineLimit(1)
-
-                    Text("\(snapshot.visibleCount) 条手记")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .monospacedDigit()
-                }
-
-                Spacer(minLength: 0)
-
-                Button(action: onCreateDraft) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(width: 32, height: 30)
-                }
-                .buttonStyle(.tactilePlain)
+        HStack(spacing: 8) {
+            Text("\(snapshot.visibleCount) 条手记")
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.secondaryText)
-                .help("新建手记")
-            }
+                .monospacedDigit()
 
-            SearchField(text: $searchText, placeholder: "搜索标题或正文")
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 13)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 12)
+        .frame(height: 32)
     }
 
     @ViewBuilder
@@ -266,7 +244,7 @@ struct HandbookNotesListView: View {
     }
 
     private var notesListBackground: Color {
-        AppTheme.workSurface
+        AppTheme.workspaceTokens.contentAltSurface
     }
 
 }
@@ -280,11 +258,11 @@ struct HandbookNotesGroupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(group.title)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppTheme.secondaryText)
                 .padding(.horizontal, 8)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.top, 10)
+                .padding(.bottom, 5)
 
             ForEach(group.rows) { row in
                 HandbookNotesRow(
@@ -441,10 +419,10 @@ struct HandbookFolderSidebarRow: View {
             }
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .dropDestination(for: String.self) { itemIDs, _ in
             onDrop(itemIDs)
         }
@@ -455,10 +433,10 @@ struct HandbookFolderSidebarRow: View {
 
     private var rowBackground: Color {
         if isSelected {
-            return AppTheme.isDark ? accentColor.opacity(0.18) : Color(red: 0.884, green: 0.884, blue: 0.878)
+            return AppTheme.isDark ? accentColor.opacity(0.18) : AppTheme.sidebarSelected
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.10 : 0.42)
+            return AppTheme.workspaceTokens.listRowHover.opacity(AppTheme.isDark ? 0.65 : 0.74)
         }
         return Color.clear
     }
@@ -489,10 +467,10 @@ struct HandbookFolderTagButton: View {
             .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.ink)
             .padding(.horizontal, 8)
             .frame(height: 26)
-            .background(tagBackground, in: Capsule())
+            .background(tagBackground, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(
-                Capsule()
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : AppTheme.hairline.opacity(0.60))
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : AppTheme.hairline.opacity(0.50))
             )
         }
         .buttonStyle(.plain)
@@ -505,7 +483,7 @@ struct HandbookFolderTagButton: View {
         if isSelected {
             return AppTheme.accentSoft.opacity(0.92)
         }
-        return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.10 : 0.50)
+        return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.10 : 0.34)
     }
 }
 

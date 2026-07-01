@@ -14,7 +14,7 @@ struct AllTodosViewModePicker: View {
 
     var body: some View {
         WorkspaceSegmentedControl(selection: $selection)
-        .frame(width: 318)
+            .frame(width: 232)
     }
 }
 
