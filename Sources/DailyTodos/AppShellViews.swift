@@ -142,6 +142,15 @@ struct CollapsedSecondarySidebarRail: View {
     @Binding var isCollapsed: Bool
 
     var body: some View {
+        CollapsedContextRail(title: title, isCollapsed: $isCollapsed)
+    }
+}
+
+struct CollapsedContextRail: View {
+    let title: String
+    @Binding var isCollapsed: Bool
+
+    var body: some View {
         VStack(spacing: 10) {
             SecondarySidebarCollapseButton(isCollapsed: $isCollapsed)
                 .padding(.top, 9)

@@ -39,6 +39,31 @@ enum AppMotion {
     }
 }
 
+struct WorkspaceThemeTokens {
+    let canvas: Color
+    let topBar: Color
+    let moduleRail: Color
+    let contextSidebar: Color
+    let contentSurface: Color
+    let contentAltSurface: Color
+    let listRow: Color
+    let listRowHover: Color
+    let listRowSelected: Color
+    let hairline: Color
+    let textPrimary: Color
+    let textSecondary: Color
+    let textMuted: Color
+    let accent: Color
+    let accentSoft: Color
+    let action: Color
+    let actionSoft: Color
+    let success: Color
+    let warning: Color
+    let danger: Color
+    let focusRing: Color
+    let shadow: Color
+}
+
 struct TactilePlainButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @State private var isHovered = false
@@ -149,6 +174,33 @@ nonisolated(unsafe) var activeAppSkin = AppSkin.stored
 nonisolated(unsafe) var activeColorScheme: ColorScheme = .light
 
 enum AppTheme {
+    static var workspaceTokens: WorkspaceThemeTokens {
+        WorkspaceThemeTokens(
+            canvas: workspaceCanvas,
+            topBar: topBar,
+            moduleRail: sidebar,
+            contextSidebar: sidebar,
+            contentSurface: workspaceSurface,
+            contentAltSurface: workSurface,
+            listRow: panel,
+            listRowHover: adaptiveWhite(isDark ? 0.16 : 0.72),
+            listRowSelected: accentSoft,
+            hairline: hairline,
+            textPrimary: ink,
+            textSecondary: secondaryText,
+            textMuted: mutedInk,
+            accent: accent,
+            accentSoft: accentSoft,
+            action: accentWarm,
+            actionSoft: accentWarm.opacity(isDark ? 0.18 : 0.12),
+            success: success,
+            warning: accentWarm,
+            danger: TodoPriority.high.displayColor,
+            focusRing: accent,
+            shadow: rowShadow
+        )
+    }
+
     static var isDark: Bool {
         activeColorScheme == .dark
     }
