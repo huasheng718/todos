@@ -48,12 +48,13 @@ struct AppSettingsSheet: View {
     @EnvironmentObject private var credentialActions: CredentialManagementActions
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
+    @State private var isSecondarySidebarCollapsed = false
 
     var body: some View {
         HStack(spacing: 0) {
             SettingsContextSidebar(
                 selectedSection: $selectedSection,
-                isSecondarySidebarCollapsed: .constant(false)
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed
             )
                 .environmentObject(updateController)
                 .environmentObject(aiSettings)
