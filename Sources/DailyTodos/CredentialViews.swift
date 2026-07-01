@@ -63,6 +63,7 @@ struct CredentialsModuleView: View {
             status: credentialStore.status,
             requiresMasterPassword: credentialStore.requiresMasterPassword,
             notice: credentialActions.notice,
+            searchText: searchTextBinding,
             content: { content },
             onNew: openNewCredential,
             onLock: { credentialStore.lock() }
@@ -211,18 +212,25 @@ struct CredentialsModuleView: View {
 
 struct CredentialContextSidebar: View {
     @EnvironmentObject private var credentialStore: CredentialStore
-    @Binding var searchText: String
     @Binding var selectedType: CredentialType?
+    @Binding var isSecondarySidebarCollapsed: Bool
 
     var body: some View {
-        CredentialSidebar(
-            searchText: $searchText,
-            selectedType: $selectedType,
-            credentials: credentialStore.credentials,
-            status: credentialStore.status
-        )
-        .frame(width: secondarySidebarWidth)
-        .background(AppTheme.workspaceSidebar)
+        Group {
+            if isSecondarySidebarCollapsed {
+                CollapsedContextRail(title: "凭证", isCollapsed: $isSecondarySidebarCollapsed)
+                    .frame(width: collapsedSecondarySidebarWidth)
+            } else {
+                CredentialSidebar(
+                    selectedType: $selectedType,
+                    credentials: credentialStore.credentials,
+                    status: credentialStore.status,
+                    isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed
+                )
+                .frame(width: secondarySidebarWidth)
+                .background(AppTheme.workspaceTokens.contextSidebar)
+            }
+        }
         .onAppear {
             credentialStore.load()
         }
@@ -234,23 +242,19 @@ struct CredentialWorkspaceContent<BodyContent: View>: View {
     let status: CredentialVaultStatus
     let requiresMasterPassword: Bool
     let notice: CredentialNotice?
+    @Binding var searchText: String
     @ViewBuilder let content: () -> BodyContent
     let onNew: () -> Void
     let onLock: () -> Void
 
     var body: some View {
         WorkspaceContentContainer {
-            ContentHeader(title: "凭证", subtitle: credentialSubtitle)
+            WorkspaceContentHeader(title: "凭证", subtitle: credentialSubtitle)
         } toolbar: {
-            ContentToolbar {
+            WorkspaceLocalToolbar {
                 if status == .unlocked {
-                    if let notice {
-                        Label(notice.message, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(notice.isError ? TodoPriority.high.displayColor : AppTheme.accent)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
+                    WorkspaceSearchField(text: $searchText, placeholder: "搜索标题、账号、服务或标签")
+                        .frame(maxWidth: 280)
 
                     Button(action: onNew) {
                         Label("新建凭证", systemImage: "plus")
@@ -265,6 +269,13 @@ struct CredentialWorkspaceContent<BodyContent: View>: View {
                         }
                         .buttonStyle(.tactilePlain)
                     }
+
+                    if let notice {
+                        Label(notice.message, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(notice.isError ? TodoPriority.high.displayColor : AppTheme.workspaceTokens.accent)
+                            .lineLimit(1)
+                    }
                 }
             }
         } bodyContent: {
@@ -274,27 +285,18 @@ struct CredentialWorkspaceContent<BodyContent: View>: View {
 }
 
 struct CredentialSidebar: View {
-    @Binding var searchText: String
     @Binding var selectedType: CredentialType?
     let credentials: [CredentialItem]
     let status: CredentialVaultStatus
+    @Binding var isSecondarySidebarCollapsed: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("凭证")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("账号、密码、Key、证书")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-            .padding(.horizontal, 17)
-            .padding(.top, 48)
-            .padding(.bottom, 14)
-
-            SearchField(text: $searchText)
-                .padding(.horizontal, 17)
+            WorkspaceContextHeader(
+                title: "凭证",
+                subtitle: "账号、密码、Key、证书",
+                isCollapsed: $isSecondarySidebarCollapsed
+            )
 
             VStack(alignment: .leading, spacing: 7) {
                 SidebarSectionLabel("类型")
@@ -320,7 +322,7 @@ struct CredentialSidebar: View {
                 }
             }
             .padding(.horizontal, 17)
-            .padding(.top, 14)
+            .padding(.top, 12)
 
             Spacer(minLength: 0)
 
@@ -333,8 +335,8 @@ struct CredentialSidebar: View {
             .padding(.horizontal, 17)
             .padding(.vertical, 13)
         }
-        .background(AppTheme.sidebar)
-        .foregroundStyle(AppTheme.ink)
+        .background(AppTheme.workspaceTokens.contextSidebar)
+        .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
     }
 
     private var statusText: String {
@@ -684,10 +686,10 @@ struct CredentialListRow: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.28) : AppTheme.hairline.opacity(isHovered ? 0.92 : 0.55))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? AppTheme.workspaceTokens.accent.opacity(0.28) : AppTheme.workspaceTokens.hairline.opacity(isHovered ? 0.92 : 0.55))
             )
         }
         .buttonStyle(.tactilePlain)
@@ -698,12 +700,12 @@ struct CredentialListRow: View {
 
     private var rowBackground: Color {
         if isSelected {
-            return AppTheme.accentSoft.opacity(0.86)
+            return AppTheme.workspaceTokens.listRowSelected
         }
         if isHovered {
-            return AppTheme.panel.opacity(0.98)
+            return AppTheme.workspaceTokens.listRowHover
         }
-        return AppTheme.panel.opacity(0.76)
+        return AppTheme.workspaceTokens.listRow
     }
 }
 

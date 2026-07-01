@@ -176,8 +176,8 @@ struct ContentView: View {
             )
         case "credentials":
             CredentialContextSidebar(
-                searchText: $credentialSearchText,
-                selectedType: $credentialSelectedType
+                selectedType: $credentialSelectedType,
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed
             )
                 .environmentObject(credentialStore)
         case "settings":
