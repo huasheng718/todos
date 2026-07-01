@@ -1,6 +1,6 @@
 {
-  "version": "1.2.20",
-  "build": 49,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.20/AntOrder-1.2.20.pkg",
-  "releaseNotes": "蚁序 1.2.20 更新：全应用统一工作台布局，新增工作台主题，优化待办、手记、凭证和设置的导航与内容结构。"
+  "version": "1.2.21",
+  "build": 50,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.21/AntOrder-1.2.21.pkg",
+  "releaseNotes": "蚁序 1.2.21 更新：统一待办、手记、凭证和设置的工作台框架，优化全局搜索、侧栏层级、内容区视觉一致性与交互响应。"
 }
