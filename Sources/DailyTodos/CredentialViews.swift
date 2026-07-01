@@ -54,7 +54,6 @@ struct CredentialsModuleView: View {
         CredentialWorkspaceContent(
             credentialSubtitle: credentialSubtitle,
             status: credentialStore.status,
-            count: credentialStore.credentials.count,
             requiresMasterPassword: credentialStore.requiresMasterPassword,
             notice: credentialActions.notice,
             content: { content },
@@ -226,7 +225,6 @@ struct CredentialContextSidebar: View {
 struct CredentialWorkspaceContent<BodyContent: View>: View {
     let credentialSubtitle: String
     let status: CredentialVaultStatus
-    let count: Int
     let requiresMasterPassword: Bool
     let notice: CredentialNotice?
     @ViewBuilder let content: () -> BodyContent
@@ -398,76 +396,6 @@ struct CredentialTypeButton: View {
             return AppTheme.adaptiveWhite(0.46)
         }
         return Color.clear
-    }
-}
-
-struct CredentialTopBar: View {
-    let status: CredentialVaultStatus
-    let count: Int
-    let requiresMasterPassword: Bool
-    let notice: CredentialNotice?
-    let onNew: () -> Void
-    let onLock: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("凭证")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text(subtitle)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-
-            Spacer()
-
-            if status == .unlocked {
-                if let notice {
-                    Label(notice.message, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(notice.isError ? TodoPriority.high.displayColor : AppTheme.accent)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: 260, alignment: .trailing)
-                }
-
-                if requiresMasterPassword {
-                    Button(action: onLock) {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 34, height: 30)
-                            .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .help("锁定凭证库")
-                }
-
-                Button(action: onNew) {
-                    Label("录入", systemImage: "square.and.pencil")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(height: 30)
-                        .padding(.horizontal, 12)
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .buttonStyle(.tactilePlain)
-            }
-        }
-        .padding(.leading, 20)
-        .padding(.trailing, 16)
-    }
-
-    private var subtitle: String {
-        switch status {
-        case .uninitialized:
-            return "设置凭证库后开始保存个人凭证"
-        case .locked:
-            return "输入主密码解锁；主密码不会被保存"
-        case .unlocked:
-            let security = requiresMasterPassword ? "已开启主密码" : "未开启主密码"
-            return "\(count) 条凭证，\(security)"
-        }
     }
 }
 
