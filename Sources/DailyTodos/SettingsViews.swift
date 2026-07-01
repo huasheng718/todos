@@ -715,11 +715,6 @@ struct SettingsContextSidebar: View {
 struct SettingsModuleView: View {
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
-    @EnvironmentObject private var updateController: UpdateController
-    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
-    @EnvironmentObject private var aiSettings: AISettingsStore
-    @EnvironmentObject private var credentialStore: CredentialStore
-    @EnvironmentObject private var credentialActions: CredentialManagementActions
 
     var body: some View {
         WorkspaceContentContainer {
@@ -734,45 +729,64 @@ struct SettingsModuleView: View {
                     .foregroundStyle(AppTheme.mutedInk)
             }
         } bodyContent: {
-            ScrollView {
-                AppSettingsSheetContent(
-                    selectedSkinRawValue: $selectedSkinRawValue,
-                    selectedSection: $selectedSection
-                )
-                .environmentObject(updateController)
-                .environmentObject(moduleRegistry)
-                .environmentObject(aiSettings)
-                .environmentObject(credentialStore)
-                .environmentObject(credentialActions)
-                .padding(22)
-            }
-            .scrollIndicators(.visible)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.workSurface)
+            SettingsWorkspacePlaceholder(selectedSkinRawValue: $selectedSkinRawValue, selectedSection: $selectedSection)
         }
     }
 }
 
-private struct AppSettingsSheetContent: View {
-    @EnvironmentObject private var updateController: UpdateController
-    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
-    @EnvironmentObject private var aiSettings: AISettingsStore
-    @EnvironmentObject private var credentialStore: CredentialStore
-    @EnvironmentObject private var credentialActions: CredentialManagementActions
+private struct SettingsWorkspacePlaceholder: View {
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
 
+    private var selectedSkin: AppSkin {
+        AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
+    }
+
     var body: some View {
-        AppSettingsSheet(
-            selectedSkinRawValue: $selectedSkinRawValue,
-            selectedSection: $selectedSection
-        )
-        .environmentObject(updateController)
-        .environmentObject(moduleRegistry)
-        .environmentObject(aiSettings)
-        .environmentObject(credentialStore)
-        .environmentObject(credentialActions)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(selectedSection.title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                    Text(selectedSection.subtitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("当前阶段", systemImage: selectedSection.icon)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("工作区设置容器已接入，交互内容将在 Task 6 中拆出。", systemImage: "hammer.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+
+                        Text("当前选中分区：\(selectedSection.title)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+
+                        if selectedSection == .appearance {
+                            Text("当前皮肤：\(selectedSkin.rawValue)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppTheme.mutedInk)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppTheme.border)
+                )
+            }
+            .padding(22)
+        }
+        .scrollIndicators(.visible)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.workSurface)
     }
 }
 

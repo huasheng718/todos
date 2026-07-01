@@ -192,18 +192,40 @@ struct CredentialsModuleView: View {
 
 struct CredentialContextSidebar: View {
     @EnvironmentObject private var credentialStore: CredentialStore
-    @State private var searchText = ""
-    @State private var selectedType: CredentialType?
 
     var body: some View {
-        CredentialSidebar(
-            searchText: $searchText,
-            selectedType: $selectedType,
-            credentials: credentialStore.credentials,
-            status: credentialStore.status
-        )
+        VStack(alignment: .leading, spacing: 10) {
+            Text("凭证")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+            Text(statusText)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+            Text("共有 \(credentialStore.credentials.count) 条凭证")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+            Text("筛选与搜索保留在主工作区，待 Task 6 抽取共享状态。")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
         .frame(width: secondarySidebarWidth)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(AppTheme.sidebar)
+    }
+
+    private var statusText: String {
+        switch credentialStore.status {
+        case .uninitialized:
+            return "尚未初始化凭证库"
+        case .locked:
+            return "凭证库已锁定"
+        case .unlocked:
+            return "已解锁，敏感字段默认隐藏"
+        }
     }
 }
 

@@ -139,62 +139,6 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var activeModuleView: some View {
-        switch moduleRegistry.activeModuleID {
-        case "todos":
-            TodoModuleView(
-                scope: $scope,
-                searchText: $searchText,
-                allTodosViewMode: $allTodosViewMode,
-                filteredTodosCache: filteredTodosCache,
-                debouncedSearchText: debouncedSearchText,
-                highlightedTodoID: highlightedTodoID,
-                scrollTargetTodoID: $scrollTargetTodoID,
-                newTitle: $newTitle,
-                newPriority: $newPriority,
-                newProgress: $newProgress,
-                newDate: quickCaptureDateBinding,
-                previewDate: quickCaptureFallbackDate(),
-                newNotes: $newNotes,
-                newIsWeekly: $newIsWeekly,
-                isQuickCaptureExpanded: $isQuickCaptureExpanded,
-                focusedField: $focusedField,
-                isCreatingTodo: isCreatingTodo,
-                aiStatusMessage: aiStatusMessage,
-                quickCaptureAITrace: quickCaptureAITrace,
-                quickCaptureAIResultSummary: quickCaptureAIResultSummary,
-                isAIEnabled: aiSettings.canUseAI,
-                contentTitle: contentTitle,
-                contentSubtitle: contentSubtitle,
-                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                onActivate: focusQuickCapture,
-                onCreate: createTodo,
-                onClear: cancelCreate,
-                onUpdate: updateTodo,
-                onProgressChange: updateProgress,
-                onToggle: toggleTodo,
-                onDelete: deleteTodo
-            )
-        case "handbook":
-            HandbookModuleView(
-                handbookCategory: $handbookCategory,
-                handbookFolder: $handbookFolder,
-                handbookSearchText: $handbookSearchText,
-                debouncedHandbookSearchText: debouncedHandbookSearchText,
-                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                onCreate: createHandbookItem,
-                onUpdate: updateHandbookItem,
-                onDelete: deleteHandbookItem
-            )
-        case "credentials":
-            CredentialsModuleView()
-        default:
-            Text("未知模块")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    @ViewBuilder
     private var activeContextSidebarView: some View {
         switch moduleRegistry.activeModuleID {
         case "todos":
