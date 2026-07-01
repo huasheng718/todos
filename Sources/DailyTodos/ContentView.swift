@@ -45,14 +45,6 @@ struct ContentView: View {
 
     private let calendar = Calendar.current
 
-    private var activeSection: AppSection {
-        switch moduleRegistry.activeModuleID {
-        case "handbook": return .handbook
-        case "credentials": return .credentials
-        default: return .todos
-        }
-    }
-
     var body: some View {
         WorkspaceShell(
             installedModules: moduleRegistry.installedModules,
@@ -61,8 +53,6 @@ struct ContentView: View {
                 set: { moduleRegistry.activate($0) }
             ),
             globalSearchText: $globalSearchText,
-            activeModuleTitle: contentTitle,
-            activeModuleSubtitle: contentSubtitle,
             hasUpdate: updateController.hasAvailableUpdate,
             onOpenSettings: { activateSettings(.appearance) },
             onActivateModule: { moduleRegistry.activate($0) },
@@ -213,8 +203,8 @@ struct ContentView: View {
             quickCaptureAITrace: quickCaptureAITrace,
             quickCaptureAIResultSummary: quickCaptureAIResultSummary,
             isAIEnabled: aiSettings.canUseAI,
-            contentTitle: contentTitle,
-            contentSubtitle: contentSubtitle,
+                contentTitle: todoContentTitle,
+                contentSubtitle: todoContentSubtitle,
             onActivate: focusQuickCapture,
             onCreate: createTodo,
             onClear: cancelCreate,
@@ -258,29 +248,12 @@ struct ContentView: View {
         moduleRegistry.activate("settings")
     }
 
-    private var contentTitle: String {
-        switch activeSection {
-        case .todos:
-            return dayTitle
-        case .handbook:
-            return handbookCategory?.title ?? "手记"
-        case .credentials:
-            return "凭证"
-        }
+    private var todoContentTitle: String {
+        dayTitle
     }
 
-    private var contentSubtitle: String {
-        switch activeSection {
-        case .todos:
-            return daySubtitle
-        case .handbook:
-            if let handbookCategory {
-                return "\(handbookCategory.subtitle)，用于沉淀可复用信息"
-            }
-            return "收集业务规则、调研、会议和灵感"
-        case .credentials:
-            return "账号、密码、Key 和证书"
-        }
+    private var todoContentSubtitle: String {
+        daySubtitle
     }
 
     private var dayTitle: String {

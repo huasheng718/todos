@@ -4,8 +4,6 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
     let installedModules: [any AppModule]
     @Binding var activeModuleID: String
     @Binding var globalSearchText: String
-    let activeModuleTitle: String
-    let activeModuleSubtitle: String
     let hasUpdate: Bool
     let onOpenSettings: () -> Void
     let onActivateModule: (String) -> Void
