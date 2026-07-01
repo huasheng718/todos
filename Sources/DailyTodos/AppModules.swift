@@ -35,3 +35,19 @@ struct CredentialsAppModule: AppModule {
         AnyView(CredentialsModuleView())
     }
 }
+
+struct SettingsAppModule: AppModule {
+    let id = "settings"
+    let displayName = "设置"
+    let icon = "gearshape"
+    let isDefault = true
+    let description = "管理外观、AI、更新、模块和安全配置"
+}
+
+struct AccountAppModule: AppModule {
+    let id = "account"
+    let displayName = "账户"
+    let icon = "person.crop.circle"
+    let isDefault = true
+    let description = "账户、空间和 Billing 边界"
+}

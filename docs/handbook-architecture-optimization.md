@@ -122,8 +122,7 @@ Run before shipping:
 
 ```bash
 swift build
-swiftc -parse-as-library Sources/DailyTodos/TodoItem.swift Sources/DailyTodos/HandbookItem.swift Sources/DailyTodos/TodoQuickInputParser.swift Sources/DailyTodos/AppStateModels.swift Sources/DailyTodos/ViewDerivedModels.swift Sources/DailyTodos/HandbookRepository.swift Sources/DailyTodos/HandbookWorkspaceViewModel.swift Sources/DailyTodos/PerformanceMonitor.swift Sources/DailyTodos/TodoStore.swift Sources/DailyTodos/AppUpdateAvailability.swift Sources/DailyTodos/AppUpdateDownloadProgress.swift scripts/quality_checks.swift -o /tmp/DailyTodosChecks
-/tmp/DailyTodosChecks
+scripts/run_quality_checks.sh
 git diff --check
 ```
 

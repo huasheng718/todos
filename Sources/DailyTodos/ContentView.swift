@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var debouncedSearchText = ""
     @State private var handbookSearchText = ""
     @State private var debouncedHandbookSearchText = ""
+    @State private var globalSearchText = ""
     @State private var newTitle = ""
     @State private var newPriority: TodoPriority = .medium
     @State private var newProgress: TodoProgress = .pending
@@ -28,8 +29,9 @@ struct ContentView: View {
     @State private var aiStatusMessage: String?
     @State private var quickCaptureAITrace: AITrace?
     @State private var quickCaptureAIResultSummary: String?
-    @State private var isAppSettingsPresented = false
     @State private var appSettingsSection: AppSettingsSection = .appearance
+    @State private var credentialSearchText = ""
+    @State private var credentialSelectedType: CredentialType?
     @State private var isSecondarySidebarCollapsed = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @State private var highlightedTodoID: TodoItem.ID?
@@ -38,41 +40,25 @@ struct ContentView: View {
     @State private var filteredTodosCache: [TodoItem] = []
     @State private var todoSearchDebounceTask: Task<Void, Never>?
     @State private var handbookSearchDebounceTask: Task<Void, Never>?
+    @StateObject private var handbookWorkspaceModel = HandbookWorkspaceViewModel()
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
 
-    private var activeSection: AppSection {
-        switch moduleRegistry.activeModuleID {
-        case "handbook": return .handbook
-        case "credentials": return .credentials
-        default: return .todos
-        }
-    }
-
     var body: some View {
-        HStack(spacing: 0) {
-            ModuleSwitcherBar(
-                activeModuleID: Binding(
-                    get: { moduleRegistry.activeModuleID },
-                    set: { moduleRegistry.activate($0) }
-                ),
-                installedModules: moduleRegistry.installedModules,
-                onOpenSettings: { openSettings(.appearance) },
-                hasUpdate: updateController.hasAvailableUpdate
-            )
-
-            activeModuleView
-        }
-        .background(AppTheme.sidebar.ignoresSafeArea())
-        .ignoresSafeArea(.container, edges: .top)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(AppTheme.hairline)
-                .frame(width: 1)
-                .offset(x: primarySidebarWidth)
-                .ignoresSafeArea(.container, edges: .vertical)
-        }
+        WorkspaceShell(
+            installedModules: moduleRegistry.installedModules,
+            activeModuleID: Binding(
+                get: { moduleRegistry.activeModuleID },
+                set: { moduleRegistry.activate($0) }
+            ),
+            globalSearchText: $globalSearchText,
+            hasUpdate: updateController.hasAvailableUpdate,
+            onOpenSettings: { activateSettings(.appearance) },
+            onActivateModule: { moduleRegistry.activate($0) },
+            contextSidebar: { activeContextSidebarView },
+            content: { activeWorkspaceContentView }
+        )
         .overlay(alignment: .bottom) {
             if let todoFeedback {
                 TodoFeedbackBanner(
@@ -131,73 +117,115 @@ struct ContentView: View {
         .onChange(of: store.todos) { _, _ in
             rebuildFilteredTodos()
         }
-        .sheet(isPresented: $isAppSettingsPresented) {
-            AppSettingsSheet(
-                selectedSkinRawValue: $selectedSkinRawValue,
-                selectedSection: $appSettingsSection
+    }
+
+    @ViewBuilder
+    private var activeContextSidebarView: some View {
+        switch moduleRegistry.activeModuleID {
+        case "todos":
+            TodoContextSidebar(scope: $scope, isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed)
+        case "handbook":
+            HandbookContextSidebar(
+                workspaceModel: handbookWorkspaceModel,
+                handbookCategory: $handbookCategory,
+                handbookFolder: $handbookFolder,
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+                isLoaded: store.didLoadHandbookItems,
+                onUpdate: updateHandbookItem
             )
-                .environmentObject(updateController)
-                .environmentObject(moduleRegistry)
-                .environmentObject(aiSettings)
+        case "credentials":
+            CredentialContextSidebar(
+                searchText: $credentialSearchText,
+                selectedType: $credentialSelectedType
+            )
                 .environmentObject(credentialStore)
-                .environmentObject(credentialActions)
+        case "settings":
+            SettingsContextSidebar(selectedSection: $appSettingsSection)
+                .environmentObject(updateController)
+                .environmentObject(aiSettings)
+        case "account":
+            EmptyWorkspaceContextSidebar(title: "账户")
+        default:
+            EmptyWorkspaceContextSidebar(title: "模块")
         }
     }
 
     @ViewBuilder
-    private var activeModuleView: some View {
+    private var activeWorkspaceContentView: some View {
         switch moduleRegistry.activeModuleID {
         case "todos":
-            TodoModuleView(
-                scope: $scope,
-                searchText: $searchText,
-                allTodosViewMode: $allTodosViewMode,
-                filteredTodosCache: filteredTodosCache,
-                debouncedSearchText: debouncedSearchText,
-                highlightedTodoID: highlightedTodoID,
-                scrollTargetTodoID: $scrollTargetTodoID,
-                newTitle: $newTitle,
-                newPriority: $newPriority,
-                newProgress: $newProgress,
-                newDate: quickCaptureDateBinding,
-                previewDate: quickCaptureFallbackDate(),
-                newNotes: $newNotes,
-                newIsWeekly: $newIsWeekly,
-                isQuickCaptureExpanded: $isQuickCaptureExpanded,
-                focusedField: $focusedField,
-                isCreatingTodo: isCreatingTodo,
-                aiStatusMessage: aiStatusMessage,
-                quickCaptureAITrace: quickCaptureAITrace,
-                quickCaptureAIResultSummary: quickCaptureAIResultSummary,
-                isAIEnabled: aiSettings.canUseAI,
-                contentTitle: contentTitle,
-                contentSubtitle: contentSubtitle,
-                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                onActivate: focusQuickCapture,
-                onCreate: createTodo,
-                onClear: cancelCreate,
-                onUpdate: updateTodo,
-                onProgressChange: updateProgress,
-                onToggle: toggleTodo,
-                onDelete: deleteTodo
-            )
+            todoWorkspaceContentView
         case "handbook":
-            HandbookModuleView(
-                handbookCategory: $handbookCategory,
-                handbookFolder: $handbookFolder,
-                handbookSearchText: $handbookSearchText,
-                debouncedHandbookSearchText: debouncedHandbookSearchText,
-                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                onCreate: createHandbookItem,
-                onUpdate: updateHandbookItem,
-                onDelete: deleteHandbookItem
-            )
+            handbookWorkspaceContentView
         case "credentials":
-            CredentialsModuleView()
+            CredentialsModuleView(
+                searchText: $credentialSearchText,
+                selectedType: $credentialSelectedType
+            )
+        case "settings":
+            SettingsModuleView(
+                selectedSkinRawValue: $selectedSkinRawValue,
+                selectedSection: $appSettingsSection
+            )
+            .environmentObject(updateController)
+            .environmentObject(moduleRegistry)
+            .environmentObject(aiSettings)
+            .environmentObject(credentialStore)
+            .environmentObject(credentialActions)
+        case "account":
+            AccountModuleView()
         default:
             Text("未知模块")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var todoWorkspaceContentView: some View {
+        TodoWorkspaceContent(
+            searchText: $searchText,
+            allTodosViewMode: $allTodosViewMode,
+            scope: scope,
+            filteredTodosCache: filteredTodosCache,
+            debouncedSearchText: debouncedSearchText,
+            highlightedTodoID: highlightedTodoID,
+            scrollTargetTodoID: $scrollTargetTodoID,
+            newTitle: $newTitle,
+            newPriority: $newPriority,
+            newProgress: $newProgress,
+            newDate: quickCaptureDateBinding,
+            previewDate: quickCaptureFallbackDate(),
+            newNotes: $newNotes,
+            newIsWeekly: $newIsWeekly,
+            isQuickCaptureExpanded: $isQuickCaptureExpanded,
+            focusedField: $focusedField,
+            isCreatingTodo: isCreatingTodo,
+            aiStatusMessage: aiStatusMessage,
+            quickCaptureAITrace: quickCaptureAITrace,
+            quickCaptureAIResultSummary: quickCaptureAIResultSummary,
+            isAIEnabled: aiSettings.canUseAI,
+                contentTitle: todoContentTitle,
+                contentSubtitle: todoContentSubtitle,
+            onActivate: focusQuickCapture,
+            onCreate: createTodo,
+            onClear: cancelCreate,
+            onUpdate: updateTodo,
+            onProgressChange: updateProgress,
+            onToggle: toggleTodo,
+            onDelete: deleteTodo
+        )
+    }
+
+    private var handbookWorkspaceContentView: some View {
+        HandbookWorkspaceContent(
+            workspaceModel: handbookWorkspaceModel,
+            handbookCategory: $handbookCategory,
+            handbookFolder: $handbookFolder,
+            handbookSearchText: $handbookSearchText,
+            debouncedHandbookSearchText: debouncedHandbookSearchText,
+            onCreate: createHandbookItem,
+            onUpdate: updateHandbookItem,
+            onDelete: deleteHandbookItem
+        )
     }
 
     private func rebuildFilteredTodos() {
@@ -215,34 +243,17 @@ struct ContentView: View {
         }
     }
 
-    private func openSettings(_ section: AppSettingsSection) {
+    private func activateSettings(_ section: AppSettingsSection) {
         appSettingsSection = section
-        isAppSettingsPresented = true
+        moduleRegistry.activate("settings")
     }
 
-    private var contentTitle: String {
-        switch activeSection {
-        case .todos:
-            return dayTitle
-        case .handbook:
-            return handbookCategory?.title ?? "手记"
-        case .credentials:
-            return "凭证"
-        }
+    private var todoContentTitle: String {
+        dayTitle
     }
 
-    private var contentSubtitle: String {
-        switch activeSection {
-        case .todos:
-            return daySubtitle
-        case .handbook:
-            if let handbookCategory {
-                return "\(handbookCategory.subtitle)，用于沉淀可复用信息"
-            }
-            return "收集业务规则、调研、会议和灵感"
-        case .credentials:
-            return "账号、密码、Key 和证书"
-        }
+    private var todoContentSubtitle: String {
+        daySubtitle
     }
 
     private var dayTitle: String {

@@ -46,7 +46,147 @@ struct AppSettingsSheet: View {
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var credentialStore: CredentialStore
     @EnvironmentObject private var credentialActions: CredentialManagementActions
-    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedSkinRawValue: String
+    @Binding var selectedSection: AppSettingsSection
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SettingsContextSidebar(selectedSection: $selectedSection)
+                .environmentObject(updateController)
+                .environmentObject(aiSettings)
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
+            SettingsModuleView(
+                selectedSkinRawValue: $selectedSkinRawValue,
+                selectedSection: $selectedSection
+            )
+            .environmentObject(updateController)
+            .environmentObject(moduleRegistry)
+            .environmentObject(aiSettings)
+            .environmentObject(credentialStore)
+            .environmentObject(credentialActions)
+        }
+        .frame(width: 920, height: 640)
+        .background(AppTheme.workspaceSurface)
+        .foregroundStyle(AppTheme.ink)
+    }
+}
+
+struct SettingsContextSidebar: View {
+    @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @Binding var selectedSection: AppSettingsSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("设置")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+
+            ForEach(AppSettingsSection.allCases) { section in
+                Button {
+                    withAnimation(AppMotion.smooth) {
+                        selectedSection = section
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: section.icon)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                            .frame(width: 16)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(section.title)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(AppTheme.ink)
+                            Text(section.subtitle)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        if section == .ai {
+                            Circle()
+                                .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
+                                .frame(width: 6, height: 6)
+                        } else if section == .updates, updateController.hasAvailableUpdate {
+                            Circle()
+                                .fill(TodoPriority.high.displayColor)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 46)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .background(
+                        selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+            }
+
+            Spacer(minLength: 0)
+
+            Text(AppVersion.displayText)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.mutedInk)
+                .padding(18)
+        }
+        .frame(width: secondarySidebarWidth)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.workspaceSidebar)
+    }
+}
+
+struct SettingsModuleView: View {
+    @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
+    @Binding var selectedSkinRawValue: String
+    @Binding var selectedSection: AppSettingsSection
+
+    var body: some View {
+        WorkspaceContentContainer {
+            ContentHeader(title: selectedSection.title, subtitle: selectedSection.subtitle)
+        } toolbar: {
+            ContentToolbar {
+                Label("设置", systemImage: selectedSection.icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.mutedInk)
+            }
+        } bodyContent: {
+            ScrollView {
+                SettingsContentView(
+                    selectedSkinRawValue: $selectedSkinRawValue,
+                    selectedSection: $selectedSection
+                )
+                .padding(22)
+            }
+            .scrollIndicators(.visible)
+            .background(AppTheme.workspaceSurface)
+        }
+        .sheet(isPresented: $credentialActions.isBackupSheetPresented) {
+            CredentialBackupSheet()
+                .environmentObject(credentialStore)
+        }
+    }
+}
+
+private struct SettingsContentView: View {
+    @EnvironmentObject private var updateController: UpdateController
+    @EnvironmentObject private var moduleRegistry: AppModuleRegistry
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var credentialStore: CredentialStore
+    @EnvironmentObject private var credentialActions: CredentialManagementActions
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
 
@@ -62,140 +202,8 @@ struct AppSettingsSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            settingsHeader
-
-            Divider()
-                .overlay(AppTheme.hairline)
-
-            HStack(spacing: 0) {
-                settingsNavigation
-                    .frame(width: 168)
-                    .background(AppTheme.sidebar)
-
-                Divider()
-                    .overlay(AppTheme.hairline)
-
-                ScrollView {
-                    settingsContent
-                        .padding(22)
-                }
-                .scrollIndicators(.visible)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .frame(width: 820, height: 620)
-        .background(AppTheme.workSurface)
-        .foregroundStyle(AppTheme.ink)
-        .sheet(isPresented: $credentialActions.isBackupSheetPresented) {
-            CredentialBackupSheet()
-                .environmentObject(credentialStore)
-        }
-    }
-
-    private var settingsHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: selectedSection.icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 30, height: 30)
-                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("设置")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text("外观、凭证、AI、模块、更新")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-
-            Spacer()
-
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .interactionHitArea()
-            }
-            .buttonStyle(.tactilePlain)
-            .foregroundStyle(AppTheme.mutedInk)
-            .help("关闭")
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 58)
-    }
-
-    private var settingsNavigation: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            ForEach(AppSettingsSection.allCases) { section in
-                settingsNavigationButton(section)
-            }
-
-            Spacer(minLength: 0)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(AppVersion.displayText)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                Text(updateController.hasAvailableUpdate ? "有新版本" : "当前版本")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(updateController.hasAvailableUpdate ? TodoPriority.high.displayColor : AppTheme.mutedInk)
-            }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 12)
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
-    }
-
-    private func settingsNavigationButton(_ section: AppSettingsSection) -> some View {
-        let isSelected = section == selectedSection
-
-        return Button {
-            withAnimation(AppMotion.smooth) {
-                selectedSection = section
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: section.icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
-                    .frame(width: 16)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(section.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(AppTheme.ink)
-                    Text(section.subtitle)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 0)
-
-                if section == .ai {
-                    Circle()
-                        .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
-                        .frame(width: 6, height: 6)
-                } else if section == .updates, updateController.hasAvailableUpdate {
-                    Circle()
-                        .fill(TodoPriority.high.displayColor)
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .padding(.horizontal, 9)
-            .frame(height: 46)
+        settingsContent
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .background(isSelected ? AppTheme.sidebarSelected : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.22) : Color.clear)
-            )
-        }
-        .buttonStyle(.tactilePlain)
     }
 
     @ViewBuilder
@@ -386,46 +394,6 @@ struct AppSettingsSheet: View {
         }
     }
 
-    private var updateActions: some View {
-        HStack(spacing: 8) {
-            if updateController.availableUpdate != nil {
-                Button {
-                    updateController.downloadAvailableUpdate()
-                } label: {
-                    Label(updateController.isDownloading ? "下载中" : "下载", systemImage: updateController.isDownloading ? "arrow.down.circle.fill" : "arrow.down.to.line")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 78, height: 32)
-                }
-                .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(updateController.isDownloading ? AppTheme.mutedInk : AppTheme.accentWarm, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(AppTheme.adaptiveWhite(0.28))
-                )
-                .disabled(updateController.isDownloading)
-                .help("下载当前发现的新版本")
-            }
-
-            Button {
-                updateController.checkForUpdates()
-            } label: {
-                Label(updateController.isChecking ? "检查中" : "检查更新", systemImage: updateController.isChecking ? "clock.arrow.circlepath" : "arrow.down.circle")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 104, height: 32)
-            }
-            .buttonStyle(.tactilePlain)
-            .foregroundStyle(updateController.isChecking ? AppTheme.accent : .white)
-            .background(updateController.isChecking ? AppTheme.accentSoft : AppTheme.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(0.26))
-            )
-            .disabled(updateController.isChecking || updateController.isDownloading)
-            .help("检查更新")
-        }
-    }
-
     private func credentialSettingsActionButton(
         title: String,
         icon: String,
@@ -528,6 +496,46 @@ struct AppSettingsSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
+    }
+
+    private var updateActions: some View {
+        HStack(spacing: 8) {
+            if updateController.availableUpdate != nil {
+                Button {
+                    updateController.downloadAvailableUpdate()
+                } label: {
+                    Label(updateController.isDownloading ? "下载中" : "下载", systemImage: updateController.isDownloading ? "arrow.down.circle.fill" : "arrow.down.to.line")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 78, height: 32)
+                }
+                .buttonStyle(.tactilePlain)
+                .foregroundStyle(.white)
+                .background(updateController.isDownloading ? AppTheme.mutedInk : AppTheme.accentWarm, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(AppTheme.adaptiveWhite(0.28))
+                )
+                .disabled(updateController.isDownloading)
+                .help("下载当前发现的新版本")
+            }
+
+            Button {
+                updateController.checkForUpdates()
+            } label: {
+                Label(updateController.isChecking ? "检查中" : "检查更新", systemImage: updateController.isChecking ? "clock.arrow.circlepath" : "arrow.down.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 104, height: 32)
+            }
+            .buttonStyle(.tactilePlain)
+            .foregroundStyle(updateController.isChecking ? AppTheme.accent : .white)
+            .background(updateController.isChecking ? AppTheme.accentSoft : AppTheme.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(0.26))
+            )
+            .disabled(updateController.isChecking || updateController.isDownloading)
+            .help("检查更新")
+        }
     }
 
     private var updateStatusText: String {
@@ -1024,7 +1032,6 @@ struct AIUsageRow: View {
     }
 }
 
-
 struct ModuleManagementRow: View {
     let module: any AppModule
     let isInstalled: Bool
@@ -1033,14 +1040,12 @@ struct ModuleManagementRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // 模块图标
             Image(systemName: module.icon)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(AppTheme.accent)
                 .frame(width: 32, height: 32)
                 .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            // 模块信息
             VStack(alignment: .leading, spacing: 2) {
                 Text(module.displayName)
                     .font(.system(size: 13, weight: .bold))
@@ -1055,7 +1060,6 @@ struct ModuleManagementRow: View {
 
             Spacer(minLength: 0)
 
-            // 安装/卸载按钮
             if isInstalled {
                 Button(action: onUninstall) {
                     Text(module.isDefault ? "内置" : "卸载")
@@ -1071,7 +1075,6 @@ struct ModuleManagementRow: View {
                 .buttonStyle(.plain)
                 .disabled(module.isDefault)
 
-                // 已安装标记
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(AppTheme.success)

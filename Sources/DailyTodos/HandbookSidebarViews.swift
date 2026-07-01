@@ -4,7 +4,7 @@ struct HandbookSidebarView: View {
     @EnvironmentObject private var store: TodoStore
     @Binding var selectedCategory: HandbookCategory?
     @Binding var selectedFolder: String?
-    @Binding var searchText: String
+    var searchText: Binding<String>?
     @State private var metrics = HandbookSidebarMetrics.empty
     @State private var metricsTask: Task<Void, Never>?
 
@@ -13,7 +13,9 @@ struct HandbookSidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header
-                    SearchField(text: $searchText, placeholder: "搜索标题或正文")
+                    if let searchText {
+                        SearchField(text: searchText, placeholder: "搜索标题或正文")
+                    }
                     categoryList(metrics: metrics)
                     folderList(metrics: metrics)
                 }
