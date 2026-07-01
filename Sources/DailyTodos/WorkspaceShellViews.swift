@@ -9,7 +9,9 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
     let globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]]
     let globalSearchContext: GlobalCommandSearchContext
     let hasUpdate: Bool
-    let onOpenSettings: () -> Void
+    let onRefreshWorkspace: () -> Void
+    let onOpenAccount: () -> Void
+    @Binding var isPrimarySidebarVisible: Bool
     let onActivateModule: (String) -> Void
     let onGlobalSearchFocused: () -> Void
     let onGlobalSearchDismiss: () -> Void
@@ -19,14 +21,18 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ModuleRail(
-                activeModuleID: $activeModuleID,
-                installedModules: installedModules,
-                onActivateModule: onActivateModule
-            )
+            if isPrimarySidebarVisible {
+                ModuleRail(
+                    activeModuleID: $activeModuleID,
+                    installedModules: installedModules,
+                    onActivateModule: onActivateModule
+                )
+                .transition(.move(edge: .leading).combined(with: .opacity))
 
-            Divider()
-                .overlay(AppTheme.hairline)
+                Divider()
+                    .overlay(AppTheme.hairline)
+                    .transition(.opacity)
+            }
 
             VStack(spacing: 0) {
                 GlobalTopBar(
@@ -37,7 +43,9 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
                     groupedResults: globalSearchResults,
                     searchContext: globalSearchContext,
                     hasUpdate: hasUpdate,
-                    onOpenSettings: onOpenSettings,
+                    onRefreshWorkspace: onRefreshWorkspace,
+                    onOpenAccount: onOpenAccount,
+                    isPrimarySidebarVisible: $isPrimarySidebarVisible,
                     onSearchFocused: onGlobalSearchFocused,
                     onSearchDismiss: onGlobalSearchDismiss,
                     onSelectResult: onSelectGlobalSearchResult
@@ -58,6 +66,7 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
                 }
             }
         }
+        .animation(AppMotion.reveal, value: isPrimarySidebarVisible)
         .background(AppTheme.workspaceTokens.canvas.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
@@ -84,7 +93,9 @@ struct GlobalTopBar: View {
     let groupedResults: [GlobalSearchModule: [GlobalSearchResult]]
     let searchContext: GlobalCommandSearchContext
     let hasUpdate: Bool
-    let onOpenSettings: () -> Void
+    let onRefreshWorkspace: () -> Void
+    let onOpenAccount: () -> Void
+    @Binding var isPrimarySidebarVisible: Bool
     let onSearchFocused: () -> Void
     let onSearchDismiss: () -> Void
     let onSelectResult: (GlobalSearchResult) -> Void
@@ -97,22 +108,24 @@ struct GlobalTopBar: View {
     var body: some View {
         HStack(spacing: 10) {
             HStack(spacing: 6) {
-                WorkspaceToolbarIndicator(systemName: "sidebar.leading", title: "模块侧栏")
+                WorkspaceIconButton(
+                    systemName: isPrimarySidebarVisible ? "sidebar.leading" : "sidebar.left",
+                    title: isPrimarySidebarVisible ? "隐藏模块侧栏" : "显示模块侧栏",
+                    action: togglePrimarySidebar
+                )
 
                 WorkspaceIconButton(
                     systemName: hasUpdate ? "arrow.down.circle.fill" : "arrow.triangle.2.circlepath",
-                    title: "更新",
-                    action: onOpenSettings
+                    title: hasUpdate ? "有可用更新" : "刷新当前模块",
+                    action: onRefreshWorkspace
                 )
                 .overlay(alignment: .topTrailing) {
                     if hasUpdate {
                         UpdateDot(size: 7)
                             .offset(x: -1, y: 2)
                             .transition(.scale.combined(with: .opacity))
-                    }
+                        }
                 }
-
-                WorkspaceIconButton(systemName: "gearshape", title: "设置", action: onOpenSettings)
             }
 
             ZStack(alignment: .topLeading) {
@@ -177,13 +190,24 @@ struct GlobalTopBar: View {
 
             Spacer(minLength: 10)
 
-            Circle()
-                .fill(AppTheme.accentSoft)
-                .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
-                .frame(width: 28, height: 28)
+            Button(action: onOpenAccount) {
+                Circle()
+                    .fill(AppTheme.accentSoft)
+                    .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("账户")
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, isPrimarySidebarVisible ? 14 : 92)
+        .padding(.trailing, 14)
         .background(AppTheme.workspaceTokens.topBar)
+    }
+
+    private func togglePrimarySidebar() {
+        withAnimation(AppMotion.reveal) {
+            isPrimarySidebarVisible.toggle()
+        }
     }
 
     private func handleMoveCommand(_ direction: MoveCommandDirection) {
@@ -605,19 +629,6 @@ struct WorkspaceIconButton: View {
         .buttonStyle(.plain)
         .help(title)
         .onHover { isHovered = $0 }
-    }
-}
-
-struct WorkspaceToolbarIndicator: View {
-    let systemName: String
-    let title: String
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(AppTheme.workspaceTokens.textMuted)
-            .frame(width: 30, height: 30)
-            .help(title)
     }
 }
 

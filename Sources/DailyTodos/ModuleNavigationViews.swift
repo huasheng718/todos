@@ -53,7 +53,7 @@ struct TodoWorkspaceContent: View {
     let onDelete: (TodoItem) -> Void
 
     var body: some View {
-        WorkspaceContentContainer(headerHeight: 52, showsToolbar: false) {
+        WorkspaceContentContainer(headerHeight: 46, showsToolbar: false) {
             TodoWorkspaceHeader(
                 title: contentTitle,
                 subtitle: contentSubtitle,
@@ -126,21 +126,7 @@ struct TodoWorkspaceHeader: View {
     let scope: TodoScope
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
-                    .lineLimit(1)
-
-                Text(subtitle)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.workspaceTokens.textMuted)
-                    .lineLimit(1)
-            }
-            .frame(width: 142, alignment: .leading)
-            .layoutPriority(1)
-
+        HStack(alignment: .center, spacing: 0) {
             ListToolbar(searchText: $searchText, allTodosViewMode: $allTodosViewMode, scope: scope)
                 .frame(maxWidth: .infinity)
         }

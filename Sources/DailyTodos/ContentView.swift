@@ -9,6 +9,7 @@ struct ContentView: View {
     @EnvironmentObject private var updateController: UpdateController
     @EnvironmentObject private var moduleRegistry: AppModuleRegistry
     @AppStorage(AppSkin.storageKey) private var selectedSkinRawValue = AppSkin.ocean.rawValue
+    @AppStorage("DailyTodos.isPrimarySidebarVisible") private var isPrimarySidebarVisible = true
     @State private var scope: TodoScope = .all
     @State private var handbookCategory: HandbookCategory? = nil
     @State private var handbookFolder: String? = nil
@@ -70,7 +71,9 @@ struct ContentView: View {
             globalSearchResults: globalSearchResults,
             globalSearchContext: globalSearchContext,
             hasUpdate: updateController.hasAvailableUpdate,
-            onOpenSettings: { activateSettings(.appearance) },
+            onRefreshWorkspace: refreshActiveWorkspace,
+            onOpenAccount: { activateSettings(.account) },
+            isPrimarySidebarVisible: $isPrimarySidebarVisible,
             onActivateModule: { moduleRegistry.activate($0) },
             onGlobalSearchFocused: {
                 store.scheduleLoadHandbookItemsIfNeeded()
@@ -89,7 +92,7 @@ struct ContentView: View {
                     onUndo: performTodoUndo,
                     onDismiss: dismissTodoFeedback
                 )
-                .padding(.leading, primarySidebarWidth)
+                .padding(.leading, isPrimarySidebarVisible ? primarySidebarWidth : 0)
                 .padding(.bottom, 18)
                 .transition(AppMotion.inlineTransition)
             }
@@ -100,6 +103,8 @@ struct ContentView: View {
         .onAppear {
             activeAppSkin = AppSkin(rawValue: selectedSkinRawValue) ?? .ocean
             activeColorScheme = colorScheme
+            applyUIQAInitialPrimarySidebarVisibilityIfNeeded()
+            applyUIQAInitialSettingsSectionIfNeeded()
             rebuildFilteredTodos()
         }
         .onChange(of: selectedSkinRawValue) { _, newValue in
@@ -187,8 +192,6 @@ struct ContentView: View {
             )
                 .environmentObject(updateController)
                 .environmentObject(aiSettings)
-        case "account":
-            AccountContextSidebar(isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed)
         default:
             EmptyWorkspaceContextSidebar(title: "模块")
         }
@@ -217,8 +220,6 @@ struct ContentView: View {
             .environmentObject(aiSettings)
             .environmentObject(credentialStore)
             .environmentObject(credentialActions)
-        case "account":
-            AccountModuleView()
         default:
             Text("未知模块")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -291,6 +292,44 @@ struct ContentView: View {
     private func activateSettings(_ section: AppSettingsSection) {
         appSettingsSection = section
         moduleRegistry.activate("settings")
+    }
+
+    private func refreshActiveWorkspace() {
+        PerformanceMonitor.event("Workspace.refresh", detail: moduleRegistry.activeModuleID)
+
+        switch moduleRegistry.activeModuleID {
+        case "todos":
+            store.loadStartupData()
+            rebuildFilteredTodos()
+        case "handbook":
+            store.reloadHandbookItems()
+            handbookWorkspaceModel.refresh(
+                items: store.handbookItems,
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
+        case "credentials":
+            credentialStore.load()
+        case "settings":
+            updateController.checkForUpdates()
+        default:
+            store.loadStartupData()
+        }
+    }
+
+    private func applyUIQAInitialSettingsSectionIfNeeded() {
+        guard moduleRegistry.activeModuleID == "settings",
+              let requestedSectionRawValue = ProcessInfo.processInfo.environment["DAILY_TODOS_UIQA_SETTINGS_SECTION"],
+              let requestedSection = AppSettingsSection(rawValue: requestedSectionRawValue)
+        else { return }
+        appSettingsSection = requestedSection
+    }
+
+    private func applyUIQAInitialPrimarySidebarVisibilityIfNeeded() {
+        guard let rawValue = ProcessInfo.processInfo.environment["DAILY_TODOS_UIQA_PRIMARY_SIDEBAR_VISIBLE"] else { return }
+        let normalizedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        isPrimarySidebarVisible = !["0", "false", "no", "off"].contains(normalizedValue)
     }
 
     private func selectGlobalSearchResult(_ result: GlobalSearchResult) {

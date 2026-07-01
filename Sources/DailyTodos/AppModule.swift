@@ -31,19 +31,19 @@ final class AppModuleRegistry: ObservableObject {
             TodoAppModule(),
             HandbookAppModule(),
             CredentialsAppModule(),
-            SettingsAppModule(),
-            AccountAppModule()
+            SettingsAppModule()
         ]
 
         // 从 UserDefaults 读取已安装模块
         let savedIDs = UserDefaults.standard.stringArray(forKey: Self.installedModulesKey) ?? []
         let defaultIDs = modules.filter { $0.isDefault }.map { $0.id }
+        let registeredIDs = Set(modules.map(\.id))
         let installed: Set<String>
         if savedIDs.isEmpty {
             // 首次启动，安装所有默认模块
             installed = Set(defaultIDs)
         } else {
-            installed = Set(savedIDs).union(defaultIDs)
+            installed = Set(savedIDs).intersection(registeredIDs).union(defaultIDs)
         }
 
         registeredModules = modules

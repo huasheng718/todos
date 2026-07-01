@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum AppSettingsSection: String, CaseIterable, Identifiable {
+    case account
     case appearance
     case credentials
     case ai
@@ -11,6 +12,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .account: "账户"
         case .appearance: "外观"
         case .credentials: "凭证"
         case .ai: "AI"
@@ -21,6 +23,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .account: "空间、订阅、账单"
         case .appearance: "主题与视觉密度"
         case .credentials: "导入、备份、安全"
         case .ai: "DeepSeek 连接"
@@ -31,6 +34,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .account: "person.crop.circle"
         case .appearance: "paintpalette.fill"
         case .credentials: "key.fill"
         case .ai: "sparkles"
@@ -166,15 +170,13 @@ struct SettingsModuleView: View {
     @Binding var selectedSection: AppSettingsSection
 
     var body: some View {
-        WorkspaceContentContainer {
+        VStack(spacing: 0) {
             ContentHeader(title: selectedSection.title, subtitle: selectedSection.subtitle)
-        } toolbar: {
-            ContentToolbar {
-                Label("设置", systemImage: selectedSection.icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-        } bodyContent: {
+                .frame(height: 50)
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
             ScrollView {
                 SettingsContentView(
                     selectedSkinRawValue: $selectedSkinRawValue,
@@ -185,6 +187,8 @@ struct SettingsModuleView: View {
             .scrollIndicators(.visible)
             .background(AppTheme.workspaceSurface)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.workspaceTokens.contentSurface)
         .sheet(isPresented: $credentialActions.isBackupSheetPresented) {
             CredentialBackupSheet()
                 .environmentObject(credentialStore)
@@ -220,6 +224,8 @@ private struct SettingsContentView: View {
     @ViewBuilder
     private var settingsContent: some View {
         switch selectedSection {
+        case .account:
+            accountSettings
         case .appearance:
             appearanceSettings
         case .credentials:
@@ -230,6 +236,12 @@ private struct SettingsContentView: View {
             moduleSettings
         case .updates:
             updateSettings
+        }
+    }
+
+    private var accountSettings: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AccountSettingsContent()
         }
     }
 
