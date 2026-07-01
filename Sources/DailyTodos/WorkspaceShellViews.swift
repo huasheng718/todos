@@ -4,6 +4,7 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
     let installedModules: [any AppModule]
     @Binding var activeModuleID: String
     @Binding var globalSearchText: String
+    var isGlobalSearchFocused: FocusState<Bool>.Binding
     let hasUpdate: Bool
     let onOpenSettings: () -> Void
     let onActivateModule: (String) -> Void
@@ -15,6 +16,7 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
             GlobalTopBar(
                 workspaceName: "个人空间",
                 searchText: $globalSearchText,
+                isSearchFocused: isGlobalSearchFocused,
                 hasUpdate: hasUpdate,
                 onOpenSettings: onOpenSettings
             )
@@ -50,6 +52,7 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
 struct GlobalTopBar: View {
     let workspaceName: String
     @Binding var searchText: String
+    var isSearchFocused: FocusState<Bool>.Binding
     let hasUpdate: Bool
     let onOpenSettings: () -> Void
 
@@ -71,7 +74,7 @@ struct GlobalTopBar: View {
                 text: $searchText,
                 placeholder: "搜索蚁序",
                 shortcutHint: "⌘K",
-                isFocused: nil
+                isFocused: isSearchFocused
             )
             .frame(maxWidth: 520)
 
@@ -96,6 +99,15 @@ struct GlobalTopBar: View {
                 .fill(AppTheme.accentSoft)
                 .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
                 .frame(width: 30, height: 30)
+        }
+        .background {
+            Button("搜索蚁序") {
+                isSearchFocused.wrappedValue = true
+            }
+            .keyboardShortcut("k", modifiers: [.command])
+            .labelsHidden()
+            .opacity(0.001)
+            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
         .background(AppTheme.workspaceTokens.topBar)

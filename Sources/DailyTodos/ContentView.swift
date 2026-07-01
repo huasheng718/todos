@@ -42,6 +42,7 @@ struct ContentView: View {
     @State private var handbookSearchDebounceTask: Task<Void, Never>?
     @StateObject private var handbookWorkspaceModel = HandbookWorkspaceViewModel()
     @FocusState private var focusedField: FocusField?
+    @FocusState private var isGlobalSearchFocused: Bool
 
     private let calendar = Calendar.current
 
@@ -53,6 +54,7 @@ struct ContentView: View {
                 set: { moduleRegistry.activate($0) }
             ),
             globalSearchText: $globalSearchText,
+            isGlobalSearchFocused: $isGlobalSearchFocused,
             hasUpdate: updateController.hasAvailableUpdate,
             onOpenSettings: { activateSettings(.appearance) },
             onActivateModule: { moduleRegistry.activate($0) },
