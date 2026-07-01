@@ -71,6 +71,18 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    func reloadHandbookItems() {
+        do {
+            try PerformanceMonitor.measure("TodoStore.reloadHandbookItems") {
+                didLoadHandbookItems = false
+                try loadHandbookItemsIfNeededInternal()
+            }
+            lastError = nil
+        } catch {
+            lastError = "刷新手记数据失败：\(error.localizedDescription)"
+        }
+    }
+
     func scheduleLoadHandbookItemsIfNeeded() {
         scheduleLoadHandbookItemsIfNeeded(after: nil)
     }
