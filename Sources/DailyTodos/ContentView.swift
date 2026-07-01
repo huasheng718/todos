@@ -39,6 +39,7 @@ struct ContentView: View {
     @State private var filteredTodosCache: [TodoItem] = []
     @State private var todoSearchDebounceTask: Task<Void, Never>?
     @State private var handbookSearchDebounceTask: Task<Void, Never>?
+    @StateObject private var handbookWorkspaceModel = HandbookWorkspaceViewModel()
     @FocusState private var focusedField: FocusField?
 
     private let calendar = Calendar.current
@@ -145,11 +146,13 @@ struct ContentView: View {
             TodoContextSidebar(scope: $scope, isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed)
         case "handbook":
             HandbookContextSidebar(
+                workspaceModel: handbookWorkspaceModel,
                 handbookCategory: $handbookCategory,
                 handbookFolder: $handbookFolder,
-                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
+                isLoaded: store.didLoadHandbookItems,
+                onUpdate: updateHandbookItem
             )
-            .environmentObject(store)
         case "credentials":
             CredentialContextSidebar()
                 .environmentObject(credentialStore)
@@ -192,10 +195,10 @@ struct ContentView: View {
     }
 
     private var todoWorkspaceContentView: some View {
-        TodoModuleView(
-            scope: $scope,
+        TodoWorkspaceContent(
             searchText: $searchText,
             allTodosViewMode: $allTodosViewMode,
+            scope: scope,
             filteredTodosCache: filteredTodosCache,
             debouncedSearchText: debouncedSearchText,
             highlightedTodoID: highlightedTodoID,
@@ -216,7 +219,6 @@ struct ContentView: View {
             isAIEnabled: aiSettings.canUseAI,
             contentTitle: contentTitle,
             contentSubtitle: contentSubtitle,
-            isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
             onActivate: focusQuickCapture,
             onCreate: createTodo,
             onClear: cancelCreate,
@@ -228,12 +230,12 @@ struct ContentView: View {
     }
 
     private var handbookWorkspaceContentView: some View {
-        HandbookModuleView(
+        HandbookWorkspaceContent(
+            workspaceModel: handbookWorkspaceModel,
             handbookCategory: $handbookCategory,
             handbookFolder: $handbookFolder,
             handbookSearchText: $handbookSearchText,
             debouncedHandbookSearchText: debouncedHandbookSearchText,
-            isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
             onCreate: createHandbookItem,
             onUpdate: updateHandbookItem,
             onDelete: deleteHandbookItem

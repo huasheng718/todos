@@ -254,17 +254,16 @@ struct EmptyWorkspaceContextSidebar: View {
     let title: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(AppTheme.ink)
-            Text("该模块暂未提供辅导航。")
-                .font(.system(size: 11, weight: .semibold))
+            Text("当前模块暂无二级导航")
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
         .frame(width: secondarySidebarWidth)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(AppTheme.sidebar)
