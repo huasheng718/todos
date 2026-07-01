@@ -11,6 +11,7 @@ struct CredentialsModuleView: View {
     @EnvironmentObject private var credentialActions: CredentialManagementActions
     private let externalSearchText: Binding<String>?
     private let externalSelectedType: Binding<CredentialType?>?
+    private let externalSelectedCredentialID: Binding<UUID?>?
     @State private var localSearchText = ""
     @State private var localSelectedType: CredentialType?
     @State private var selectedCredentialID: UUID?
@@ -24,10 +25,12 @@ struct CredentialsModuleView: View {
 
     init(
         searchText: Binding<String>? = nil,
-        selectedType: Binding<CredentialType?>? = nil
+        selectedType: Binding<CredentialType?>? = nil,
+        selectedCredentialID: Binding<UUID?>? = nil
     ) {
         externalSearchText = searchText
         externalSelectedType = selectedType
+        externalSelectedCredentialID = selectedCredentialID
     }
 
     private var searchTextBinding: Binding<String> {
@@ -38,6 +41,10 @@ struct CredentialsModuleView: View {
         externalSelectedType ?? $localSelectedType
     }
 
+    private var selectedCredentialIDBinding: Binding<UUID?> {
+        externalSelectedCredentialID ?? $selectedCredentialID
+    }
+
     private var visibleCredentials: [CredentialItem] {
         credentialStore.credentials(
             matching: searchTextBinding.wrappedValue,
@@ -46,7 +53,7 @@ struct CredentialsModuleView: View {
     }
 
     private var selectedCredential: CredentialItem? {
-        guard let selectedCredentialID else { return visibleCredentials.first }
+        guard let selectedCredentialID = selectedCredentialIDBinding.wrappedValue else { return visibleCredentials.first }
         return visibleCredentials.first { $0.id == selectedCredentialID } ?? visibleCredentials.first
     }
 
@@ -120,7 +127,7 @@ struct CredentialsModuleView: View {
                 securityMode: $credentialActions.securityMode,
                 error: credentialStore.lastError,
                 auditEvents: credentialStore.auditEvents,
-                onSelect: { selectedCredentialID = $0.id },
+                onSelect: { selectedCredentialIDBinding.wrappedValue = $0.id },
                 onEdit: { item in
                     let secret = credentialStore.secretPayload(for: item, auditAction: "编辑凭证") ?? .empty
                     editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
@@ -136,14 +143,14 @@ struct CredentialsModuleView: View {
                 onImportDrafts: { drafts in
                     let importedCount = credentialActions.importDrafts(drafts, store: credentialStore)
                     if importedCount > 0 {
-                        selectedCredentialID = credentialStore.credentials.first?.id
+                        selectedCredentialIDBinding.wrappedValue = credentialStore.credentials.first?.id
                         editorMode = nil
                     }
                 },
                 onDelete: { item in
                     credentialStore.deleteCredential(item)
-                    if selectedCredentialID == item.id {
-                        selectedCredentialID = nil
+                    if selectedCredentialIDBinding.wrappedValue == item.id {
+                        selectedCredentialIDBinding.wrappedValue = nil
                     }
                 },
                 onReveal: { item in
@@ -179,13 +186,13 @@ struct CredentialsModuleView: View {
         switch mode {
         case .create(let draft):
             if let item = credentialStore.addCredential(draft) {
-                selectedCredentialID = item.id
+                selectedCredentialIDBinding.wrappedValue = item.id
                 editorMode = nil
                 credentialActions.clearTransientModes()
             }
         case .edit(let item, let draft):
             credentialStore.updateCredential(item, draft: draft)
-            selectedCredentialID = item.id
+            selectedCredentialIDBinding.wrappedValue = item.id
             editorMode = nil
             credentialActions.clearTransientModes()
         }

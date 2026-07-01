@@ -4,10 +4,16 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
     let installedModules: [any AppModule]
     @Binding var activeModuleID: String
     @Binding var globalSearchText: String
+    @Binding var isGlobalSearchPresented: Bool
     var isGlobalSearchFocused: FocusState<Bool>.Binding
+    let globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]]
+    let globalSearchContext: GlobalCommandSearchContext
     let hasUpdate: Bool
     let onOpenSettings: () -> Void
     let onActivateModule: (String) -> Void
+    let onGlobalSearchFocused: () -> Void
+    let onGlobalSearchDismiss: () -> Void
+    let onSelectGlobalSearchResult: (GlobalSearchResult) -> Void
     @ViewBuilder let contextSidebar: () -> ContextSidebar
     @ViewBuilder let content: () -> Content
 
@@ -16,9 +22,15 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
             GlobalTopBar(
                 workspaceName: "个人空间",
                 searchText: $globalSearchText,
+                isSearchPresented: $isGlobalSearchPresented,
                 isSearchFocused: isGlobalSearchFocused,
+                groupedResults: globalSearchResults,
+                searchContext: globalSearchContext,
                 hasUpdate: hasUpdate,
-                onOpenSettings: onOpenSettings
+                onOpenSettings: onOpenSettings,
+                onSearchFocused: onGlobalSearchFocused,
+                onSearchDismiss: onGlobalSearchDismiss,
+                onSelectResult: onSelectGlobalSearchResult
             )
             .frame(height: 52)
 
@@ -46,15 +58,32 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
         .background(AppTheme.workspaceTokens.canvas.ignoresSafeArea())
         .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
         .font(.system(size: 13, weight: .regular, design: .default))
+        .overlay {
+            Button("搜索蚁序") {
+                isGlobalSearchPresented = true
+                isGlobalSearchFocused.wrappedValue = true
+                onGlobalSearchFocused()
+            }
+            .keyboardShortcut("k", modifiers: [.command])
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
     }
 }
 
 struct GlobalTopBar: View {
     let workspaceName: String
     @Binding var searchText: String
+    @Binding var isSearchPresented: Bool
     var isSearchFocused: FocusState<Bool>.Binding
+    let groupedResults: [GlobalSearchModule: [GlobalSearchResult]]
+    let searchContext: GlobalCommandSearchContext
     let hasUpdate: Bool
     let onOpenSettings: () -> Void
+    let onSearchFocused: () -> Void
+    let onSearchDismiss: () -> Void
+    let onSelectResult: (GlobalSearchResult) -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -70,12 +99,50 @@ struct GlobalTopBar: View {
             }
             .frame(width: 220, alignment: .leading)
 
-            WorkspaceSearchField(
-                text: $searchText,
-                placeholder: "搜索蚁序",
-                shortcutHint: "⌘K",
-                isFocused: isSearchFocused
-            )
+            ZStack(alignment: .topLeading) {
+                WorkspaceSearchField(
+                    text: $searchText,
+                    placeholder: "搜索蚁序",
+                    shortcutHint: "⌘K",
+                    isFocused: isSearchFocused
+                )
+                .onChange(of: isSearchFocused.wrappedValue) { _, focused in
+                    if focused {
+                        isSearchPresented = true
+                        onSearchFocused()
+                    }
+                }
+                .onChange(of: searchText) { _, newValue in
+                    if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        isSearchPresented = true
+                        onSearchFocused()
+                    }
+                }
+                .onExitCommand {
+                    searchText = ""
+                    isSearchPresented = false
+                    isSearchFocused.wrappedValue = false
+                    onSearchDismiss()
+                }
+
+                if isSearchPresented {
+                    GlobalCommandSearchPanel(
+                        query: searchText,
+                        groupedResults: groupedResults,
+                        didLoadHandbookItems: searchContext.didLoadHandbookItems,
+                        isLoadingHandbookItems: searchContext.isLoadingHandbookItems,
+                        isCredentialVaultUnlocked: searchContext.isCredentialVaultUnlocked,
+                        onSelect: { result in
+                            onSelectResult(result)
+                            searchText = ""
+                            isSearchPresented = false
+                            isSearchFocused.wrappedValue = false
+                        }
+                    )
+                    .offset(y: 38)
+                    .zIndex(20)
+                }
+            }
             .frame(maxWidth: 520)
 
             Spacer(minLength: 16)
@@ -99,15 +166,6 @@ struct GlobalTopBar: View {
                 .fill(AppTheme.accentSoft)
                 .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
                 .frame(width: 30, height: 30)
-        }
-        .background {
-            Button("搜索蚁序") {
-                isSearchFocused.wrappedValue = true
-            }
-            .keyboardShortcut("k", modifiers: [.command])
-            .labelsHidden()
-            .opacity(0.001)
-            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
         .background(AppTheme.workspaceTokens.topBar)

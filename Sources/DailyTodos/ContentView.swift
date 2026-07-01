@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var handbookSearchText = ""
     @State private var debouncedHandbookSearchText = ""
     @State private var globalSearchText = ""
+    @State private var isGlobalSearchPresented = false
     @State private var newTitle = ""
     @State private var newPriority: TodoPriority = .medium
     @State private var newProgress: TodoProgress = .pending
@@ -32,6 +33,7 @@ struct ContentView: View {
     @State private var appSettingsSection: AppSettingsSection = .appearance
     @State private var credentialSearchText = ""
     @State private var credentialSelectedType: CredentialType?
+    @State private var selectedCredentialID: UUID?
     @State private var isSecondarySidebarCollapsed = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @State private var highlightedTodoID: TodoItem.ID?
@@ -45,6 +47,15 @@ struct ContentView: View {
     @FocusState private var isGlobalSearchFocused: Bool
 
     private let calendar = Calendar.current
+    private let globalSearchEngine = GlobalCommandSearchEngine()
+
+    private struct PendingHandbookSelection: Equatable {
+        let id: UUID
+        let category: HandbookCategory?
+        let folder: String?
+    }
+
+    @State private var pendingHandbookSelection: PendingHandbookSelection?
 
     var body: some View {
         WorkspaceShell(
@@ -54,10 +65,20 @@ struct ContentView: View {
                 set: { moduleRegistry.activate($0) }
             ),
             globalSearchText: $globalSearchText,
+            isGlobalSearchPresented: $isGlobalSearchPresented,
             isGlobalSearchFocused: $isGlobalSearchFocused,
+            globalSearchResults: globalSearchResults,
+            globalSearchContext: globalSearchContext,
             hasUpdate: updateController.hasAvailableUpdate,
             onOpenSettings: { activateSettings(.appearance) },
             onActivateModule: { moduleRegistry.activate($0) },
+            onGlobalSearchFocused: {
+                store.scheduleLoadHandbookItemsIfNeeded()
+            },
+            onGlobalSearchDismiss: {
+                isGlobalSearchPresented = false
+            },
+            onSelectGlobalSearchResult: selectGlobalSearchResult,
             contextSidebar: { activeContextSidebarView },
             content: { activeWorkspaceContentView }
         )
@@ -119,6 +140,24 @@ struct ContentView: View {
         .onChange(of: store.todos) { _, _ in
             rebuildFilteredTodos()
         }
+        .onChange(of: store.handbookItems) { _, _ in
+            applyPendingHandbookSelectionIfAvailable()
+        }
+    }
+
+    private var globalSearchContext: GlobalCommandSearchContext {
+        GlobalCommandSearchContext(
+            todos: store.todos,
+            handbookItems: store.handbookItems,
+            credentials: credentialStore.credentials,
+            didLoadHandbookItems: store.didLoadHandbookItems,
+            isLoadingHandbookItems: store.isLoadingHandbookItems,
+            isCredentialVaultUnlocked: credentialStore.isUnlocked
+        )
+    }
+
+    private var globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]] {
+        globalSearchEngine.results(query: globalSearchText, context: globalSearchContext)
     }
 
     @ViewBuilder
@@ -162,7 +201,8 @@ struct ContentView: View {
         case "credentials":
             CredentialsModuleView(
                 searchText: $credentialSearchText,
-                selectedType: $credentialSelectedType
+                selectedType: $credentialSelectedType,
+                selectedCredentialID: $selectedCredentialID
             )
         case "settings":
             SettingsModuleView(
@@ -248,6 +288,58 @@ struct ContentView: View {
     private func activateSettings(_ section: AppSettingsSection) {
         appSettingsSection = section
         moduleRegistry.activate("settings")
+    }
+
+    private func selectGlobalSearchResult(_ result: GlobalSearchResult) {
+        switch result.target {
+        case .todo(let id, let targetScope):
+            moduleRegistry.activate("todos")
+            scope = targetScope
+            searchText = ""
+            debouncedSearchText = ""
+            rebuildFilteredTodos()
+            highlightTodo(id, shouldScroll: true)
+
+        case .handbook(let id, let category, let folder):
+            moduleRegistry.activate("handbook")
+            store.scheduleLoadHandbookItemsIfNeeded()
+            handbookCategory = category
+            handbookFolder = folder
+            handbookSearchText = ""
+            debouncedHandbookSearchText = ""
+            handbookWorkspaceModel.refresh(
+                items: store.handbookItems,
+                selectedCategory: handbookCategory,
+                selectedFolder: handbookFolder,
+                searchText: debouncedHandbookSearchText
+            )
+
+            let pendingSelection = PendingHandbookSelection(id: id, category: category, folder: folder)
+            pendingHandbookSelection = pendingSelection
+            applyPendingHandbookSelectionIfAvailable()
+
+        case .credential(let id, let type):
+            moduleRegistry.activate("credentials")
+            credentialSearchText = ""
+            credentialSelectedType = type
+            selectedCredentialID = id
+        }
+    }
+
+    private func applyPendingHandbookSelectionIfAvailable() {
+        guard let pendingHandbookSelection else { return }
+        guard store.handbookItems.contains(where: { $0.id == pendingHandbookSelection.id }) else { return }
+
+        handbookCategory = pendingHandbookSelection.category
+        handbookFolder = pendingHandbookSelection.folder
+        handbookWorkspaceModel.refresh(
+            items: store.handbookItems,
+            selectedCategory: handbookCategory,
+            selectedFolder: handbookFolder,
+            searchText: debouncedHandbookSearchText
+        )
+        handbookWorkspaceModel.selectItem(id: pendingHandbookSelection.id)
+        self.pendingHandbookSelection = nil
     }
 
     private var todoContentTitle: String {
