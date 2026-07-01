@@ -166,7 +166,6 @@ struct GlobalTopBar: View {
 
             Spacer(minLength: 16)
 
-            WorkspaceIconButton(systemName: "sparkles", title: "AI Assistant") {}
             ZStack(alignment: .topTrailing) {
                 WorkspaceIconButton(
                     systemName: hasUpdate ? "arrow.down.circle.fill" : "arrow.triangle.2.circlepath",

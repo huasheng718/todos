@@ -181,11 +181,14 @@ struct ContentView: View {
             )
                 .environmentObject(credentialStore)
         case "settings":
-            SettingsContextSidebar(selectedSection: $appSettingsSection)
+            SettingsContextSidebar(
+                selectedSection: $appSettingsSection,
+                isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed
+            )
                 .environmentObject(updateController)
                 .environmentObject(aiSettings)
         case "account":
-            EmptyWorkspaceContextSidebar(title: "账户")
+            AccountContextSidebar(isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed)
         default:
             EmptyWorkspaceContextSidebar(title: "模块")
         }

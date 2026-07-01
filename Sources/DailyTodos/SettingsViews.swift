@@ -51,7 +51,10 @@ struct AppSettingsSheet: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SettingsContextSidebar(selectedSection: $selectedSection)
+            SettingsContextSidebar(
+                selectedSection: $selectedSection,
+                isSecondarySidebarCollapsed: .constant(false)
+            )
                 .environmentObject(updateController)
                 .environmentObject(aiSettings)
 
@@ -78,70 +81,77 @@ struct SettingsContextSidebar: View {
     @EnvironmentObject private var updateController: UpdateController
     @EnvironmentObject private var aiSettings: AISettingsStore
     @Binding var selectedSection: AppSettingsSection
+    @Binding var isSecondarySidebarCollapsed: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("设置")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 8)
-
-            ForEach(AppSettingsSection.allCases) { section in
-                Button {
-                    withAnimation(AppMotion.smooth) {
-                        selectedSection = section
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: section.icon)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
-                            .frame(width: 16)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(section.title)
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(AppTheme.ink)
-                            Text(section.subtitle)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                        if section == .ai {
-                            Circle()
-                                .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
-                                .frame(width: 6, height: 6)
-                        } else if section == .updates, updateController.hasAvailableUpdate {
-                            Circle()
-                                .fill(TodoPriority.high.displayColor)
-                                .frame(width: 6, height: 6)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 46)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .background(
-                        selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        Group {
+            if isSecondarySidebarCollapsed {
+                CollapsedContextRail(title: "设置", isCollapsed: $isSecondarySidebarCollapsed)
+                    .frame(width: collapsedSecondarySidebarWidth)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    WorkspaceContextHeader(
+                        title: "设置",
+                        subtitle: "外观、AI、更新、安全",
+                        isCollapsed: $isSecondarySidebarCollapsed
                     )
+
+                    ForEach(AppSettingsSection.allCases) { section in
+                        Button {
+                            withAnimation(AppMotion.smooth) {
+                                selectedSection = section
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: section.icon)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                    .frame(width: 16)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(section.title)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(AppTheme.ink)
+                                    Text(section.subtitle)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                                if section == .ai {
+                                    Circle()
+                                        .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
+                                        .frame(width: 6, height: 6)
+                                } else if section == .updates, updateController.hasAvailableUpdate {
+                                    Circle()
+                                        .fill(TodoPriority.high.displayColor)
+                                        .frame(width: 6, height: 6)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 46)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .background(
+                                selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 10)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Text(AppVersion.displayText)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppTheme.mutedInk)
+                        .padding(18)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
+                .frame(width: secondarySidebarWidth)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
+                .background(AppTheme.workspaceSidebar)
             }
-
-            Spacer(minLength: 0)
-
-            Text(AppVersion.displayText)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .padding(18)
         }
-        .frame(width: secondarySidebarWidth)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.workspaceSidebar)
     }
 }
 
