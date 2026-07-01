@@ -52,26 +52,11 @@ struct TodoSidebarView: View {
     }
 
     private var sidebarHeader: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("待办")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                    .lineLimit(1)
-                Text("今日、等待、固定、全部")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.mutedInk)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 12)
-
-            SecondarySidebarCollapseButton(isCollapsed: $isCollapsed)
-        }
-        .padding(.leading, 20)
-        .padding(.trailing, 16)
-        .frame(height: 48)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        WorkspaceContextHeader(
+            title: "待办",
+            subtitle: "今日、等待、固定、全部",
+            isCollapsed: $isCollapsed
+        )
     }
 
     private var navigationGroup: some View {

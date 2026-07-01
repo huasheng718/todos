@@ -137,14 +137,7 @@ struct SecondarySidebarCollapseButton: View {
     }
 }
 
-struct CollapsedSecondarySidebarRail: View {
-    let title: String
-    @Binding var isCollapsed: Bool
-
-    var body: some View {
-        CollapsedContextRail(title: title, isCollapsed: $isCollapsed)
-    }
-}
+typealias CollapsedSecondarySidebarRail = CollapsedContextRail
 
 struct CollapsedContextRail: View {
     let title: String

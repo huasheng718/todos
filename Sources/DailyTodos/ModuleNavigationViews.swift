@@ -7,7 +7,7 @@ struct TodoContextSidebar: View {
     var body: some View {
         Group {
             if isSecondarySidebarCollapsed {
-                CollapsedSecondarySidebarRail(title: "待办", isCollapsed: $isSecondarySidebarCollapsed)
+                CollapsedContextRail(title: "待办", isCollapsed: $isSecondarySidebarCollapsed)
                     .frame(width: collapsedSecondarySidebarWidth)
             } else {
                 TodoSidebarView(scope: $scope, isCollapsed: $isSecondarySidebarCollapsed)
@@ -54,9 +54,9 @@ struct TodoWorkspaceContent: View {
 
     var body: some View {
         WorkspaceContentContainer {
-            ContentHeader(title: contentTitle, subtitle: contentSubtitle)
+            WorkspaceContentHeader(title: contentTitle, subtitle: contentSubtitle)
         } toolbar: {
-            ContentToolbar {
+            WorkspaceLocalToolbar {
                 ListToolbar(searchText: $searchText, allTodosViewMode: $allTodosViewMode, scope: scope)
             }
         } bodyContent: {
@@ -125,7 +125,7 @@ struct HandbookContextSidebar: View {
     var body: some View {
         Group {
             if isSecondarySidebarCollapsed {
-                CollapsedSecondarySidebarRail(title: "手记", isCollapsed: $isSecondarySidebarCollapsed)
+                CollapsedContextRail(title: "手记", isCollapsed: $isSecondarySidebarCollapsed)
                     .frame(width: collapsedSecondarySidebarWidth)
             } else {
                 HandbookFolderSidebarView(
@@ -173,15 +173,12 @@ struct HandbookWorkspaceContent: View {
 
     var body: some View {
         WorkspaceContentContainer {
-            ContentHeader(
+            WorkspaceContentHeader(
                 title: handbookCategory?.title ?? "全部手记",
                 subtitle: handbookCategory?.subtitle ?? "收集业务规则、调研、会议和灵感"
             )
         } toolbar: {
-            ContentToolbar {
-                SearchField(text: $handbookSearchText)
-                    .frame(maxWidth: 280)
-
+            WorkspaceLocalToolbar {
                 Button(action: createDraftHandbookItem) {
                     Label("新建", systemImage: "square.and.pencil")
                         .font(.system(size: 12, weight: .bold))

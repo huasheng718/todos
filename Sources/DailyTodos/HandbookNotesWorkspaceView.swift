@@ -37,26 +37,11 @@ struct HandbookFolderSidebarView: View {
     }
 
     private var sidebarHeader: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("手记")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppTheme.ink)
-                    .lineLimit(1)
-
-                Text("Mac")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 8)
-
-            SecondarySidebarCollapseButton(isCollapsed: $isSecondarySidebarCollapsed)
-        }
-        .padding(.leading, 18)
-        .padding(.trailing, 12)
-        .frame(height: 52)
+        WorkspaceContextHeader(
+            title: "手记",
+            subtitle: "规则、调研、会议、灵感",
+            isCollapsed: $isSecondarySidebarCollapsed
+        )
     }
 
     private var sourceSection: some View {
@@ -386,7 +371,7 @@ struct HandbookNotesRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
