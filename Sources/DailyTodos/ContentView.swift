@@ -29,8 +29,9 @@ struct ContentView: View {
     @State private var aiStatusMessage: String?
     @State private var quickCaptureAITrace: AITrace?
     @State private var quickCaptureAIResultSummary: String?
-    @State private var isAppSettingsPresented = false
     @State private var appSettingsSection: AppSettingsSection = .appearance
+    @State private var credentialSearchText = ""
+    @State private var credentialSelectedType: CredentialType?
     @State private var isSecondarySidebarCollapsed = false
     @State private var allTodosViewMode: AllTodosViewMode = .compact
     @State private var highlightedTodoID: TodoItem.ID?
@@ -126,17 +127,6 @@ struct ContentView: View {
         .onChange(of: store.todos) { _, _ in
             rebuildFilteredTodos()
         }
-        .sheet(isPresented: $isAppSettingsPresented) {
-            AppSettingsSheet(
-                selectedSkinRawValue: $selectedSkinRawValue,
-                selectedSection: $appSettingsSection
-            )
-                .environmentObject(updateController)
-                .environmentObject(moduleRegistry)
-                .environmentObject(aiSettings)
-                .environmentObject(credentialStore)
-                .environmentObject(credentialActions)
-        }
     }
 
     @ViewBuilder
@@ -154,7 +144,10 @@ struct ContentView: View {
                 onUpdate: updateHandbookItem
             )
         case "credentials":
-            CredentialContextSidebar()
+            CredentialContextSidebar(
+                searchText: $credentialSearchText,
+                selectedType: $credentialSelectedType
+            )
                 .environmentObject(credentialStore)
         case "settings":
             SettingsContextSidebar(selectedSection: $appSettingsSection)
@@ -175,7 +168,10 @@ struct ContentView: View {
         case "handbook":
             handbookWorkspaceContentView
         case "credentials":
-            CredentialsModuleView()
+            CredentialsModuleView(
+                searchText: $credentialSearchText,
+                selectedType: $credentialSelectedType
+            )
         case "settings":
             SettingsModuleView(
                 selectedSkinRawValue: $selectedSkinRawValue,
@@ -255,11 +251,6 @@ struct ContentView: View {
         case .weekly:
             filteredTodosCache = store.todos(matching: debouncedSearchText).filter(\.isWeekly)
         }
-    }
-
-    private func openSettings(_ section: AppSettingsSection) {
-        appSettingsSection = section
-        isAppSettingsPresented = true
     }
 
     private func activateSettings(_ section: AppSettingsSection) {

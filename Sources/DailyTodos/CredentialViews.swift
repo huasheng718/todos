@@ -9,8 +9,10 @@ enum CredentialEditorMode: Equatable {
 struct CredentialsModuleView: View {
     @EnvironmentObject private var credentialStore: CredentialStore
     @EnvironmentObject private var credentialActions: CredentialManagementActions
-    @State private var searchText = ""
-    @State private var selectedType: CredentialType?
+    private let externalSearchText: Binding<String>?
+    private let externalSelectedType: Binding<CredentialType?>?
+    @State private var localSearchText = ""
+    @State private var localSelectedType: CredentialType?
     @State private var selectedCredentialID: UUID?
     @State private var editorMode: CredentialEditorMode?
     @State private var isResetConfirmationPresented = false
@@ -20,8 +22,27 @@ struct CredentialsModuleView: View {
     @State private var initializationError: String?
     @State private var initializeRequiresMasterPassword = true
 
+    init(
+        searchText: Binding<String>? = nil,
+        selectedType: Binding<CredentialType?>? = nil
+    ) {
+        externalSearchText = searchText
+        externalSelectedType = selectedType
+    }
+
+    private var searchTextBinding: Binding<String> {
+        externalSearchText ?? $localSearchText
+    }
+
+    private var selectedTypeBinding: Binding<CredentialType?> {
+        externalSelectedType ?? $localSelectedType
+    }
+
     private var visibleCredentials: [CredentialItem] {
-        credentialStore.credentials(matching: searchText, type: selectedType)
+        credentialStore.credentials(
+            matching: searchTextBinding.wrappedValue,
+            type: selectedTypeBinding.wrappedValue
+        )
     }
 
     private var selectedCredential: CredentialItem? {
@@ -30,35 +51,16 @@ struct CredentialsModuleView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            CredentialSidebar(
-                searchText: $searchText,
-                selectedType: $selectedType,
-                credentials: credentialStore.credentials,
-                status: credentialStore.status
-            )
-            .frame(width: 280)
-            .background(AppTheme.sidebar)
-
-            VStack(spacing: 0) {
-                CredentialTopBar(
-                    status: credentialStore.status,
-                    count: credentialStore.credentials.count,
-                    requiresMasterPassword: credentialStore.requiresMasterPassword,
-                    notice: credentialActions.notice,
-                    onNew: openNewCredential,
-                    onLock: { credentialStore.lock() }
-                )
-                .frame(height: 48)
-
-                Divider()
-                    .overlay(AppTheme.hairline)
-
-                content
-            }
-            .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.workSurface)
-        }
+        CredentialWorkspaceContent(
+            credentialSubtitle: credentialSubtitle,
+            status: credentialStore.status,
+            count: credentialStore.credentials.count,
+            requiresMasterPassword: credentialStore.requiresMasterPassword,
+            notice: credentialActions.notice,
+            content: { content },
+            onNew: openNewCredential,
+            onLock: { credentialStore.lock() }
+        )
         .onAppear {
             credentialStore.load()
         }
@@ -76,6 +78,17 @@ struct CredentialsModuleView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("忘记主密码时只能重置。除非你已有加密备份，否则旧凭证不可恢复。")
+        }
+    }
+
+    private var credentialSubtitle: String {
+        switch credentialStore.status {
+        case .uninitialized:
+            "尚未初始化凭证库"
+        case .locked:
+            "凭证库已锁定"
+        case .unlocked:
+            "\(credentialStore.credentials.count) 条凭证，敏感字段默认隐藏"
         }
     }
 
@@ -192,39 +205,65 @@ struct CredentialsModuleView: View {
 
 struct CredentialContextSidebar: View {
     @EnvironmentObject private var credentialStore: CredentialStore
+    @Binding var searchText: String
+    @Binding var selectedType: CredentialType?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("凭证")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-            Text(statusText)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-            Text("共有 \(credentialStore.credentials.count) 条凭证")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-            Text("筛选与搜索保留在主工作区，待 Task 6 抽取共享状态。")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        CredentialSidebar(
+            searchText: $searchText,
+            selectedType: $selectedType,
+            credentials: credentialStore.credentials,
+            status: credentialStore.status
+        )
         .frame(width: secondarySidebarWidth)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.sidebar)
+        .background(AppTheme.workspaceSidebar)
+        .onAppear {
+            credentialStore.load()
+        }
     }
+}
 
-    private var statusText: String {
-        switch credentialStore.status {
-        case .uninitialized:
-            return "尚未初始化凭证库"
-        case .locked:
-            return "凭证库已锁定"
-        case .unlocked:
-            return "已解锁，敏感字段默认隐藏"
+struct CredentialWorkspaceContent<BodyContent: View>: View {
+    let credentialSubtitle: String
+    let status: CredentialVaultStatus
+    let count: Int
+    let requiresMasterPassword: Bool
+    let notice: CredentialNotice?
+    @ViewBuilder let content: () -> BodyContent
+    let onNew: () -> Void
+    let onLock: () -> Void
+
+    var body: some View {
+        WorkspaceContentContainer {
+            ContentHeader(title: "凭证", subtitle: credentialSubtitle)
+        } toolbar: {
+            ContentToolbar {
+                if status == .unlocked {
+                    if let notice {
+                        Label(notice.message, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(notice.isError ? TodoPriority.high.displayColor : AppTheme.accent)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+
+                    Button(action: onNew) {
+                        Label("新建凭证", systemImage: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .buttonStyle(.tactilePlain)
+
+                    if requiresMasterPassword {
+                        Button(action: onLock) {
+                            Label("锁定", systemImage: "lock.fill")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .buttonStyle(.tactilePlain)
+                    }
+                }
+            }
+        } bodyContent: {
+            content()
         }
     }
 }
