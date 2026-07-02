@@ -19,6 +19,8 @@ struct DailyTodosChecks {
                 try checkUpdateDownloadProgress()
                 try checkP0PerformanceGuardrails()
                 try checkRemainingPerformanceGuardrails()
+                try checkStoreArchitectureGuardrails()
+                try checkDeadCodeGuardrails()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
@@ -35,6 +37,7 @@ struct DailyTodosChecks {
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkTodoStore()
+                try checkHandbookStore()
                 try checkCredentialBreachChecker()
             }
             try await checkCredentialStore()
@@ -157,6 +160,63 @@ func checkRemainingPerformanceGuardrails() throws {
         dateFormatterSource.contains("enum CachedDateFormatter")
             && dateFormatterSource.contains("CachedDateFormatter.fullFollowUpDate"),
         "待办行日期格式化应恢复 CachedDateFormatter，避免大列表中重复创建格式化器"
+    )
+}
+
+func checkStoreArchitectureGuardrails() throws {
+    let handbookStoreSource = try sourceFile("Sources/DailyTodos/HandbookStore.swift")
+    try expect(
+        handbookStoreSource.contains("final class HandbookStore: ObservableObject"),
+        "手记状态和持久化应拆到 HandbookStore，避免 TodoStore 继续膨胀"
+    )
+    try expect(
+        handbookStoreSource.contains("CREATE TABLE IF NOT EXISTS handbook_items")
+            && handbookStoreSource.contains("HandbookSQLiteBackgroundReader"),
+        "HandbookStore 应承接 handbook_items schema 和后台读取器"
+    )
+
+    let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
+    try expect(
+        !todoStoreSource.contains("handbook_items"),
+        "TodoStore 不应再包含 handbook_items SQL，手记持久化归 HandbookStore"
+    )
+    try expect(
+        !todoStoreSource.contains("HandbookSQLiteBackgroundReader"),
+        "TodoStore 不应再承载手记后台 SQLite 读取器"
+    )
+    try expect(
+        !todoStoreSource.contains("HandbookItem"),
+        "TodoStore 不应再暴露 HandbookItem 状态或手记 CRUD，视图应依赖 HandbookStore"
+    )
+}
+
+func checkDeadCodeGuardrails() throws {
+    let removedLegacyFiles = [
+        "Sources/DailyTodos/HandbookViews.swift",
+        "Sources/DailyTodos/HandbookTreeView.swift",
+        "Sources/DailyTodos/HandbookSidebarViews.swift",
+        "Sources/DailyTodos/HandbookEmptyStates.swift"
+    ]
+    for file in removedLegacyFiles {
+        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(file)
+        try expect(
+            !FileManager.default.fileExists(atPath: url.path),
+            "\(file) 是旧手记方案残留，不应重新引入"
+        )
+    }
+
+    let moduleSource = try sourceFile("Sources/DailyTodos/ModuleNavigationViews.swift")
+    try expect(
+        moduleSource.contains("HandbookFolderSidebarView(")
+            && moduleSource.contains("HandbookNotesListView("),
+        "手记入口应保持当前三栏工作区，不能回退到旧 HandbookContentView/HandbookTreeView"
+    )
+    try expect(
+        !moduleSource.contains("HandbookContentView(")
+            && !moduleSource.contains("HandbookTreeView(")
+            && !moduleSource.contains("HandbookSidebarView("),
+        "模块导航不应引用已删除的旧手记视图"
     )
 }
 
@@ -425,27 +485,28 @@ func checkHandbookActivationUsesScheduledLoading() throws {
         .appendingPathComponent("Sources/DailyTodos/ContentView.swift")
     let source = try String(contentsOf: contentViewURL, encoding: .utf8)
     try expect(
-        source.contains("store.scheduleLoadHandbookItemsIfNeeded()"),
+        source.contains("handbookStore.scheduleLoadHandbookItemsIfNeeded()"),
         "切换到手记模块时应调度后台加载，避免同步 SQLite 阻塞 UI"
     )
     try expect(
-        !source.contains("guard newValue == \"handbook\" else { return }\n            store.loadHandbookItemsIfNeeded()"),
+        !source.contains("guard newValue == \"handbook\" else { return }\n            handbookStore.loadHandbookItemsIfNeeded()"),
         "手记模块激活路径不应同步调用 loadHandbookItemsIfNeeded"
     )
 }
 
 @MainActor
 func checkLazyStartupLoading() throws {
-    let (store, _) = try makeStore()
+    let (store, databaseURL) = try makeStore()
+    let handbookStore = HandbookStore(storageURL: databaseURL)
 
     store.loadStartupData()
     try expect(store.didLoadTodos, "首屏加载后应标记待办已加载")
-    try expect(!store.didLoadHandbookItems, "首屏加载不应同步加载手记")
-    try expect(!store.isLoadingHandbookItems, "首屏加载不应进入手记加载状态")
-    try expect(store.handbookItems.isEmpty, "首屏加载时手记列表应保持空集合")
+    try expect(!handbookStore.didLoadHandbookItems, "首屏加载不应同步加载手记")
+    try expect(!handbookStore.isLoadingHandbookItems, "首屏加载不应进入手记加载状态")
+    try expect(handbookStore.handbookItems.isEmpty, "首屏加载时手记列表应保持空集合")
 
-    store.loadHandbookItemsIfNeeded()
-    try expect(store.didLoadHandbookItems, "按需加载后应标记手记已加载")
+    handbookStore.loadHandbookItemsIfNeeded()
+    try expect(handbookStore.didLoadHandbookItems, "按需加载后应标记手记已加载")
 }
 
 func checkHandbookNotesSnapshotInvalidation() throws {
@@ -737,8 +798,8 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
 
 @MainActor
 func checkScheduledHandbookLoading() async throws {
-    let (seedStore, databaseURL) = try makeStore()
-    seedStore.loadStartupData()
+    let (_, databaseURL) = try makeStore()
+    let seedStore = HandbookStore(storageURL: databaseURL)
     seedStore.addHandbookItem(
         category: .businessRule,
         folder: "合同",
@@ -746,8 +807,7 @@ func checkScheduledHandbookLoading() async throws {
         body: "切换手记时不应阻塞主线程"
     )
 
-    let store = TodoStore(storageURL: databaseURL)
-    store.loadStartupData()
+    let store = HandbookStore(storageURL: databaseURL)
     try expect(!store.didLoadHandbookItems, "异步调度前不应预加载手记")
 
     store.scheduleLoadHandbookItemsIfNeeded()
@@ -768,8 +828,8 @@ func checkScheduledHandbookLoading() async throws {
 
 @MainActor
 func checkHandbookLoadingStateConflict() async throws {
-    let (seedStore, databaseURL) = try makeStore()
-    seedStore.loadStartupData()
+    let (_, databaseURL) = try makeStore()
+    let seedStore = HandbookStore(storageURL: databaseURL)
     seedStore.addHandbookItem(
         category: .inspiration,
         folder: "性能",
@@ -777,8 +837,7 @@ func checkHandbookLoadingStateConflict() async throws {
         body: "同步加载应取消后台预热结果"
     )
 
-    let store = TodoStore(storageURL: databaseURL)
-    store.loadStartupData()
+    let store = HandbookStore(storageURL: databaseURL)
     store.scheduleLoadHandbookItemsIfNeeded()
     try expect(store.isLoadingHandbookItems, "调度后应记录后台手记加载状态")
 
@@ -877,6 +936,12 @@ func checkTodoStore() throws {
             && todo.isWeekly
             && calendar.isDate(todo.date, inSameDayAs: weeklyDate.addingTimeInterval(7 * 24 * 60 * 60))
     }, "周期待办应生成下周待处理事项")
+}
+
+@MainActor
+func checkHandbookStore() throws {
+    let (_, databaseURL) = try makeStore()
+    let store = HandbookStore(storageURL: databaseURL)
 
     let attachment = HandbookAttachment(kind: .image, name: "现场照片.png", path: "/tmp/photo.png")
     store.addHandbookItem(
@@ -934,8 +999,8 @@ func checkTodoStore() throws {
     store.delete(item)
     try expect(!store.handbookItems.contains(where: { $0.id == item.id }), "软删除后 UI 内存列表不应保留手记")
 
-    let deletedReloadStore = TodoStore(storageURL: databaseURL)
-    deletedReloadStore.load()
+    let deletedReloadStore = HandbookStore(storageURL: databaseURL)
+    deletedReloadStore.loadHandbookItemsIfNeeded()
     try expect(!deletedReloadStore.handbookItems.contains(where: { $0.id == item.id }), "软删除后普通加载不应返回 tombstone")
 }
 

@@ -180,7 +180,7 @@ struct HandbookContextSidebar: View {
 }
 
 struct HandbookWorkspaceContent: View {
-    @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var handbookStore: HandbookStore
 
     @ObservedObject var workspaceModel: HandbookWorkspaceViewModel
     @Binding var handbookCategory: HandbookCategory?
@@ -218,7 +218,7 @@ struct HandbookWorkspaceContent: View {
                     selectedFolder: $handbookFolder,
                     searchText: handbookSearchText,
                     selectedItemID: workspaceModel.selectedItemID,
-                    isLoaded: store.didLoadHandbookItems,
+                    isLoaded: handbookStore.didLoadHandbookItems,
                     onSelect: { workspaceModel.selectItem(id: $0) },
                     onDelete: { itemID in
                         guard let item = workspaceModel.item(for: itemID) else { return }
@@ -249,13 +249,13 @@ struct HandbookWorkspaceContent: View {
         }
         .onAppear {
             workspaceModel.refresh(
-                items: store.handbookItems,
+                items: handbookStore.handbookItems,
                 selectedCategory: handbookCategory,
                 selectedFolder: handbookFolder,
                 searchText: debouncedHandbookSearchText
             )
         }
-        .onChange(of: store.handbookItems) { _, newItems in
+        .onChange(of: handbookStore.handbookItems) { _, newItems in
             workspaceModel.refresh(
                 items: newItems,
                 selectedCategory: handbookCategory,
@@ -293,7 +293,7 @@ struct HandbookWorkspaceContent: View {
         handbookCategory = category
         handbookFolder = createdItem.trimmedFolder.isEmpty ? nil : createdItem.trimmedFolder
         workspaceModel.refresh(
-            items: store.handbookItems,
+            items: handbookStore.handbookItems,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
             searchText: debouncedHandbookSearchText

@@ -73,11 +73,6 @@ enum FocusField: Hashable {
     case newTitle
 }
 
-enum HandbookFocusField: Hashable {
-    case title
-    case body
-}
-
 struct TodoDraft: Equatable, Sendable {
     var title: String
     var notes: String
