@@ -346,6 +346,10 @@ struct ModuleRailButton: View {
     }
 }
 
+enum WorkspaceChromeMetrics {
+    static let headerHeight: CGFloat = 46
+}
+
 struct WorkspaceContentContainer<Header: View, Toolbar: View, BodyContent: View>: View {
     let headerHeight: CGFloat
     let showsHeader: Bool
@@ -355,7 +359,7 @@ struct WorkspaceContentContainer<Header: View, Toolbar: View, BodyContent: View>
     @ViewBuilder let bodyContent: () -> BodyContent
 
     init(
-        headerHeight: CGFloat = 50,
+        headerHeight: CGFloat = WorkspaceChromeMetrics.headerHeight,
         showsHeader: Bool = true,
         showsToolbar: Bool = true,
         @ViewBuilder header: @escaping () -> Header,
@@ -379,7 +383,7 @@ struct WorkspaceContentContainer<Header: View, Toolbar: View, BodyContent: View>
             }
             if showsToolbar {
                 toolbar()
-                    .frame(minHeight: 40)
+                    .frame(height: WorkspaceChromeMetrics.headerHeight)
                 Divider().overlay(AppTheme.hairline.opacity(0.72))
             }
             bodyContent()
@@ -413,7 +417,7 @@ struct WorkspaceContextHeader: View {
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)
-        .frame(height: 46)
+        .frame(height: WorkspaceChromeMetrics.headerHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.workspaceTokens.contextSidebar)
     }
@@ -448,7 +452,7 @@ struct WorkspaceContentHeader<Actions: View>: View {
             actions()
         }
         .padding(.horizontal, 20)
-        .frame(height: 50)
+        .frame(height: WorkspaceChromeMetrics.headerHeight)
         .background(AppTheme.workspaceTokens.contentSurface)
     }
 }
@@ -462,8 +466,7 @@ struct WorkspaceLocalToolbar<Content: View>: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 5)
-        .frame(minHeight: 40)
+        .frame(height: WorkspaceChromeMetrics.headerHeight)
         .background(AppTheme.workspaceTokens.contentSurface)
     }
 }

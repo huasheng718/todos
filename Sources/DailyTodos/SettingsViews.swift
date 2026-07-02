@@ -94,56 +94,62 @@ struct SettingsContextSidebar: View {
                 CollapsedContextRail(title: "设置", isCollapsed: $isSecondarySidebarCollapsed)
                     .frame(width: collapsedSecondarySidebarWidth)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
                     WorkspaceContextHeader(
                         title: "设置",
                         subtitle: "外观、AI、更新、安全",
                         isCollapsed: $isSecondarySidebarCollapsed
                     )
 
-                    ForEach(AppSettingsSection.allCases) { section in
-                        Button {
-                            withAnimation(AppMotion.smooth) {
-                                selectedSection = section
-                            }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: section.icon)
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
-                                    .frame(width: 16)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(section.title)
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(AppTheme.ink)
-                                    Text(section.subtitle)
-                                        .font(.system(size: 10, weight: .semibold))
+                    Divider()
+                        .overlay(AppTheme.hairline.opacity(0.72))
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(AppSettingsSection.allCases) { section in
+                            Button {
+                                withAnimation(AppMotion.smooth) {
+                                    selectedSection = section
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: section.icon)
+                                        .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
-                                        .lineLimit(1)
+                                        .frame(width: 16)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(section.title)
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(AppTheme.ink)
+                                        Text(section.subtitle)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                    if section == .ai {
+                                        Circle()
+                                            .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
+                                            .frame(width: 6, height: 6)
+                                    } else if section == .updates, updateController.hasAvailableUpdate {
+                                        Circle()
+                                            .fill(TodoPriority.high.displayColor)
+                                            .frame(width: 6, height: 6)
+                                    }
                                 }
-                                Spacer(minLength: 0)
-                                if section == .ai {
-                                    Circle()
-                                        .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
-                                        .frame(width: 6, height: 6)
-                                } else if section == .updates, updateController.hasAvailableUpdate {
-                                    Circle()
-                                        .fill(TodoPriority.high.displayColor)
-                                        .frame(width: 6, height: 6)
-                                }
+                                .padding(.horizontal, 10)
+                                .frame(height: 46)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                                .background(
+                                    selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                )
                             }
+                            .buttonStyle(.plain)
                             .padding(.horizontal, 10)
-                            .frame(height: 46)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                            .background(
-                                selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            )
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 10)
                     }
+                    .padding(.top, 6)
 
                     Spacer(minLength: 0)
 
@@ -172,7 +178,7 @@ struct SettingsModuleView: View {
     var body: some View {
         VStack(spacing: 0) {
             ContentHeader(title: selectedSection.title, subtitle: selectedSection.subtitle)
-                .frame(height: 50)
+                .frame(height: WorkspaceChromeMetrics.headerHeight)
 
             Divider()
                 .overlay(AppTheme.hairline)
@@ -247,11 +253,6 @@ private struct SettingsContentView: View {
 
     private var appearanceSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "外观",
-                subtitle: "选择当前工作台皮肤，切换后立即应用到整套界面。"
-            )
-
             settingsPanel(title: "皮肤", icon: "paintpalette.fill") {
                 LazyVGrid(columns: skinColumns, alignment: .leading, spacing: 8) {
                     ForEach(AppSkin.allCases) { skin in
@@ -264,22 +265,12 @@ private struct SettingsContentView: View {
 
     private var aiSettingsPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "AI 配置",
-                subtitle: "统一管理 DeepSeek 连接、模型、API Key 和连接测试。"
-            )
-
             AISettingsContentView()
         }
     }
 
     private var credentialSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "凭证",
-                subtitle: "统一管理凭证导入、加密备份和主密码验证。"
-            )
-
             settingsPanel(title: "凭证库", icon: "key.fill") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center, spacing: 12) {
@@ -350,11 +341,6 @@ private struct SettingsContentView: View {
 
     private var moduleSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "模块",
-                subtitle: "控制工作台左侧模块入口，卸载不会删除本地数据。"
-            )
-
             settingsPanel(title: "已注册模块", icon: "puzzlepiece.extension.fill") {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(moduleRegistry.registeredModules, id: \.id) { module in
@@ -372,11 +358,6 @@ private struct SettingsContentView: View {
 
     private var updateSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "更新",
-                subtitle: "检查版本、下载新包，并查看当前下载进度。"
-            )
-
             settingsPanel(title: "版本状态", icon: "arrow.triangle.2.circlepath") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center, spacing: 12) {
@@ -435,18 +416,6 @@ private struct SettingsContentView: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .stroke(isPrimary ? AppTheme.adaptiveWhite(0.26) : AppTheme.hairline)
         )
-    }
-
-    private func settingsContentHeader(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-            Text(subtitle)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func settingsPanel<Content: View>(

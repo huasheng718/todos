@@ -298,6 +298,9 @@ struct CredentialSidebar: View {
                 isCollapsed: $isSecondarySidebarCollapsed
             )
 
+            Divider()
+                .overlay(AppTheme.hairline.opacity(0.72))
+
             VStack(alignment: .leading, spacing: 7) {
                 SidebarSectionLabel("类型")
                 CredentialTypeButton(
