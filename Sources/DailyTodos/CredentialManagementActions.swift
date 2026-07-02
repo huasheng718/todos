@@ -12,24 +12,24 @@ final class CredentialManagementActions: ObservableObject {
         store: CredentialStore,
         password: String,
         repeatedPassword: String
-    ) {
+    ) async {
         guard password == repeatedPassword else {
             notice = CredentialNotice(message: "两次主密码输入不一致", isError: true)
             return
         }
-        store.setMasterPasswordRequired(true, newMasterPassword: password)
+        await store.setMasterPasswordRequired(true, newMasterPassword: password)
         if store.requiresMasterPassword {
             securityMode = nil
             notice = CredentialNotice(message: "已开启主密码验证", isError: false)
         }
     }
 
-    func updateMasterPasswordRequirement(store: CredentialStore, required: Bool) {
+    func updateMasterPasswordRequirement(store: CredentialStore, required: Bool) async {
         notice = nil
         if required {
             securityMode = .enableMasterPassword
         } else {
-            store.setMasterPasswordRequired(false)
+            await store.setMasterPasswordRequired(false)
             if !store.requiresMasterPassword {
                 securityMode = nil
                 notice = CredentialNotice(message: "已关闭主密码验证", isError: false)
@@ -37,12 +37,12 @@ final class CredentialManagementActions: ObservableObject {
         }
     }
 
-    func importDrafts(_ drafts: [CredentialDraft], store: CredentialStore) -> Int {
+    func importDrafts(_ drafts: [CredentialDraft], store: CredentialStore) async -> Int {
         guard !drafts.isEmpty else {
             notice = CredentialNotice(message: "没有识别到可导入的凭证", isError: true)
             return 0
         }
-        let importedCount = store.importCredentials(drafts)
+        let importedCount = await store.importCredentials(drafts)
         if importedCount > 0 {
             securityMode = nil
             notice = CredentialNotice(message: "已导入 \(importedCount) 条凭证", isError: false)
@@ -69,7 +69,7 @@ final class CredentialManagementActions: ObservableObject {
                 do {
                     let text = try String(contentsOf: url, encoding: .utf8)
                     let drafts = CredentialImportParser.drafts(fromFileText: text)
-                    _ = self.importDrafts(drafts, store: store)
+                    _ = await self.importDrafts(drafts, store: store)
                 } catch {
                     self.notice = CredentialNotice(message: "读取文件失败：\(error.localizedDescription)", isError: true)
                 }

@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var handbookSearchText = ""
     @State private var debouncedHandbookSearchText = ""
     @State private var globalSearchText = ""
+    @State private var debouncedGlobalSearchText = ""
     @State private var isGlobalSearchPresented = false
     @State private var newTitle = ""
     @State private var newPriority: TodoPriority = .medium
@@ -43,6 +44,7 @@ struct ContentView: View {
     @State private var filteredTodosCache: [TodoItem] = []
     @State private var todoSearchDebounceTask: Task<Void, Never>?
     @State private var handbookSearchDebounceTask: Task<Void, Never>?
+    @State private var globalSearchDebounceTask: Task<Void, Never>?
     @StateObject private var handbookWorkspaceModel = HandbookWorkspaceViewModel()
     @FocusState private var focusedField: FocusField?
     @FocusState private var isGlobalSearchFocused: Bool
@@ -79,7 +81,7 @@ struct ContentView: View {
                 store.scheduleLoadHandbookItemsIfNeeded()
             },
             onGlobalSearchDismiss: {
-                isGlobalSearchPresented = false
+                clearGlobalSearch()
             },
             onSelectGlobalSearchResult: selectGlobalSearchResult,
             contextSidebar: { activeContextSidebarView },
@@ -139,6 +141,9 @@ struct ContentView: View {
         .onChange(of: handbookSearchText) { _, newValue in
             debounceHandbookSearchText(newValue)
         }
+        .onChange(of: globalSearchText) { _, newValue in
+            debounceGlobalSearchText(newValue)
+        }
         .onChange(of: debouncedSearchText) { _, _ in
             rebuildFilteredTodos()
         }
@@ -162,7 +167,7 @@ struct ContentView: View {
     }
 
     private var globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]] {
-        globalSearchEngine.results(query: globalSearchText, context: globalSearchContext)
+        globalSearchEngine.results(query: debouncedGlobalSearchText, context: globalSearchContext)
     }
 
     @ViewBuilder
@@ -333,6 +338,7 @@ struct ContentView: View {
     }
 
     private func selectGlobalSearchResult(_ result: GlobalSearchResult) {
+        clearGlobalSearch()
         switch result.target {
         case .todo(let id, let targetScope):
             moduleRegistry.activate("todos")
@@ -366,6 +372,14 @@ struct ContentView: View {
             credentialSelectedType = type
             selectedCredentialID = id
         }
+    }
+
+    private func clearGlobalSearch() {
+        globalSearchDebounceTask?.cancel()
+        globalSearchText = ""
+        debouncedGlobalSearchText = ""
+        isGlobalSearchPresented = false
+        isGlobalSearchFocused = false
     }
 
     private func applyPendingHandbookSelectionIfAvailable() {
@@ -868,6 +882,24 @@ struct ContentView: View {
                     withAnimation(AppMotion.quick) {
                         debouncedHandbookSearchText = value
                     }
+                }
+            }
+        }
+    }
+
+    private func debounceGlobalSearchText(_ value: String) {
+        globalSearchDebounceTask?.cancel()
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else {
+            debouncedGlobalSearchText = ""
+            return
+        }
+        globalSearchDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                if globalSearchText == value {
+                    debouncedGlobalSearchText = value
                 }
             }
         }

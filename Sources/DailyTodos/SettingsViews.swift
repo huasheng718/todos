@@ -208,6 +208,7 @@ private struct SettingsContentView: View {
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var credentialStore: CredentialStore
     @EnvironmentObject private var credentialActions: CredentialManagementActions
+    @AppStorage(AppMotion.reduceMotionStorageKey) private var reduceMotion = false
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
 
@@ -260,6 +261,20 @@ private struct SettingsContentView: View {
                     }
                 }
             }
+
+            settingsPanel(title: "动态效果", icon: "figure.walk.motion") {
+                Toggle(isOn: $reduceMotion) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("减少动态效果")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                        Text("降低弹簧、缩放和列表转场强度，优先保证稳定阅读。")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
         }
     }
 
@@ -285,10 +300,12 @@ private struct SettingsContentView: View {
                         Toggle(isOn: Binding(
                             get: { credentialStore.requiresMasterPassword },
                             set: { value in
-                                credentialActions.updateMasterPasswordRequirement(
-                                    store: credentialStore,
-                                    required: value
-                                )
+                                Task {
+                                    await credentialActions.updateMasterPasswordRequirement(
+                                        store: credentialStore,
+                                        required: value
+                                    )
+                                }
                             }
                         )) {
                             Text("主密码验证")
@@ -323,11 +340,13 @@ private struct SettingsContentView: View {
                         CredentialSecuritySettingsPane(
                             error: credentialStore.lastError,
                             onSave: { password, repeatedPassword in
-                                credentialActions.enableMasterPassword(
-                                    store: credentialStore,
-                                    password: password,
-                                    repeatedPassword: repeatedPassword
-                                )
+                                Task {
+                                    await credentialActions.enableMasterPassword(
+                                        store: credentialStore,
+                                        password: password,
+                                        repeatedPassword: repeatedPassword
+                                    )
+                                }
                             },
                             onCancel: { credentialActions.clearTransientModes() }
                         )

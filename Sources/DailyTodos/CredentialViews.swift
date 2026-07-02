@@ -115,8 +115,11 @@ struct CredentialsModuleView: View {
                 password: $unlockPassword,
                 error: credentialStore.lastError,
                 onUnlock: {
-                    credentialStore.unlock(masterPassword: unlockPassword)
+                    let password = unlockPassword
                     unlockPassword = ""
+                    Task {
+                        await credentialStore.unlock(masterPassword: password)
+                    }
                 },
                 onReset: { isResetConfirmationPresented = true }
             )
@@ -135,17 +138,21 @@ struct CredentialsModuleView: View {
                 },
                 onSaveDraft: saveEditorDraft,
                 onSaveSecurity: { password, repeatedPassword in
-                    credentialActions.enableMasterPassword(
-                        store: credentialStore,
-                        password: password,
-                        repeatedPassword: repeatedPassword
-                    )
+                    Task {
+                        await credentialActions.enableMasterPassword(
+                            store: credentialStore,
+                            password: password,
+                            repeatedPassword: repeatedPassword
+                        )
+                    }
                 },
                 onImportDrafts: { drafts in
-                    let importedCount = credentialActions.importDrafts(drafts, store: credentialStore)
-                    if importedCount > 0 {
-                        selectedCredentialIDBinding.wrappedValue = credentialStore.credentials.first?.id
-                        editorMode = nil
+                    Task {
+                        let importedCount = await credentialActions.importDrafts(drafts, store: credentialStore)
+                        if importedCount > 0 {
+                            selectedCredentialIDBinding.wrappedValue = credentialStore.credentials.first?.id
+                            editorMode = nil
+                        }
                     }
                 },
                 onDelete: { item in
@@ -171,9 +178,13 @@ struct CredentialsModuleView: View {
             return
         }
         initializationError = nil
-        credentialStore.initialize(masterPassword: newMasterPassword, requiresMasterPassword: initializeRequiresMasterPassword)
+        let password = newMasterPassword
+        let requiresPassword = initializeRequiresMasterPassword
         newMasterPassword = ""
         repeatedMasterPassword = ""
+        Task {
+            await credentialStore.initialize(masterPassword: password, requiresMasterPassword: requiresPassword)
+        }
     }
 
     private func openNewCredential() {
@@ -186,16 +197,20 @@ struct CredentialsModuleView: View {
     private func saveEditorDraft(_ mode: CredentialEditorMode) {
         switch mode {
         case .create(let draft):
-            if let item = credentialStore.addCredential(draft) {
+            Task {
+                if let item = await credentialStore.addCredential(draft) {
+                    selectedCredentialIDBinding.wrappedValue = item.id
+                    editorMode = nil
+                    credentialActions.clearTransientModes()
+                }
+            }
+        case .edit(let item, let draft):
+            Task {
+                await credentialStore.updateCredential(item, draft: draft)
                 selectedCredentialIDBinding.wrappedValue = item.id
                 editorMode = nil
                 credentialActions.clearTransientModes()
             }
-        case .edit(let item, let draft):
-            credentialStore.updateCredential(item, draft: draft)
-            selectedCredentialIDBinding.wrappedValue = item.id
-            editorMode = nil
-            credentialActions.clearTransientModes()
         }
     }
 
@@ -1643,7 +1658,9 @@ struct CredentialBackupSheet: View {
                     SecureField("备份密码，至少 8 位", text: $backupPassword)
                         .textFieldStyle(.roundedBorder)
                     Button {
-                        backupText = credentialStore.exportBackup(password: backupPassword) ?? ""
+                        Task {
+                            backupText = credentialStore.exportBackup(password: backupPassword) ?? ""
+                        }
                     } label: {
                         Label("生成加密备份", systemImage: "lock.doc")
                     }
@@ -1670,7 +1687,9 @@ struct CredentialBackupSheet: View {
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .frame(height: 250)
                     Button {
-                        credentialStore.importBackup(importText, password: importPassword, replaceExisting: replaceExisting)
+                        Task {
+                            credentialStore.importBackup(importText, password: importPassword, replaceExisting: replaceExisting)
+                        }
                     } label: {
                         Label("导入备份", systemImage: "square.and.arrow.down")
                     }

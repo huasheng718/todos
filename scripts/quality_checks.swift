@@ -17,6 +17,7 @@ struct DailyTodosChecks {
             try await MainActor.run {
                 try checkUpdateAvailability()
                 try checkUpdateDownloadProgress()
+                try checkP0PerformanceGuardrails()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
@@ -34,8 +35,8 @@ struct DailyTodosChecks {
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkTodoStore()
                 try checkCredentialBreachChecker()
-                try checkCredentialStore()
             }
+            try await checkCredentialStore()
             try await checkScheduledHandbookLoading()
             try await checkHandbookLoadingStateConflict()
             print("DailyTodosChecks passed")
@@ -50,6 +51,65 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() {
         throw CheckFailure.failed(message)
     }
+}
+
+func sourceFile(_ relativePath: String) throws -> String {
+    let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent(relativePath)
+    return try String(contentsOf: url, encoding: .utf8)
+}
+
+func checkP0PerformanceGuardrails() throws {
+    let credentialStoreSource = try sourceFile("Sources/DailyTodos/CredentialStore.swift")
+    try expect(
+        credentialStoreSource.contains("sqlite3_busy_timeout(db, 2_000)"),
+        "CredentialStore.openDatabase 应设置 sqlite3_busy_timeout，避免凭证库遇到短暂 SQLite 锁时直接失败"
+    )
+    try expect(
+        credentialStoreSource.contains("Task.detached(priority: .userInitiated)"),
+        "凭证加解密必须放到 Task.detached，不能在 MainActor 上执行 PBKDF2/AES 重活"
+    )
+
+    let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
+    let todoStoreMainOpenStart = todoStoreSource.range(of: "private func openDatabase() throws")?.lowerBound
+    let todoStoreMainOpenEnd = todoStoreSource.range(of: "private func prepareDatabase() throws")?.lowerBound
+    if let todoStoreMainOpenStart, let todoStoreMainOpenEnd {
+        let mainOpenDatabase = String(todoStoreSource[todoStoreMainOpenStart..<todoStoreMainOpenEnd])
+        try expect(
+            mainOpenDatabase.contains("sqlite3_busy_timeout(db, 2_000)"),
+            "TodoStore 主 SQLite 连接应设置 busy_timeout，避免主连接和后台手记连接互相抢锁时报错"
+        )
+        try expect(
+            mainOpenDatabase.contains("PRAGMA foreign_keys = ON") && mainOpenDatabase.contains("PRAGMA journal_mode = WAL"),
+            "TodoStore 主 SQLite 连接应保留 foreign_keys 与 WAL PRAGMA"
+        )
+    } else {
+        throw CheckFailure.failed("无法定位 TodoStore.openDatabase")
+    }
+
+    let contentViewSource = try sourceFile("Sources/DailyTodos/ContentView.swift")
+    try expect(
+        contentViewSource.contains("@State private var debouncedGlobalSearchText = \"\""),
+        "全局搜索应维护 debouncedGlobalSearchText，避免每次击键同步重算所有模块结果"
+    )
+    try expect(
+        contentViewSource.contains("globalSearchEngine.results(query: debouncedGlobalSearchText, context: globalSearchContext)"),
+        "全局搜索结果应使用 debouncedGlobalSearchText，而不是原始 globalSearchText"
+    )
+    try expect(
+        contentViewSource.contains("Task.sleep(for: .milliseconds(120))")
+            && contentViewSource.contains("debounceGlobalSearchText(newValue)"),
+        "全局搜索应使用 120ms 防抖，与待办/手记局部搜索保持一致"
+    )
+
+    let appThemeSource = try sourceFile("Sources/DailyTodos/AppTheme.swift")
+    let settingsSource = try sourceFile("Sources/DailyTodos/SettingsViews.swift")
+    try expect(
+        appThemeSource.contains("reduceMotionStorageKey = \"DailyTodos.reduceMotion\"")
+            && appThemeSource.contains("UserDefaults.standard.bool(forKey: reduceMotionStorageKey)")
+            && settingsSource.contains("@AppStorage(AppMotion.reduceMotionStorageKey)"),
+        "AppMotion 应恢复 reduceMotion 感知，并在设置页提供减少动态效果入口"
+    )
 }
 
 func checkCredentialBreachChecker() throws {
@@ -832,7 +892,7 @@ func checkTodoStore() throws {
 }
 
 @MainActor
-func checkCredentialStore() throws {
+func checkCredentialStore() async throws {
     let databaseURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("DailyTodosCredentialChecks-\(UUID().uuidString)", isDirectory: true)
         .appendingPathComponent("credentials.sqlite")
@@ -842,7 +902,7 @@ func checkCredentialStore() throws {
     store.load()
     try expect(store.status == .uninitialized, "首次加载凭证库应处于未初始化状态")
 
-    store.initialize(masterPassword: "correct horse battery staple")
+    await store.initialize(masterPassword: "correct horse battery staple")
     try expect(store.status == .unlocked, "初始化后应解锁凭证库")
 
     var draft = CredentialDraft()
@@ -854,7 +914,7 @@ func checkCredentialStore() throws {
     draft.notes = "恢复码"
     draft.tagsText = "dev, code"
 
-    guard let item = store.addCredential(draft) else {
+    guard let item = await store.addCredential(draft) else {
         throw CheckFailure.failed("新增凭证失败：\(store.lastError ?? "unknown")")
     }
     try expect(store.credentials.count == 1, "新增凭证后内存列表应有 1 条")
@@ -878,12 +938,12 @@ func checkCredentialStore() throws {
 
     store.lock()
     try expect(store.status == .locked, "手动锁定后状态应为 locked")
-    store.unlock(masterPassword: "wrong password")
+    await store.unlock(masterPassword: "wrong password")
     try expect(store.status == .locked, "错误主密码不应解锁凭证库")
-    store.unlock(masterPassword: "correct horse battery staple")
+    await store.unlock(masterPassword: "correct horse battery staple")
     try expect(store.status == .unlocked, "正确主密码应重新解锁凭证库")
 
-    store.setMasterPasswordRequired(false)
+    await store.setMasterPasswordRequired(false)
     try expect(!store.requiresMasterPassword, "应支持关闭主密码验证")
     store.lock()
     try expect(store.status == .unlocked, "关闭主密码后手动锁定不应要求验证")
@@ -891,12 +951,12 @@ func checkCredentialStore() throws {
     noPasswordStore.load()
     try expect(noPasswordStore.status == .unlocked, "关闭主密码后重新加载应自动解锁")
     try expect(noPasswordStore.credentials.count == 1, "关闭主密码后凭证仍应可加载")
-    noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
+    await noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
     try expect(noPasswordStore.requiresMasterPassword, "应支持重新开启主密码验证")
     noPasswordStore.lock()
-    noPasswordStore.unlock(masterPassword: "wrong password")
+    await noPasswordStore.unlock(masterPassword: "wrong password")
     try expect(noPasswordStore.status == .locked, "重新开启主密码后错误密码不应解锁")
-    noPasswordStore.unlock(masterPassword: "new master password")
+    await noPasswordStore.unlock(masterPassword: "new master password")
     try expect(noPasswordStore.status == .unlocked, "重新开启主密码后正确密码应解锁")
 
     let importedURL = FileManager.default.temporaryDirectory
@@ -906,7 +966,7 @@ func checkCredentialStore() throws {
     let importedStore = CredentialStore(storageURL: importedURL, autoLockInterval: 60)
     importedStore.load()
     importedStore.importBackup(backup, password: "backup password", replaceExisting: true)
-    importedStore.unlock(masterPassword: "correct horse battery staple")
+    await importedStore.unlock(masterPassword: "correct horse battery staple")
     try expect(importedStore.credentials.count == 1, "导入备份后应恢复凭证")
     guard let importedItem = importedStore.credentials.first,
           let importedSecret = importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
@@ -949,7 +1009,7 @@ func checkCredentialStore() throws {
     try expect(chromeDrafts[0].username == "HT008881", "Chrome CSV 应识别 username")
     try expect(chromeDrafts[0].secretValue == "sample-login-password", "Chrome CSV 应识别 password")
 
-    let importedCount = store.importCredentials([parsedDraft] + chromeDrafts)
+    let importedCount = await store.importCredentials([parsedDraft] + chromeDrafts)
     try expect(importedCount == 2, "批量导入应返回成功条数")
     try expect(store.credentials.count == 3, "批量导入后凭证数量应增加")
     let databaseDataAfterImport = try Data(contentsOf: databaseURL)

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 let statusColumnWidth: CGFloat = 82
@@ -11,17 +12,55 @@ let secondarySidebarWidth: CGFloat = 264
 let collapsedSecondarySidebarWidth: CGFloat = 46
 
 enum AppMotion {
-    static let press = Animation.interactiveSpring(response: 0.18, dampingFraction: 0.86, blendDuration: 0.02)
-    static let quick = Animation.easeOut(duration: 0.14)
-    static let hover = Animation.easeOut(duration: 0.12)
-    static let smooth = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.03)
-    static let reveal = Animation.interactiveSpring(response: 0.30, dampingFraction: 0.86, blendDuration: 0.04)
-    static let list = Animation.interactiveSpring(response: 0.32, dampingFraction: 0.90, blendDuration: 0.04)
-    static let capture = Animation.interactiveSpring(response: 0.34, dampingFraction: 0.82, blendDuration: 0.04)
-    static let status = Animation.interactiveSpring(response: 0.26, dampingFraction: 0.84, blendDuration: 0.03)
-    static let complete = Animation.interactiveSpring(response: 0.34, dampingFraction: 0.72, blendDuration: 0.04)
-    static let modeSwitch = Animation.interactiveSpring(response: 0.30, dampingFraction: 0.90, blendDuration: 0.04)
-    static let sectionSwitch = Animation.easeOut(duration: 0.16)
+    static let reduceMotionStorageKey = "DailyTodos.reduceMotion"
+
+    private static var reduceMotion: Bool {
+        UserDefaults.standard.bool(forKey: reduceMotionStorageKey)
+    }
+
+    static var press: Animation {
+        spring(response: 0.18, dampingFraction: 0.86, blendDuration: 0.02, reducedDuration: 0.06)
+    }
+
+    static var quick: Animation {
+        easeOut(duration: 0.14, reducedDuration: 0.05)
+    }
+
+    static var hover: Animation {
+        easeOut(duration: 0.12, reducedDuration: 0.04)
+    }
+
+    static var smooth: Animation {
+        spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.03, reducedDuration: 0.08)
+    }
+
+    static var reveal: Animation {
+        spring(response: 0.30, dampingFraction: 0.86, blendDuration: 0.04, reducedDuration: 0.08)
+    }
+
+    static var list: Animation {
+        spring(response: 0.32, dampingFraction: 0.90, blendDuration: 0.04, reducedDuration: 0.08)
+    }
+
+    static var capture: Animation {
+        spring(response: 0.34, dampingFraction: 0.82, blendDuration: 0.04, reducedDuration: 0.08)
+    }
+
+    static var status: Animation {
+        spring(response: 0.26, dampingFraction: 0.84, blendDuration: 0.03, reducedDuration: 0.07)
+    }
+
+    static var complete: Animation {
+        spring(response: 0.34, dampingFraction: 0.72, blendDuration: 0.04, reducedDuration: 0.08)
+    }
+
+    static var modeSwitch: Animation {
+        spring(response: 0.30, dampingFraction: 0.90, blendDuration: 0.04, reducedDuration: 0.08)
+    }
+
+    static var sectionSwitch: Animation {
+        easeOut(duration: 0.16, reducedDuration: 0.06)
+    }
 
     static var rowTransition: AnyTransition {
         .asymmetric(
@@ -35,7 +74,25 @@ enum AppMotion {
     }
 
     static var inlineTransition: AnyTransition {
-        .opacity.combined(with: .scale(scale: 0.985, anchor: .top))
+        if reduceMotion {
+            return .opacity
+        }
+        return .opacity.combined(with: .scale(scale: 0.985, anchor: .top))
+    }
+
+    private static func spring(
+        response: Double,
+        dampingFraction: Double,
+        blendDuration: Double,
+        reducedDuration: Double
+    ) -> Animation {
+        reduceMotion
+            ? .easeOut(duration: reducedDuration)
+            : .interactiveSpring(response: response, dampingFraction: dampingFraction, blendDuration: blendDuration)
+    }
+
+    private static func easeOut(duration: Double, reducedDuration: Double) -> Animation {
+        .easeOut(duration: reduceMotion ? reducedDuration : duration)
     }
 }
 
