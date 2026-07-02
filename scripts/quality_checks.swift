@@ -18,6 +18,7 @@ struct DailyTodosChecks {
                 try checkUpdateAvailability()
                 try checkUpdateDownloadProgress()
                 try checkP0PerformanceGuardrails()
+                try checkRemainingPerformanceGuardrails()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
@@ -93,8 +94,9 @@ func checkP0PerformanceGuardrails() throws {
         "全局搜索应维护 debouncedGlobalSearchText，避免每次击键同步重算所有模块结果"
     )
     try expect(
-        contentViewSource.contains("globalSearchEngine.results(query: debouncedGlobalSearchText, context: globalSearchContext)"),
-        "全局搜索结果应使用 debouncedGlobalSearchText，而不是原始 globalSearchText"
+        contentViewSource.contains("globalSearchModel.groupedResults")
+            && contentViewSource.contains("globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)"),
+        "全局搜索结果应由后台模型产出，并使用 debouncedGlobalSearchText 调度"
     )
     try expect(
         contentViewSource.contains("Task.sleep(for: .milliseconds(120))")
@@ -109,6 +111,52 @@ func checkP0PerformanceGuardrails() throws {
             && appThemeSource.contains("UserDefaults.standard.bool(forKey: reduceMotionStorageKey)")
             && settingsSource.contains("@AppStorage(AppMotion.reduceMotionStorageKey)"),
         "AppMotion 应恢复 reduceMotion 感知，并在设置页提供减少动态效果入口"
+    )
+}
+
+func checkRemainingPerformanceGuardrails() throws {
+    let contentViewSource = try sourceFile("Sources/DailyTodos/ContentView.swift")
+    let globalSearchSource = try sourceFile("Sources/DailyTodos/GlobalCommandSearch.swift")
+    try expect(
+        contentViewSource.contains("@StateObject private var globalSearchModel")
+            && contentViewSource.contains("globalSearchModel.scheduleSearch")
+            && globalSearchSource.contains("Task.detached(priority: .userInitiated)"),
+        "全局搜索应在后台 Task.detached 计算，不能只在主线程做 120ms 防抖"
+    )
+
+    let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
+    guard let toggleStart = todoStoreSource.range(of: "func toggle(_ todo: TodoItem)")?.lowerBound,
+          let deleteStart = todoStoreSource.range(of: "func delete(_ todo: TodoItem)")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 TodoStore.toggle")
+    }
+    let toggleSource = String(todoStoreSource[toggleStart..<deleteStart])
+    try expect(
+        toggleSource.contains("BEGIN TRANSACTION") && toggleSource.contains("COMMIT") && toggleSource.contains("ROLLBACK"),
+        "toggle weekly 应把更新原事项和生成下周事项包进同一个 SQLite 事务"
+    )
+
+    let todoListSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
+    try expect(
+        todoListSource.contains("TodoListSnapshot")
+            && todoListSource.contains("let snapshot = TodoListSnapshot(")
+            && !todoListSource.contains("private var boardGroups: [TodoProgress: [TodoItem]]"),
+        "待办列表 board/matrix/dashboard 分桶应使用单次快照，避免每次 body 重算多套分桶"
+    )
+
+    let todoFlowRowSource = try sourceFile("Sources/DailyTodos/TodoFlowRow.swift")
+    try expect(
+        (todoFlowRowSource.contains("struct TodoFlowRow: View, Equatable")
+            || todoFlowRowSource.contains("struct TodoFlowRow: View, @MainActor Equatable"))
+            && todoListSource.contains(".equatable()"),
+        "TodoFlowRow 应支持 Equatable 并在列表中使用 .equatable()，减少无关行重绘"
+    )
+
+    let dateFormatterSource = try sourceFile("Sources/DailyTodos/TodoRowFormatting.swift")
+    try expect(
+        dateFormatterSource.contains("enum CachedDateFormatter")
+            && dateFormatterSource.contains("CachedDateFormatter.fullFollowUpDate"),
+        "待办行日期格式化应恢复 CachedDateFormatter，避免大列表中重复创建格式化器"
     )
 }
 

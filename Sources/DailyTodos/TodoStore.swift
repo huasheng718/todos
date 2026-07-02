@@ -206,11 +206,25 @@ final class TodoStore: ObservableObject {
 
         do {
             try PerformanceMonitor.measure("TodoStore.toggleTodo") {
-                try update(updated)
+                let nextTodo = updated.isWeekly && updated.progress == .done
+                    ? try nextWeeklyOccurrence(after: updated)
+                    : nil
+
+                try execute("BEGIN TRANSACTION")
+                do {
+                    try update(updated)
+                    if let nextTodo {
+                        try insert(nextTodo)
+                    }
+                    try execute("COMMIT")
+                } catch {
+                    try? execute("ROLLBACK")
+                    throw error
+                }
+
                 todos.remove(at: index)
                 insertInMemory(updated)
-                if updated.isWeekly && updated.progress == .done,
-                   let nextTodo = try ensureNextWeeklyOccurrence(after: updated) {
+                if let nextTodo {
                     insertInMemory(nextTodo)
                 }
             }
@@ -598,6 +612,14 @@ final class TodoStore: ObservableObject {
     }
 
     private func ensureNextWeeklyOccurrence(after todo: TodoItem) throws -> TodoItem? {
+        guard let nextTodo = try nextWeeklyOccurrence(after: todo) else {
+            return nil
+        }
+        try insert(nextTodo)
+        return nextTodo
+    }
+
+    private func nextWeeklyOccurrence(after todo: TodoItem) throws -> TodoItem? {
         guard let nextDate = calendar.date(byAdding: .day, value: 7, to: todo.date) else { return nil }
         let nextDay = calendar.startOfDay(for: nextDate)
         let alreadyExists = todos.contains { candidate in
@@ -616,7 +638,6 @@ final class TodoStore: ObservableObject {
             progress: .pending,
             isWeekly: true
         )
-        try insert(nextTodo)
         return nextTodo
     }
 

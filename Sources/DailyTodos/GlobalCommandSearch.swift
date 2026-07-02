@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum GlobalSearchModule: String, CaseIterable, Identifiable {
+enum GlobalSearchModule: String, CaseIterable, Identifiable, Sendable {
     case todos
     case handbook
     case credentials
@@ -25,7 +25,7 @@ enum GlobalSearchModule: String, CaseIterable, Identifiable {
     }
 }
 
-enum GlobalSearchTarget: Identifiable, Equatable {
+enum GlobalSearchTarget: Identifiable, Equatable, Sendable {
     case todo(UUID, scope: TodoScope)
     case handbook(UUID, category: HandbookCategory?, folder: String?)
     case credential(UUID, type: CredentialType?)
@@ -39,7 +39,7 @@ enum GlobalSearchTarget: Identifiable, Equatable {
     }
 }
 
-struct GlobalSearchResult: Identifiable, Equatable {
+struct GlobalSearchResult: Identifiable, Equatable, Sendable {
     let id: String
     let module: GlobalSearchModule
     let title: String
@@ -57,13 +57,45 @@ struct GlobalSearchResult: Identifiable, Equatable {
     }
 }
 
-struct GlobalCommandSearchContext {
+struct GlobalCommandSearchContext: Equatable, Sendable {
     let todos: [TodoItem]
     let handbookItems: [HandbookItem]
     let credentials: [CredentialItem]
     let didLoadHandbookItems: Bool
     let isLoadingHandbookItems: Bool
     let isCredentialVaultUnlocked: Bool
+}
+
+@MainActor
+final class GlobalCommandSearchModel: ObservableObject {
+    @Published private(set) var groupedResults: [GlobalSearchModule: [GlobalSearchResult]] = [:]
+    private var searchTask: Task<Void, Never>?
+
+    deinit {
+        searchTask?.cancel()
+    }
+
+    func scheduleSearch(query: String, context: GlobalCommandSearchContext) {
+        searchTask?.cancel()
+        let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedQuery.isEmpty else {
+            groupedResults = [:]
+            return
+        }
+
+        searchTask = Task {
+            let results = await Task.detached(priority: .userInitiated) {
+                GlobalCommandSearchEngine().results(query: cleanedQuery, context: context)
+            }.value
+            guard !Task.isCancelled else { return }
+            groupedResults = results
+        }
+    }
+
+    func clear() {
+        searchTask?.cancel()
+        groupedResults = [:]
+    }
 }
 
 struct GlobalCommandSearchEngine {

@@ -46,11 +46,11 @@ struct ContentView: View {
     @State private var handbookSearchDebounceTask: Task<Void, Never>?
     @State private var globalSearchDebounceTask: Task<Void, Never>?
     @StateObject private var handbookWorkspaceModel = HandbookWorkspaceViewModel()
+    @StateObject private var globalSearchModel = GlobalCommandSearchModel()
     @FocusState private var focusedField: FocusField?
     @FocusState private var isGlobalSearchFocused: Bool
 
     private let calendar = Calendar.current
-    private let globalSearchEngine = GlobalCommandSearchEngine()
 
     private struct PendingHandbookSelection: Equatable {
         let id: UUID
@@ -149,9 +149,17 @@ struct ContentView: View {
         }
         .onChange(of: store.todos) { _, _ in
             rebuildFilteredTodos()
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
         }
         .onChange(of: store.handbookItems) { _, _ in
             applyPendingHandbookSelectionIfAvailable()
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
+        }
+        .onChange(of: credentialStore.credentials) { _, _ in
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
+        }
+        .onChange(of: debouncedGlobalSearchText) { _, _ in
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
         }
     }
 
@@ -167,7 +175,7 @@ struct ContentView: View {
     }
 
     private var globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]] {
-        globalSearchEngine.results(query: debouncedGlobalSearchText, context: globalSearchContext)
+        globalSearchModel.groupedResults
     }
 
     @ViewBuilder
@@ -378,6 +386,7 @@ struct ContentView: View {
         globalSearchDebounceTask?.cancel()
         globalSearchText = ""
         debouncedGlobalSearchText = ""
+        globalSearchModel.clear()
         isGlobalSearchPresented = false
         isGlobalSearchFocused = false
     }

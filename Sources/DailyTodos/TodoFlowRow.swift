@@ -1,11 +1,11 @@
 import SwiftUI
 
-enum TodoFlowRowEditStyle {
+enum TodoFlowRowEditStyle: Equatable {
     case full
     case compact
 }
 
-struct TodoFlowRow: View {
+struct TodoFlowRow: View, @MainActor Equatable {
     let todo: TodoItem
     let onToggle: () -> Void
     let onProgressChange: (TodoProgress) -> Void
@@ -16,6 +16,12 @@ struct TodoFlowRow: View {
 
     @State private var isEditing = false
     @State private var isHovered = false
+
+    static func == (lhs: TodoFlowRow, rhs: TodoFlowRow) -> Bool {
+        lhs.todo == rhs.todo
+            && lhs.editStyle == rhs.editStyle
+            && lhs.isHighlighted == rhs.isHighlighted
+    }
 
     var body: some View {
         if isEditing {
