@@ -129,35 +129,36 @@ struct GlobalTopBar: View {
             }
 
             ZStack(alignment: .topLeading) {
-                TextField("", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .focused(isSearchFocused)
-                    .frame(width: 1, height: 1)
-                    .opacity(0.01)
-                    .accessibilityLabel("搜索蚁序")
-                .onChange(of: isSearchFocused.wrappedValue) { _, focused in
-                    if focused {
-                        isSearchPresented = true
-                        onSearchFocused()
-                        syncSelectedSearchResult()
-                    }
-                }
-                .onChange(of: searchText) { _, newValue in
-                    if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        isSearchPresented = true
-                        onSearchFocused()
-                    }
-                    syncSelectedSearchResult()
-                }
-                .onExitCommand {
-                    searchText = ""
-                    isSearchPresented = false
-                    isSearchFocused.wrappedValue = false
-                    onSearchDismiss()
-                    selectedGlobalSearchResultID = nil
-                }
-
                 if isSearchPresented {
+                    TextField("", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .focused(isSearchFocused)
+                        .frame(width: 260, height: 28)
+                        .padding(.horizontal, 10)
+                        .background(AppTheme.workspaceTokens.contentSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(AppTheme.workspaceTokens.hairline)
+                        )
+                        .accessibilityLabel("搜索蚁序")
+                        .onAppear {
+                            isSearchFocused.wrappedValue = true
+                            onSearchFocused()
+                            syncSelectedSearchResult()
+                        }
+                        .onChange(of: isSearchFocused.wrappedValue) { _, focused in
+                            if focused {
+                                onSearchFocused()
+                                syncSelectedSearchResult()
+                            }
+                        }
+                        .onChange(of: searchText) { _, _ in
+                            syncSelectedSearchResult()
+                        }
+                        .onExitCommand {
+                            closeSearch()
+                        }
+
                     GlobalCommandSearchPanel(
                         query: searchText,
                         groupedResults: groupedResults,
@@ -174,7 +175,7 @@ struct GlobalTopBar: View {
                     .zIndex(20)
                 }
             }
-            .frame(width: 1, height: 1)
+            .frame(width: isSearchPresented ? 260 : 1, height: isSearchPresented ? 28 : 1)
             .onMoveCommand(perform: handleMoveCommand)
             .onSubmit(handleSubmit)
             .onChange(of: groupedResults) { _, _ in
@@ -237,9 +238,14 @@ struct GlobalTopBar: View {
 
     private func handleSelectedResult(_ result: GlobalSearchResult) {
         onSelectResult(result)
+        closeSearch()
+    }
+
+    private func closeSearch() {
         searchText = ""
         isSearchPresented = false
         isSearchFocused.wrappedValue = false
+        onSearchDismiss()
         selectedGlobalSearchResultID = nil
     }
 

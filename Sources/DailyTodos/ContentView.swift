@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var handbookStore: HandbookStore
     @EnvironmentObject private var credentialStore: CredentialStore
     @EnvironmentObject private var credentialActions: CredentialManagementActions
     @EnvironmentObject private var aiSettings: AISettingsStore
@@ -18,6 +19,7 @@ struct ContentView: View {
     @State private var handbookSearchText = ""
     @State private var debouncedHandbookSearchText = ""
     @State private var globalSearchText = ""
+    @State private var debouncedGlobalSearchText = ""
     @State private var isGlobalSearchPresented = false
     @State private var newTitle = ""
     @State private var newPriority: TodoPriority = .medium
@@ -43,12 +45,13 @@ struct ContentView: View {
     @State private var filteredTodosCache: [TodoItem] = []
     @State private var todoSearchDebounceTask: Task<Void, Never>?
     @State private var handbookSearchDebounceTask: Task<Void, Never>?
+    @State private var globalSearchDebounceTask: Task<Void, Never>?
     @StateObject private var handbookWorkspaceModel = HandbookWorkspaceViewModel()
+    @StateObject private var globalSearchModel = GlobalCommandSearchModel()
     @FocusState private var focusedField: FocusField?
     @FocusState private var isGlobalSearchFocused: Bool
 
     private let calendar = Calendar.current
-    private let globalSearchEngine = GlobalCommandSearchEngine()
 
     private struct PendingHandbookSelection: Equatable {
         let id: UUID
@@ -76,10 +79,10 @@ struct ContentView: View {
             isPrimarySidebarVisible: $isPrimarySidebarVisible,
             onActivateModule: { moduleRegistry.activate($0) },
             onGlobalSearchFocused: {
-                store.scheduleLoadHandbookItemsIfNeeded()
+                handbookStore.scheduleLoadHandbookItemsIfNeeded()
             },
             onGlobalSearchDismiss: {
-                isGlobalSearchPresented = false
+                clearGlobalSearch()
             },
             onSelectGlobalSearchResult: selectGlobalSearchResult,
             contextSidebar: { activeContextSidebarView },
@@ -127,7 +130,7 @@ struct ContentView: View {
         }
         .onChange(of: moduleRegistry.activeModuleID) { _, newValue in
             guard newValue == "handbook" else { return }
-            store.scheduleLoadHandbookItemsIfNeeded()
+            handbookStore.scheduleLoadHandbookItemsIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTodoRequested)) { _ in
             moduleRegistry.activate("todos")
@@ -139,30 +142,41 @@ struct ContentView: View {
         .onChange(of: handbookSearchText) { _, newValue in
             debounceHandbookSearchText(newValue)
         }
+        .onChange(of: globalSearchText) { _, newValue in
+            debounceGlobalSearchText(newValue)
+        }
         .onChange(of: debouncedSearchText) { _, _ in
             rebuildFilteredTodos()
         }
         .onChange(of: store.todos) { _, _ in
             rebuildFilteredTodos()
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
         }
-        .onChange(of: store.handbookItems) { _, _ in
+        .onChange(of: handbookStore.handbookItems) { _, _ in
             applyPendingHandbookSelectionIfAvailable()
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
+        }
+        .onChange(of: credentialStore.credentials) { _, _ in
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
+        }
+        .onChange(of: debouncedGlobalSearchText) { _, _ in
+            globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)
         }
     }
 
     private var globalSearchContext: GlobalCommandSearchContext {
         GlobalCommandSearchContext(
             todos: store.todos,
-            handbookItems: store.handbookItems,
+            handbookItems: handbookStore.handbookItems,
             credentials: credentialStore.credentials,
-            didLoadHandbookItems: store.didLoadHandbookItems,
-            isLoadingHandbookItems: store.isLoadingHandbookItems,
+            didLoadHandbookItems: handbookStore.didLoadHandbookItems,
+            isLoadingHandbookItems: handbookStore.isLoadingHandbookItems,
             isCredentialVaultUnlocked: credentialStore.isUnlocked
         )
     }
 
     private var globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]] {
-        globalSearchEngine.results(query: globalSearchText, context: globalSearchContext)
+        globalSearchModel.groupedResults
     }
 
     @ViewBuilder
@@ -176,7 +190,7 @@ struct ContentView: View {
                 handbookCategory: $handbookCategory,
                 handbookFolder: $handbookFolder,
                 isSecondarySidebarCollapsed: $isSecondarySidebarCollapsed,
-                isLoaded: store.didLoadHandbookItems,
+                isLoaded: handbookStore.didLoadHandbookItems,
                 onUpdate: updateHandbookItem
             )
         case "credentials":
@@ -302,15 +316,17 @@ struct ContentView: View {
             store.loadStartupData()
             rebuildFilteredTodos()
         case "handbook":
-            store.reloadHandbookItems()
+            handbookStore.reloadHandbookItems()
             handbookWorkspaceModel.refresh(
-                items: store.handbookItems,
+                items: handbookStore.handbookItems,
                 selectedCategory: handbookCategory,
                 selectedFolder: handbookFolder,
                 searchText: debouncedHandbookSearchText
             )
         case "credentials":
-            credentialStore.load()
+            Task {
+                await credentialStore.reload()
+            }
         case "settings":
             updateController.checkForUpdates()
         default:
@@ -333,6 +349,7 @@ struct ContentView: View {
     }
 
     private func selectGlobalSearchResult(_ result: GlobalSearchResult) {
+        clearGlobalSearch()
         switch result.target {
         case .todo(let id, let targetScope):
             moduleRegistry.activate("todos")
@@ -344,13 +361,13 @@ struct ContentView: View {
 
         case .handbook(let id, let category, let folder):
             moduleRegistry.activate("handbook")
-            store.scheduleLoadHandbookItemsIfNeeded()
+            handbookStore.scheduleLoadHandbookItemsIfNeeded()
             handbookCategory = category
             handbookFolder = folder
             handbookSearchText = ""
             debouncedHandbookSearchText = ""
             handbookWorkspaceModel.refresh(
-                items: store.handbookItems,
+                items: handbookStore.handbookItems,
                 selectedCategory: handbookCategory,
                 selectedFolder: handbookFolder,
                 searchText: debouncedHandbookSearchText
@@ -368,14 +385,23 @@ struct ContentView: View {
         }
     }
 
+    private func clearGlobalSearch() {
+        globalSearchDebounceTask?.cancel()
+        globalSearchText = ""
+        debouncedGlobalSearchText = ""
+        globalSearchModel.clear()
+        isGlobalSearchPresented = false
+        isGlobalSearchFocused = false
+    }
+
     private func applyPendingHandbookSelectionIfAvailable() {
         guard let pendingHandbookSelection else { return }
-        guard store.handbookItems.contains(where: { $0.id == pendingHandbookSelection.id }) else { return }
+        guard handbookStore.handbookItems.contains(where: { $0.id == pendingHandbookSelection.id }) else { return }
 
         handbookCategory = pendingHandbookSelection.category
         handbookFolder = pendingHandbookSelection.folder
         handbookWorkspaceModel.refresh(
-            items: store.handbookItems,
+            items: handbookStore.handbookItems,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
             searchText: debouncedHandbookSearchText
@@ -434,30 +460,6 @@ struct ContentView: View {
     private var dashboardSubtitle: String {
         let today = Date().formatted(.dateTime.year().month().day().weekday(.wide))
         return "\(today)，先处理风险，再推进今天"
-    }
-
-    private var overdueTodos: [TodoItem] {
-        filteredTodosCache.filter { todo in
-            todo.progress != .done
-                && todo.progress != .waiting
-                && calendar.startOfDay(for: todo.date) < calendar.startOfDay(for: Date())
-        }
-    }
-
-    private var todayActiveTodos: [TodoItem] {
-        filteredTodosCache.filter { todo in
-            todo.progress != .done
-                && todo.progress != .waiting
-                && calendar.isDateInToday(todo.date)
-        }
-    }
-
-    private var waitingTodos: [TodoItem] {
-        store.todos(matching: searchText).filter { $0.progress == .waiting }
-    }
-
-    private var weeklyTodos: [TodoItem] {
-        store.todos(matching: searchText).filter(\.isWeekly)
     }
 
     private func createTodo() {
@@ -648,7 +650,7 @@ struct ContentView: View {
     ) -> HandbookItem? {
         var createdItem: HandbookItem?
         withAnimation(AppMotion.capture) {
-            createdItem = store.addHandbookItem(category: category, folder: folder, title: title, body: body, attachments: attachments)
+            createdItem = handbookStore.addHandbookItem(category: category, folder: folder, title: title, body: body, attachments: attachments)
             handbookCategory = category
             handbookFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : folder.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -666,13 +668,13 @@ struct ContentView: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            store.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
+            handbookStore.update(item, category: category, folder: folder, title: title, body: body, attachments: attachments)
         }
     }
 
     private func deleteHandbookItem(_ item: HandbookItem) {
         withAnimation(AppMotion.quick) {
-            store.delete(item)
+            handbookStore.delete(item)
         }
     }
 
@@ -868,6 +870,24 @@ struct ContentView: View {
                     withAnimation(AppMotion.quick) {
                         debouncedHandbookSearchText = value
                     }
+                }
+            }
+        }
+    }
+
+    private func debounceGlobalSearchText(_ value: String) {
+        globalSearchDebounceTask?.cancel()
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else {
+            debouncedGlobalSearchText = ""
+            return
+        }
+        globalSearchDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                if globalSearchText == value {
+                    debouncedGlobalSearchText = value
                 }
             }
         }

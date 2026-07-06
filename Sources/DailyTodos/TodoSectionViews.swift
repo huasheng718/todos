@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct WorkSectionGroup: Identifiable {
+struct WorkSectionGroup: Identifiable, Equatable {
     let kind: WorkSectionKind
     let todos: [TodoItem]
 

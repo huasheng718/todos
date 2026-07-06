@@ -1,15 +1,15 @@
 import Foundation
 
-enum CredentialSecurityMode: Equatable {
+enum CredentialSecurityMode: Equatable, Sendable {
     case enableMasterPassword
 }
 
-struct CredentialNotice: Equatable {
+struct CredentialNotice: Equatable, Sendable {
     let message: String
     let isError: Bool
 }
 
-enum CredentialType: String, CaseIterable, Codable, Identifiable {
+enum CredentialType: String, CaseIterable, Codable, Identifiable, Sendable {
     case website
     case software
     case apiKey
@@ -42,7 +42,7 @@ enum CredentialType: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-struct CredentialItem: Identifiable, Equatable {
+struct CredentialItem: Identifiable, Equatable, Sendable {
     var id: UUID
     var title: String
     var type: CredentialType
@@ -85,13 +85,13 @@ struct CredentialItem: Identifiable, Equatable {
     }
 }
 
-struct CredentialEncryptedPayload: Codable, Equatable {
+struct CredentialEncryptedPayload: Codable, Equatable, Sendable {
     var nonce: Data
     var ciphertext: Data
     var tag: Data
 }
 
-struct CredentialSecretPayload: Codable, Equatable {
+struct CredentialSecretPayload: Codable, Equatable, Sendable {
     var secretValue: String
     var certificateBody: String
     var notes: String
@@ -99,7 +99,7 @@ struct CredentialSecretPayload: Codable, Equatable {
     static let empty = CredentialSecretPayload(secretValue: "", certificateBody: "", notes: "")
 }
 
-struct CredentialDraft: Equatable {
+struct CredentialDraft: Equatable, Sendable {
     var title: String = ""
     var type: CredentialType = .website
     var username: String = ""
@@ -150,13 +150,13 @@ struct CredentialDraft: Equatable {
     }
 }
 
-enum CredentialVaultStatus: Equatable {
+enum CredentialVaultStatus: Equatable, Sendable {
     case uninitialized
     case locked
     case unlocked
 }
 
-struct CredentialAuditEvent: Identifiable, Equatable {
+struct CredentialAuditEvent: Identifiable, Equatable, Sendable {
     var id = UUID()
     var action: String
     var credentialTitle: String

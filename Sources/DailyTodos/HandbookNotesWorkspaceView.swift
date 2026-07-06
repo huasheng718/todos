@@ -290,7 +290,9 @@ struct HandbookNotesRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: onSelect) {
+        Button {
+            onSelect()
+        } label: {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.title)

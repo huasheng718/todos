@@ -22,7 +22,7 @@ enum CredentialCryptoError: LocalizedError {
     }
 }
 
-struct CredentialVaultMetadata: Codable, Equatable {
+struct CredentialVaultMetadata: Codable, Equatable, Sendable {
     var version: Int
     var kdf: String
     var iterations: Int

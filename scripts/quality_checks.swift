@@ -17,6 +17,10 @@ struct DailyTodosChecks {
             try await MainActor.run {
                 try checkUpdateAvailability()
                 try checkUpdateDownloadProgress()
+                try checkP0PerformanceGuardrails()
+                try checkRemainingPerformanceGuardrails()
+                try checkStoreArchitectureGuardrails()
+                try checkDeadCodeGuardrails()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
@@ -32,10 +36,12 @@ struct DailyTodosChecks {
                 try checkHandbookCreateDraftTracksCreatedScope()
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
+                try checkSystemInputSourcePolicy()
                 try checkTodoStore()
+                try checkHandbookStore()
                 try checkCredentialBreachChecker()
-                try checkCredentialStore()
             }
+            try await checkCredentialStore()
             try await checkScheduledHandbookLoading()
             try await checkHandbookLoadingStateConflict()
             print("DailyTodosChecks passed")
@@ -50,6 +56,268 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() {
         throw CheckFailure.failed(message)
     }
+}
+
+func sourceFile(_ relativePath: String) throws -> String {
+    let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent(relativePath)
+    return try String(contentsOf: url, encoding: .utf8)
+}
+
+func checkSystemInputSourcePolicy() throws {
+    let forbiddenInputSourceAPIs = [
+        "NSTextInputContext.current",
+        "selectedKeyboardInputSource",
+        "keyboardInputSource",
+        "TISSelectInputSource",
+        "activateKeyboardLayout",
+        "kTISPropertyInputSourceID",
+        "com.apple.keylayout",
+        "com.apple.inputmethod"
+    ]
+    let sourceFiles = [
+        "Sources/DailyTodos/ContentView.swift",
+        "Sources/DailyTodos/WorkspaceShellViews.swift",
+        "Sources/DailyTodos/TodoCaptureViews.swift",
+        "Sources/DailyTodos/HandbookEditableCanvas.swift",
+        "Sources/DailyTodos/CredentialViews.swift",
+        "Sources/DailyTodos/SettingsViews.swift"
+    ]
+
+    for relativePath in sourceFiles {
+        let source = try sourceFile(relativePath)
+        for forbiddenAPI in forbiddenInputSourceAPIs {
+            try expect(
+                !source.contains(forbiddenAPI),
+                "\(relativePath) 不应调用 \(forbiddenAPI)，输入法必须继承 macOS 当前系统配置"
+            )
+        }
+    }
+
+    let workspaceShellSource = try sourceFile("Sources/DailyTodos/WorkspaceShellViews.swift")
+    guard let topBarStart = workspaceShellSource.range(of: "struct GlobalTopBar")?.lowerBound,
+          let moduleRailStart = workspaceShellSource.range(of: "struct ModuleRail")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 GlobalTopBar")
+    }
+    let globalTopBarSource = String(workspaceShellSource[topBarStart..<moduleRailStart])
+    try expect(
+        !globalTopBarSource.contains(".frame(width: 1, height: 1)") &&
+            !globalTopBarSource.contains(".opacity(0.01)"),
+        "全局搜索不能保留 1x1/透明 TextField 常驻焦点树，避免影响系统输入法上下文"
+    )
+    try expect(
+        globalTopBarSource.contains("if isSearchPresented {") &&
+            globalTopBarSource.contains("TextField(\"\", text: $searchText)"),
+        "全局搜索输入框应仅在搜索打开时创建，避免隐藏 TextField 常驻抢占输入法上下文"
+    )
+}
+
+func checkP0PerformanceGuardrails() throws {
+    let credentialStoreSource = try sourceFile("Sources/DailyTodos/CredentialStore.swift")
+    try expect(
+        credentialStoreSource.contains("sqlite3_busy_timeout(db, 2_000)"),
+        "CredentialStore.openDatabase 应设置 sqlite3_busy_timeout，避免凭证库遇到短暂 SQLite 锁时直接失败"
+    )
+    try expect(
+        credentialStoreSource.contains("Task.detached(priority: .userInitiated)"),
+        "凭证加解密必须放到 Task.detached，不能在 MainActor 上执行 PBKDF2/AES 重活"
+    )
+    guard let credentialLoadStart = credentialStoreSource.range(of: "func load()")?.lowerBound,
+          let credentialInitializeStart = credentialStoreSource.range(of: "func initialize(")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialStore.load")
+    }
+    let credentialLoadSource = String(credentialStoreSource[credentialLoadStart..<credentialInitializeStart])
+    try expect(
+        !credentialLoadSource.contains("CredentialCrypto.unlockLocal"),
+        "CredentialStore.load 不能在 MainActor 同步执行本地解锁 PBKDF2，应改为后台解锁"
+    )
+    try expect(
+        credentialLoadSource.contains("guard !hasLoaded") || credentialLoadSource.contains("isLoading"),
+        "CredentialStore.load 应具备幂等/加载中保护，避免页面进入时重复加载"
+    )
+    try expect(
+        credentialLoadSource.contains("if isUnlocked") && credentialLoadSource.contains("force"),
+        "CredentialStore.load 应显式保护已解锁状态，刷新时只重读列表，不能回退为 locked"
+    )
+    guard let credentialFilterStart = credentialStoreSource.range(of: "func credentials(matching query: String, type: CredentialType?)")?.lowerBound,
+          let credentialAddStart = credentialStoreSource.range(of: "@discardableResult")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialStore.credentials(matching:type:)")
+    }
+    let credentialFilterSource = String(credentialStoreSource[credentialFilterStart..<credentialAddStart])
+    try expect(
+        !credentialFilterSource.contains("ensureAutoLock()"),
+        "CredentialStore.credentials(matching:type:) 是 SwiftUI body 路径，不能触发 ensureAutoLock/lock 等状态修改"
+    )
+    guard let secretPayloadStart = credentialStoreSource.range(of: "func secretPayload(for item: CredentialItem")?.lowerBound,
+          let exportBackupStart = credentialStoreSource.range(of: "func exportBackup(")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialStore.secretPayload")
+    }
+    let secretPayloadSource = String(credentialStoreSource[secretPayloadStart..<exportBackupStart])
+    try expect(
+        secretPayloadSource.contains("await Self.openSecretPayload") || secretPayloadSource.contains("openSecretPayload("),
+        "CredentialStore.secretPayload 应把 AES 解密移到后台 helper，避免查看/编辑/复制凭证时卡住主线程"
+    )
+
+    let credentialViewsSource = try sourceFile("Sources/DailyTodos/CredentialViews.swift")
+    guard let credentialSidebarStart = credentialViewsSource.range(of: "struct CredentialContextSidebar")?.lowerBound,
+          let credentialWorkspaceStart = credentialViewsSource.range(of: "struct CredentialWorkspaceContent")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialContextSidebar")
+    }
+    let credentialSidebarSource = String(credentialViewsSource[credentialSidebarStart..<credentialWorkspaceStart])
+    try expect(
+        !credentialSidebarSource.contains("credentialStore.load()"),
+        "CredentialContextSidebar 不应在 onAppear 重复加载凭证库，加载入口应集中在模块内容或应用启动"
+    )
+
+    let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
+    let todoStoreMainOpenStart = todoStoreSource.range(of: "private func openDatabase() throws")?.lowerBound
+    let todoStoreMainOpenEnd = todoStoreSource.range(of: "private func prepareDatabase() throws")?.lowerBound
+    if let todoStoreMainOpenStart, let todoStoreMainOpenEnd {
+        let mainOpenDatabase = String(todoStoreSource[todoStoreMainOpenStart..<todoStoreMainOpenEnd])
+        try expect(
+            mainOpenDatabase.contains("sqlite3_busy_timeout(db, 2_000)"),
+            "TodoStore 主 SQLite 连接应设置 busy_timeout，避免主连接和后台手记连接互相抢锁时报错"
+        )
+        try expect(
+            mainOpenDatabase.contains("PRAGMA foreign_keys = ON") && mainOpenDatabase.contains("PRAGMA journal_mode = WAL"),
+            "TodoStore 主 SQLite 连接应保留 foreign_keys 与 WAL PRAGMA"
+        )
+    } else {
+        throw CheckFailure.failed("无法定位 TodoStore.openDatabase")
+    }
+
+    let contentViewSource = try sourceFile("Sources/DailyTodos/ContentView.swift")
+    try expect(
+        contentViewSource.contains("@State private var debouncedGlobalSearchText = \"\""),
+        "全局搜索应维护 debouncedGlobalSearchText，避免每次击键同步重算所有模块结果"
+    )
+    try expect(
+        contentViewSource.contains("globalSearchModel.groupedResults")
+            && contentViewSource.contains("globalSearchModel.scheduleSearch(query: debouncedGlobalSearchText, context: globalSearchContext)"),
+        "全局搜索结果应由后台模型产出，并使用 debouncedGlobalSearchText 调度"
+    )
+    try expect(
+        contentViewSource.contains("Task.sleep(for: .milliseconds(120))")
+            && contentViewSource.contains("debounceGlobalSearchText(newValue)"),
+        "全局搜索应使用 120ms 防抖，与待办/手记局部搜索保持一致"
+    )
+
+    let appThemeSource = try sourceFile("Sources/DailyTodos/AppTheme.swift")
+    let settingsSource = try sourceFile("Sources/DailyTodos/SettingsViews.swift")
+    try expect(
+        appThemeSource.contains("reduceMotionStorageKey = \"DailyTodos.reduceMotion\"")
+            && appThemeSource.contains("UserDefaults.standard.bool(forKey: reduceMotionStorageKey)")
+            && settingsSource.contains("@AppStorage(AppMotion.reduceMotionStorageKey)"),
+        "AppMotion 应恢复 reduceMotion 感知，并在设置页提供减少动态效果入口"
+    )
+}
+
+func checkRemainingPerformanceGuardrails() throws {
+    let contentViewSource = try sourceFile("Sources/DailyTodos/ContentView.swift")
+    let globalSearchSource = try sourceFile("Sources/DailyTodos/GlobalCommandSearch.swift")
+    try expect(
+        contentViewSource.contains("@StateObject private var globalSearchModel")
+            && contentViewSource.contains("globalSearchModel.scheduleSearch")
+            && globalSearchSource.contains("Task.detached(priority: .userInitiated)"),
+        "全局搜索应在后台 Task.detached 计算，不能只在主线程做 120ms 防抖"
+    )
+
+    let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
+    guard let toggleStart = todoStoreSource.range(of: "func toggle(_ todo: TodoItem)")?.lowerBound,
+          let deleteStart = todoStoreSource.range(of: "func delete(_ todo: TodoItem)")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 TodoStore.toggle")
+    }
+    let toggleSource = String(todoStoreSource[toggleStart..<deleteStart])
+    try expect(
+        toggleSource.contains("BEGIN TRANSACTION") && toggleSource.contains("COMMIT") && toggleSource.contains("ROLLBACK"),
+        "toggle weekly 应把更新原事项和生成下周事项包进同一个 SQLite 事务"
+    )
+
+    let todoListSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
+    try expect(
+        todoListSource.contains("TodoListSnapshot")
+            && todoListSource.contains("let snapshot = TodoListSnapshot(")
+            && !todoListSource.contains("private var boardGroups: [TodoProgress: [TodoItem]]"),
+        "待办列表 board/matrix/dashboard 分桶应使用单次快照，避免每次 body 重算多套分桶"
+    )
+
+    let todoFlowRowSource = try sourceFile("Sources/DailyTodos/TodoFlowRow.swift")
+    try expect(
+        (todoFlowRowSource.contains("struct TodoFlowRow: View, Equatable")
+            || todoFlowRowSource.contains("struct TodoFlowRow: View, @MainActor Equatable"))
+            && todoListSource.contains(".equatable()"),
+        "TodoFlowRow 应支持 Equatable 并在列表中使用 .equatable()，减少无关行重绘"
+    )
+
+    let dateFormatterSource = try sourceFile("Sources/DailyTodos/TodoRowFormatting.swift")
+    try expect(
+        dateFormatterSource.contains("enum CachedDateFormatter")
+            && dateFormatterSource.contains("CachedDateFormatter.fullFollowUpDate"),
+        "待办行日期格式化应恢复 CachedDateFormatter，避免大列表中重复创建格式化器"
+    )
+}
+
+func checkStoreArchitectureGuardrails() throws {
+    let handbookStoreSource = try sourceFile("Sources/DailyTodos/HandbookStore.swift")
+    try expect(
+        handbookStoreSource.contains("final class HandbookStore: ObservableObject"),
+        "手记状态和持久化应拆到 HandbookStore，避免 TodoStore 继续膨胀"
+    )
+    try expect(
+        handbookStoreSource.contains("CREATE TABLE IF NOT EXISTS handbook_items")
+            && handbookStoreSource.contains("HandbookSQLiteBackgroundReader"),
+        "HandbookStore 应承接 handbook_items schema 和后台读取器"
+    )
+
+    let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
+    try expect(
+        !todoStoreSource.contains("handbook_items"),
+        "TodoStore 不应再包含 handbook_items SQL，手记持久化归 HandbookStore"
+    )
+    try expect(
+        !todoStoreSource.contains("HandbookSQLiteBackgroundReader"),
+        "TodoStore 不应再承载手记后台 SQLite 读取器"
+    )
+    try expect(
+        !todoStoreSource.contains("HandbookItem"),
+        "TodoStore 不应再暴露 HandbookItem 状态或手记 CRUD，视图应依赖 HandbookStore"
+    )
+}
+
+func checkDeadCodeGuardrails() throws {
+    let removedLegacyFiles = [
+        "Sources/DailyTodos/HandbookViews.swift",
+        "Sources/DailyTodos/HandbookTreeView.swift",
+        "Sources/DailyTodos/HandbookSidebarViews.swift",
+        "Sources/DailyTodos/HandbookEmptyStates.swift"
+    ]
+    for file in removedLegacyFiles {
+        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(file)
+        try expect(
+            !FileManager.default.fileExists(atPath: url.path),
+            "\(file) 是旧手记方案残留，不应重新引入"
+        )
+    }
+
+    let moduleSource = try sourceFile("Sources/DailyTodos/ModuleNavigationViews.swift")
+    try expect(
+        moduleSource.contains("HandbookFolderSidebarView(")
+            && moduleSource.contains("HandbookNotesListView("),
+        "手记入口应保持当前三栏工作区，不能回退到旧 HandbookContentView/HandbookTreeView"
+    )
+    try expect(
+        !moduleSource.contains("HandbookContentView(")
+            && !moduleSource.contains("HandbookTreeView(")
+            && !moduleSource.contains("HandbookSidebarView("),
+        "模块导航不应引用已删除的旧手记视图"
+    )
 }
 
 func checkCredentialBreachChecker() throws {
@@ -317,27 +585,28 @@ func checkHandbookActivationUsesScheduledLoading() throws {
         .appendingPathComponent("Sources/DailyTodos/ContentView.swift")
     let source = try String(contentsOf: contentViewURL, encoding: .utf8)
     try expect(
-        source.contains("store.scheduleLoadHandbookItemsIfNeeded()"),
+        source.contains("handbookStore.scheduleLoadHandbookItemsIfNeeded()"),
         "切换到手记模块时应调度后台加载，避免同步 SQLite 阻塞 UI"
     )
     try expect(
-        !source.contains("guard newValue == \"handbook\" else { return }\n            store.loadHandbookItemsIfNeeded()"),
+        !source.contains("guard newValue == \"handbook\" else { return }\n            handbookStore.loadHandbookItemsIfNeeded()"),
         "手记模块激活路径不应同步调用 loadHandbookItemsIfNeeded"
     )
 }
 
 @MainActor
 func checkLazyStartupLoading() throws {
-    let (store, _) = try makeStore()
+    let (store, databaseURL) = try makeStore()
+    let handbookStore = HandbookStore(storageURL: databaseURL)
 
     store.loadStartupData()
     try expect(store.didLoadTodos, "首屏加载后应标记待办已加载")
-    try expect(!store.didLoadHandbookItems, "首屏加载不应同步加载手记")
-    try expect(!store.isLoadingHandbookItems, "首屏加载不应进入手记加载状态")
-    try expect(store.handbookItems.isEmpty, "首屏加载时手记列表应保持空集合")
+    try expect(!handbookStore.didLoadHandbookItems, "首屏加载不应同步加载手记")
+    try expect(!handbookStore.isLoadingHandbookItems, "首屏加载不应进入手记加载状态")
+    try expect(handbookStore.handbookItems.isEmpty, "首屏加载时手记列表应保持空集合")
 
-    store.loadHandbookItemsIfNeeded()
-    try expect(store.didLoadHandbookItems, "按需加载后应标记手记已加载")
+    handbookStore.loadHandbookItemsIfNeeded()
+    try expect(handbookStore.didLoadHandbookItems, "按需加载后应标记手记已加载")
 }
 
 func checkHandbookNotesSnapshotInvalidation() throws {
@@ -629,8 +898,8 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
 
 @MainActor
 func checkScheduledHandbookLoading() async throws {
-    let (seedStore, databaseURL) = try makeStore()
-    seedStore.loadStartupData()
+    let (_, databaseURL) = try makeStore()
+    let seedStore = HandbookStore(storageURL: databaseURL)
     seedStore.addHandbookItem(
         category: .businessRule,
         folder: "合同",
@@ -638,8 +907,7 @@ func checkScheduledHandbookLoading() async throws {
         body: "切换手记时不应阻塞主线程"
     )
 
-    let store = TodoStore(storageURL: databaseURL)
-    store.loadStartupData()
+    let store = HandbookStore(storageURL: databaseURL)
     try expect(!store.didLoadHandbookItems, "异步调度前不应预加载手记")
 
     store.scheduleLoadHandbookItemsIfNeeded()
@@ -660,8 +928,8 @@ func checkScheduledHandbookLoading() async throws {
 
 @MainActor
 func checkHandbookLoadingStateConflict() async throws {
-    let (seedStore, databaseURL) = try makeStore()
-    seedStore.loadStartupData()
+    let (_, databaseURL) = try makeStore()
+    let seedStore = HandbookStore(storageURL: databaseURL)
     seedStore.addHandbookItem(
         category: .inspiration,
         folder: "性能",
@@ -669,8 +937,7 @@ func checkHandbookLoadingStateConflict() async throws {
         body: "同步加载应取消后台预热结果"
     )
 
-    let store = TodoStore(storageURL: databaseURL)
-    store.loadStartupData()
+    let store = HandbookStore(storageURL: databaseURL)
     store.scheduleLoadHandbookItemsIfNeeded()
     try expect(store.isLoadingHandbookItems, "调度后应记录后台手记加载状态")
 
@@ -769,6 +1036,12 @@ func checkTodoStore() throws {
             && todo.isWeekly
             && calendar.isDate(todo.date, inSameDayAs: weeklyDate.addingTimeInterval(7 * 24 * 60 * 60))
     }, "周期待办应生成下周待处理事项")
+}
+
+@MainActor
+func checkHandbookStore() throws {
+    let (_, databaseURL) = try makeStore()
+    let store = HandbookStore(storageURL: databaseURL)
 
     let attachment = HandbookAttachment(kind: .image, name: "现场照片.png", path: "/tmp/photo.png")
     store.addHandbookItem(
@@ -826,23 +1099,23 @@ func checkTodoStore() throws {
     store.delete(item)
     try expect(!store.handbookItems.contains(where: { $0.id == item.id }), "软删除后 UI 内存列表不应保留手记")
 
-    let deletedReloadStore = TodoStore(storageURL: databaseURL)
-    deletedReloadStore.load()
+    let deletedReloadStore = HandbookStore(storageURL: databaseURL)
+    deletedReloadStore.loadHandbookItemsIfNeeded()
     try expect(!deletedReloadStore.handbookItems.contains(where: { $0.id == item.id }), "软删除后普通加载不应返回 tombstone")
 }
 
 @MainActor
-func checkCredentialStore() throws {
+func checkCredentialStore() async throws {
     let databaseURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("DailyTodosCredentialChecks-\(UUID().uuidString)", isDirectory: true)
         .appendingPathComponent("credentials.sqlite")
     try FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
     let store = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
-    store.load()
+    await store.load()
     try expect(store.status == .uninitialized, "首次加载凭证库应处于未初始化状态")
 
-    store.initialize(masterPassword: "correct horse battery staple")
+    await store.initialize(masterPassword: "correct horse battery staple")
     try expect(store.status == .unlocked, "初始化后应解锁凭证库")
 
     var draft = CredentialDraft()
@@ -854,14 +1127,14 @@ func checkCredentialStore() throws {
     draft.notes = "恢复码"
     draft.tagsText = "dev, code"
 
-    guard let item = store.addCredential(draft) else {
+    guard let item = await store.addCredential(draft) else {
         throw CheckFailure.failed("新增凭证失败：\(store.lastError ?? "unknown")")
     }
     try expect(store.credentials.count == 1, "新增凭证后内存列表应有 1 条")
     try expect(store.credentials(matching: "github", type: nil).count == 1, "凭证应支持标题搜索")
     try expect(store.credentials(matching: "sample-sensitive-token", type: nil).isEmpty, "敏感字段不应进入普通搜索")
 
-    guard let secret = store.secretPayload(for: item, auditAction: "测试查看") else {
+    guard let secret = await store.secretPayload(for: item, auditAction: "测试查看") else {
         throw CheckFailure.failed("解密凭证失败")
     }
     try expect(secret.secretValue == "sample-sensitive-token", "正确主密码应解密敏感字段")
@@ -878,25 +1151,28 @@ func checkCredentialStore() throws {
 
     store.lock()
     try expect(store.status == .locked, "手动锁定后状态应为 locked")
-    store.unlock(masterPassword: "wrong password")
+    await store.unlock(masterPassword: "wrong password")
     try expect(store.status == .locked, "错误主密码不应解锁凭证库")
-    store.unlock(masterPassword: "correct horse battery staple")
+    await store.unlock(masterPassword: "correct horse battery staple")
     try expect(store.status == .unlocked, "正确主密码应重新解锁凭证库")
+    await store.load()
+    try expect(store.status == .unlocked, "已解锁凭证库重复 load 不应回退为 locked")
+    try expect(store.credentials.count == 1, "已解锁凭证库重复 load 不应清空内存列表")
 
-    store.setMasterPasswordRequired(false)
+    await store.setMasterPasswordRequired(false)
     try expect(!store.requiresMasterPassword, "应支持关闭主密码验证")
     store.lock()
     try expect(store.status == .unlocked, "关闭主密码后手动锁定不应要求验证")
     let noPasswordStore = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
-    noPasswordStore.load()
+    await noPasswordStore.load()
     try expect(noPasswordStore.status == .unlocked, "关闭主密码后重新加载应自动解锁")
     try expect(noPasswordStore.credentials.count == 1, "关闭主密码后凭证仍应可加载")
-    noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
+    await noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
     try expect(noPasswordStore.requiresMasterPassword, "应支持重新开启主密码验证")
     noPasswordStore.lock()
-    noPasswordStore.unlock(masterPassword: "wrong password")
+    await noPasswordStore.unlock(masterPassword: "wrong password")
     try expect(noPasswordStore.status == .locked, "重新开启主密码后错误密码不应解锁")
-    noPasswordStore.unlock(masterPassword: "new master password")
+    await noPasswordStore.unlock(masterPassword: "new master password")
     try expect(noPasswordStore.status == .unlocked, "重新开启主密码后正确密码应解锁")
 
     let importedURL = FileManager.default.temporaryDirectory
@@ -904,12 +1180,12 @@ func checkCredentialStore() throws {
         .appendingPathComponent("credentials.sqlite")
     try FileManager.default.createDirectory(at: importedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     let importedStore = CredentialStore(storageURL: importedURL, autoLockInterval: 60)
-    importedStore.load()
+    await importedStore.load()
     importedStore.importBackup(backup, password: "backup password", replaceExisting: true)
-    importedStore.unlock(masterPassword: "correct horse battery staple")
+    await importedStore.unlock(masterPassword: "correct horse battery staple")
     try expect(importedStore.credentials.count == 1, "导入备份后应恢复凭证")
     guard let importedItem = importedStore.credentials.first,
-          let importedSecret = importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
+          let importedSecret = await importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
         throw CheckFailure.failed("导入备份后无法解密凭证")
     }
     try expect(importedSecret.secretValue == "sample-sensitive-token", "导入备份后敏感字段应保持一致")
@@ -949,7 +1225,7 @@ func checkCredentialStore() throws {
     try expect(chromeDrafts[0].username == "HT008881", "Chrome CSV 应识别 username")
     try expect(chromeDrafts[0].secretValue == "sample-login-password", "Chrome CSV 应识别 password")
 
-    let importedCount = store.importCredentials([parsedDraft] + chromeDrafts)
+    let importedCount = await store.importCredentials([parsedDraft] + chromeDrafts)
     try expect(importedCount == 2, "批量导入应返回成功条数")
     try expect(store.credentials.count == 3, "批量导入后凭证数量应增加")
     let databaseDataAfterImport = try Data(contentsOf: databaseURL)

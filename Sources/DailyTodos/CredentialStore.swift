@@ -12,6 +12,8 @@ final class CredentialStore: ObservableObject {
     private let databaseURL: URL
     private let autoLockInterval: TimeInterval
     private var isDatabasePrepared = false
+    private var hasLoaded = false
+    private var isLoading = false
     private var vaultMetadata: CredentialVaultMetadata?
     private var sessionKey: SymmetricKey?
     private var lastActivityAt = Date()
@@ -37,26 +39,62 @@ final class CredentialStore: ObservableObject {
         sqlite3_close(db)
     }
 
-    func load() {
+    func load() async {
+        guard !isLoading else { return }
+        guard !hasLoaded else { return }
+        await loadVault(force: false)
+    }
+
+    func reload() async {
+        await loadVault(force: true)
+    }
+
+    private func loadVault(force: Bool) async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+
         do {
             try prepareDatabase()
-            vaultMetadata = try fetchVaultMetadata()
-            if let metadata = vaultMetadata, !metadata.requiresMasterPassword {
-                sessionKey = try CredentialCrypto.unlockLocal(metadata: metadata)
-                status = .unlocked
-                credentials = try fetchCredentials()
-                lastActivityAt = Date()
-            } else {
-                status = vaultMetadata == nil ? .uninitialized : .locked
+            let metadata = try fetchVaultMetadata()
+            vaultMetadata = metadata
+            hasLoaded = true
+
+            guard let metadata else {
+                sessionKey = nil
+                status = .uninitialized
                 credentials = []
+                lastError = nil
+                return
             }
+
+            if metadata.requiresMasterPassword {
+                if isUnlocked {
+                    if force {
+                        credentials = try fetchCredentials()
+                    }
+                    touchActivity()
+                } else {
+                    sessionKey = nil
+                    status = .locked
+                    credentials = []
+                }
+                lastError = nil
+                return
+            }
+
+            let keyData = try await Self.unlockKeyData(masterPassword: "", metadata: metadata)
+            sessionKey = Self.symmetricKey(from: keyData)
+            status = .unlocked
+            credentials = try fetchCredentials()
+            touchActivity()
             lastError = nil
         } catch {
             lastError = "读取凭证库失败：\(error.localizedDescription)"
         }
     }
 
-    func initialize(masterPassword: String, requiresMasterPassword: Bool = true) {
+    func initialize(masterPassword: String, requiresMasterPassword: Bool = true) async {
         let password = masterPassword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !requiresMasterPassword || password.count >= 8 else {
             lastError = "主密码至少需要 8 个字符"
@@ -65,13 +103,21 @@ final class CredentialStore: ObservableObject {
 
         do {
             try prepareDatabase()
-            let (metadata, key) = try (requiresMasterPassword
-                ? CredentialCrypto.createVaultMetadata(masterPassword: password)
-                : CredentialCrypto.createLocalVaultMetadata())
+            guard vaultMetadata == nil else {
+                throw CredentialSQLiteError.concurrentUpdate
+            }
+            let (metadata, keyData) = try await Self.createVaultMetadata(
+                password: password,
+                requiresMasterPassword: requiresMasterPassword
+            )
+            guard vaultMetadata == nil else {
+                throw CredentialSQLiteError.concurrentUpdate
+            }
             try saveVaultMetadata(metadata)
             vaultMetadata = metadata
-            sessionKey = key
+            sessionKey = Self.symmetricKey(from: keyData)
             status = .unlocked
+            hasLoaded = true
             lastActivityAt = Date()
             credentials = try fetchCredentials()
             lastError = nil
@@ -81,7 +127,7 @@ final class CredentialStore: ObservableObject {
         }
     }
 
-    func unlock(masterPassword: String) {
+    func unlock(masterPassword: String) async {
         do {
             try prepareDatabase()
             let metadata = try fetchVaultMetadata()
@@ -89,11 +135,14 @@ final class CredentialStore: ObservableObject {
                 status = .uninitialized
                 return
             }
-            sessionKey = try (metadata.requiresMasterPassword
-                ? CredentialCrypto.unlock(masterPassword: masterPassword, metadata: metadata)
-                : CredentialCrypto.unlockLocal(metadata: metadata))
+            let keyData = try await Self.unlockKeyData(masterPassword: masterPassword, metadata: metadata)
+            guard try fetchVaultMetadata() == metadata else {
+                throw CredentialSQLiteError.concurrentUpdate
+            }
+            sessionKey = Self.symmetricKey(from: keyData)
             vaultMetadata = metadata
             status = .unlocked
+            hasLoaded = true
             lastActivityAt = Date()
             credentials = try fetchCredentials()
             lastError = nil
@@ -121,7 +170,7 @@ final class CredentialStore: ObservableObject {
         recordAudit(action: "锁定凭证库", credentialTitle: "凭证库")
     }
 
-    func setMasterPasswordRequired(_ required: Bool, newMasterPassword: String = "") {
+    func setMasterPasswordRequired(_ required: Bool, newMasterPassword: String = "") async {
         guard let currentKey = activeKey() else { return }
         guard requiresMasterPassword != required else { return }
         let password = newMasterPassword.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,18 +180,20 @@ final class CredentialStore: ObservableObject {
         }
 
         do {
-            let decrypted = try credentials.map { item in
-                (item, try CredentialCrypto.open(item.encryptedPayload, as: CredentialSecretPayload.self, using: currentKey))
-            }
-            let (metadata, newKey) = try (required
-                ? CredentialCrypto.createVaultMetadata(masterPassword: password)
-                : CredentialCrypto.createLocalVaultMetadata())
-            let updatedItems = try decrypted.map { item, secret in
-                var updated = item
-                updated.encryptedPayload = try CredentialCrypto.seal(secret, using: newKey)
-                updated.updatedAt = Date()
-                updated.encryptionVersion = CredentialCrypto.version
-                return updated
+            let credentialSnapshot = credentials
+            let currentKeyData = Self.keyData(from: currentKey)
+            let (metadata, newKeyData, updatedItems) = try await Self.rekeyCredentials(
+                credentials: credentialSnapshot,
+                currentKeyData: currentKeyData,
+                required: required,
+                password: password
+            )
+            guard isUnlocked,
+                  credentials == credentialSnapshot,
+                  let latestKey = sessionKey,
+                  Self.keyData(from: latestKey) == currentKeyData
+            else {
+                throw CredentialSQLiteError.concurrentUpdate
             }
 
             try execute("BEGIN TRANSACTION")
@@ -158,7 +209,7 @@ final class CredentialStore: ObservableObject {
             }
 
             vaultMetadata = metadata
-            sessionKey = newKey
+            sessionKey = Self.symmetricKey(from: newKeyData)
             credentials = updatedItems.sorted(by: sortCredentials)
             status = .unlocked
             touchActivity()
@@ -178,6 +229,7 @@ final class CredentialStore: ObservableObject {
             sessionKey = nil
             credentials = []
             status = .uninitialized
+            hasLoaded = true
             lastError = nil
             recordAudit(action: "重置凭证库", credentialTitle: "凭证库")
         } catch {
@@ -193,7 +245,6 @@ final class CredentialStore: ObservableObject {
     }
 
     func credentials(matching query: String, type: CredentialType?) -> [CredentialItem] {
-        ensureAutoLock()
         guard isUnlocked else { return [] }
         return credentials
             .filter { $0.matches(query: query, type: type) }
@@ -201,7 +252,7 @@ final class CredentialStore: ObservableObject {
     }
 
     @discardableResult
-    func addCredential(_ draft: CredentialDraft) -> CredentialItem? {
+    func addCredential(_ draft: CredentialDraft) async -> CredentialItem? {
         guard let key = activeKey() else { return nil }
         guard !draft.cleanedTitle.isEmpty else {
             lastError = "凭证标题不能为空"
@@ -210,6 +261,17 @@ final class CredentialStore: ObservableObject {
 
         do {
             let now = Date()
+            let keyData = Self.keyData(from: key)
+            let encryptedPayload = try await Self.sealSecretPayload(
+                draft.secretPayload,
+                keyData: keyData
+            )
+            guard isUnlocked,
+                  let latestKey = sessionKey,
+                  Self.keyData(from: latestKey) == keyData
+            else {
+                throw CredentialSQLiteError.concurrentUpdate
+            }
             let item = CredentialItem(
                 id: UUID(),
                 title: draft.cleanedTitle,
@@ -217,7 +279,7 @@ final class CredentialStore: ObservableObject {
                 username: draft.cleanedUsername,
                 serviceURL: draft.cleanedServiceURL,
                 tags: draft.cleanedTags,
-                encryptedPayload: try CredentialCrypto.seal(draft.secretPayload, using: key),
+                encryptedPayload: encryptedPayload,
                 createdAt: now,
                 updatedAt: now,
                 lastViewedAt: nil,
@@ -235,22 +297,33 @@ final class CredentialStore: ObservableObject {
         }
     }
 
-    func updateCredential(_ item: CredentialItem, draft: CredentialDraft) {
+    func updateCredential(_ item: CredentialItem, draft: CredentialDraft) async {
         guard let key = activeKey() else { return }
-        guard let index = credentials.firstIndex(where: { $0.id == item.id }) else { return }
         guard !draft.cleanedTitle.isEmpty else {
             lastError = "凭证标题不能为空"
             return
         }
 
         do {
+            let keyData = Self.keyData(from: key)
+            let encryptedPayload = try await Self.sealSecretPayload(
+                draft.secretPayload,
+                keyData: keyData
+            )
+            guard isUnlocked,
+                  let latestKey = sessionKey,
+                  Self.keyData(from: latestKey) == keyData
+            else {
+                throw CredentialSQLiteError.concurrentUpdate
+            }
+            guard let index = credentials.firstIndex(where: { $0.id == item.id }) else { return }
             var updated = credentials[index]
             updated.title = draft.cleanedTitle
             updated.type = draft.type
             updated.username = draft.cleanedUsername
             updated.serviceURL = draft.cleanedServiceURL
             updated.tags = draft.cleanedTags
-            updated.encryptedPayload = try CredentialCrypto.seal(draft.secretPayload, using: key)
+            updated.encryptedPayload = encryptedPayload
             updated.updatedAt = Date()
             updated.encryptionVersion = CredentialCrypto.version
 
@@ -265,11 +338,11 @@ final class CredentialStore: ObservableObject {
     }
 
     @discardableResult
-    func importCredentials(_ drafts: [CredentialDraft]) -> Int {
+    func importCredentials(_ drafts: [CredentialDraft]) async -> Int {
         guard !drafts.isEmpty else { return 0 }
         var importedCount = 0
         for draft in drafts {
-            if addCredential(draft) != nil {
+            if await addCredential(draft) != nil {
                 importedCount += 1
             }
         }
@@ -297,10 +370,14 @@ final class CredentialStore: ObservableObject {
         }
     }
 
-    func secretPayload(for item: CredentialItem, auditAction: String? = nil) -> CredentialSecretPayload? {
+    func secretPayload(for item: CredentialItem, auditAction: String? = nil) async -> CredentialSecretPayload? {
         guard let key = activeKey() else { return nil }
         do {
-            let secret = try CredentialCrypto.open(item.encryptedPayload, as: CredentialSecretPayload.self, using: key)
+            let keyData = Self.keyData(from: key)
+            let secret = try await Self.openSecretPayload(
+                item.encryptedPayload,
+                keyData: keyData
+            )
             if let auditAction {
                 markAccess(item, action: auditAction)
             }
@@ -311,6 +388,14 @@ final class CredentialStore: ObservableObject {
             lastError = "读取敏感字段失败：\(error.localizedDescription)"
             return nil
         }
+    }
+
+    func recordCredentialAccess(for item: CredentialItem, action: String) {
+        ensureAutoLock()
+        guard isUnlocked else { return }
+        markAccess(item, action: action)
+        touchActivity()
+        lastError = nil
     }
 
     func exportBackup(password: String) -> String? {
@@ -447,8 +532,89 @@ final class CredentialStore: ObservableObject {
             throw CredentialSQLiteError.open(message: databaseErrorMessage)
         }
 
+        sqlite3_busy_timeout(db, 2_000)
+
         try execute("PRAGMA foreign_keys = ON")
         try execute("PRAGMA journal_mode = WAL")
+    }
+
+    private nonisolated static func createVaultMetadata(
+        password: String,
+        requiresMasterPassword: Bool
+    ) async throws -> (CredentialVaultMetadata, Data) {
+        try await Task.detached(priority: .userInitiated) {
+            let (metadata, key) = try (requiresMasterPassword
+                ? CredentialCrypto.createVaultMetadata(masterPassword: password)
+                : CredentialCrypto.createLocalVaultMetadata())
+            return (metadata, keyData(from: key))
+        }.value
+    }
+
+    private nonisolated static func unlockKeyData(
+        masterPassword: String,
+        metadata: CredentialVaultMetadata
+    ) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            let key = try (metadata.requiresMasterPassword
+                ? CredentialCrypto.unlock(masterPassword: masterPassword, metadata: metadata)
+                : CredentialCrypto.unlockLocal(metadata: metadata))
+            return keyData(from: key)
+        }.value
+    }
+
+    private nonisolated static func sealSecretPayload(
+        _ payload: CredentialSecretPayload,
+        keyData: Data
+    ) async throws -> CredentialEncryptedPayload {
+        try await Task.detached(priority: .userInitiated) {
+            try CredentialCrypto.seal(payload, using: symmetricKey(from: keyData))
+        }.value
+    }
+
+    private nonisolated static func openSecretPayload(
+        _ payload: CredentialEncryptedPayload,
+        keyData: Data
+    ) async throws -> CredentialSecretPayload {
+        try await Task.detached(priority: .userInitiated) {
+            try CredentialCrypto.open(
+                payload,
+                as: CredentialSecretPayload.self,
+                using: symmetricKey(from: keyData)
+            )
+        }.value
+    }
+
+    private nonisolated static func rekeyCredentials(
+        credentials: [CredentialItem],
+        currentKeyData: Data,
+        required: Bool,
+        password: String
+    ) async throws -> (CredentialVaultMetadata, Data, [CredentialItem]) {
+        try await Task.detached(priority: .userInitiated) {
+            let currentKey = symmetricKey(from: currentKeyData)
+            let decrypted = try credentials.map { item in
+                (item, try CredentialCrypto.open(item.encryptedPayload, as: CredentialSecretPayload.self, using: currentKey))
+            }
+            let (metadata, newKey) = try (required
+                ? CredentialCrypto.createVaultMetadata(masterPassword: password)
+                : CredentialCrypto.createLocalVaultMetadata())
+            let updatedItems = try decrypted.map { item, secret in
+                var updated = item
+                updated.encryptedPayload = try CredentialCrypto.seal(secret, using: newKey)
+                updated.updatedAt = Date()
+                updated.encryptionVersion = CredentialCrypto.version
+                return updated
+            }
+            return (metadata, keyData(from: newKey), updatedItems)
+        }.value
+    }
+
+    private nonisolated static func keyData(from key: SymmetricKey) -> Data {
+        key.withUnsafeBytes { Data($0) }
+    }
+
+    private nonisolated static func symmetricKey(from data: Data) -> SymmetricKey {
+        SymmetricKey(data: data)
     }
 
     private func prepareDatabase() throws {
@@ -791,6 +957,7 @@ private enum CredentialSQLiteError: LocalizedError {
     case open(message: String)
     case prepare(message: String)
     case execute(message: String)
+    case concurrentUpdate
     case decode
 
     var errorDescription: String? {
@@ -801,6 +968,8 @@ private enum CredentialSQLiteError: LocalizedError {
             return "准备 SQLite 语句失败：\(message)"
         case .execute(let message):
             return "执行 SQLite 语句失败：\(message)"
+        case .concurrentUpdate:
+            return "凭证库数据已变化，请重试"
         case .decode:
             return "解析 SQLite 数据失败"
         }

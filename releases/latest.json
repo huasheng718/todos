@@ -1,6 +1,6 @@
 {
-  "version": "1.2.24",
-  "build": 53,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.24/AntOrder-1.2.24.pkg",
-  "releaseNotes": "统一待办、手记、凭证、设置的左二和右一标题高度；移除设置页重复标题，优化页面层级。"
+  "version": "1.2.25",
+  "build": 54,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.25/AntOrder-1.2.25.pkg",
+  "releaseNotes": "修复凭证页加载卡顿和状态抖动；优化敏感字段异步读取；修复隐藏全局搜索输入框影响系统输入法配置的问题。"
 }
