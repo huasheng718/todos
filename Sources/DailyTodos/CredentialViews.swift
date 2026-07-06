@@ -22,6 +22,7 @@ struct CredentialsModuleView: View {
     @State private var repeatedMasterPassword = ""
     @State private var initializationError: String?
     @State private var initializeRequiresMasterPassword = true
+    @State private var isOpeningEditor = false
 
     init(
         searchText: Binding<String>? = nil,
@@ -69,7 +70,9 @@ struct CredentialsModuleView: View {
             onLock: { credentialStore.lock() }
         )
         .onAppear {
-            credentialStore.load()
+            Task {
+                await credentialStore.load()
+            }
         }
         .confirmationDialog(
             "重置会永久删除所有凭证",
@@ -131,10 +134,10 @@ struct CredentialsModuleView: View {
                 securityMode: $credentialActions.securityMode,
                 error: credentialStore.lastError,
                 auditEvents: credentialStore.auditEvents,
+                isOpeningEditor: isOpeningEditor,
                 onSelect: { selectedCredentialIDBinding.wrappedValue = $0.id },
                 onEdit: { item in
-                    let secret = credentialStore.secretPayload(for: item, auditAction: "编辑凭证") ?? .empty
-                    editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
+                    openEditor(for: item)
                 },
                 onSaveDraft: saveEditorDraft,
                 onSaveSecurity: { password, repeatedPassword in
@@ -162,11 +165,11 @@ struct CredentialsModuleView: View {
                     }
                 },
                 onReveal: { item in
-                    credentialStore.secretPayload(for: item, auditAction: "查看敏感字段")
+                    await credentialStore.secretPayload(for: item, auditAction: "查看敏感字段")
                 },
                 onCopy: { item, value in
                     copyToClipboard(value)
-                    _ = credentialStore.secretPayload(for: item, auditAction: "复制敏感字段")
+                    credentialStore.recordCredentialAccess(for: item, action: "复制敏感字段")
                 }
             )
         }
@@ -192,6 +195,20 @@ struct CredentialsModuleView: View {
         credentialActions.notice = nil
         credentialActions.clearTransientModes()
         editorMode = .create(CredentialDraft())
+    }
+
+    private func openEditor(for item: CredentialItem) {
+        guard !isOpeningEditor else { return }
+        isOpeningEditor = true
+        Task {
+            let secret = await credentialStore.secretPayload(for: item, auditAction: "编辑凭证")
+            await MainActor.run {
+                if selectedCredentialIDBinding.wrappedValue == item.id, let secret {
+                    editorMode = .edit(item, CredentialDraft(item: item, secret: secret))
+                }
+                isOpeningEditor = false
+            }
+        }
     }
 
     private func saveEditorDraft(_ mode: CredentialEditorMode) {
@@ -245,9 +262,6 @@ struct CredentialContextSidebar: View {
                 .frame(width: secondarySidebarWidth)
                 .background(AppTheme.workspaceTokens.contextSidebar)
             }
-        }
-        .onAppear {
-            credentialStore.load()
         }
     }
 }
@@ -539,13 +553,14 @@ struct CredentialWorkArea: View {
     @Binding var securityMode: CredentialSecurityMode?
     let error: String?
     let auditEvents: [CredentialAuditEvent]
+    let isOpeningEditor: Bool
     let onSelect: (CredentialItem) -> Void
     let onEdit: (CredentialItem) -> Void
     let onSaveDraft: (CredentialEditorMode) -> Void
     let onSaveSecurity: (String, String) -> Void
     let onImportDrafts: ([CredentialDraft]) -> Void
     let onDelete: (CredentialItem) -> Void
-    let onReveal: (CredentialItem) -> CredentialSecretPayload?
+    let onReveal: (CredentialItem) async -> CredentialSecretPayload?
     let onCopy: (CredentialItem, String) -> Void
 
     var body: some View {
@@ -586,6 +601,7 @@ struct CredentialWorkArea: View {
                     item: selectedCredential,
                     error: error,
                     auditEvents: auditEvents,
+                    isOpeningEditor: isOpeningEditor,
                     onEdit: onEdit,
                     onDelete: onDelete,
                     onReveal: onReveal,
@@ -736,11 +752,13 @@ struct CredentialDetailPane: View {
     let item: CredentialItem?
     let error: String?
     let auditEvents: [CredentialAuditEvent]
+    let isOpeningEditor: Bool
     let onEdit: (CredentialItem) -> Void
     let onDelete: (CredentialItem) -> Void
-    let onReveal: (CredentialItem) -> CredentialSecretPayload?
+    let onReveal: (CredentialItem) async -> CredentialSecretPayload?
     let onCopy: (CredentialItem, String) -> Void
     @State private var revealedSecret: CredentialSecretPayload?
+    @State private var isRevealingSecret = false
     @State private var breachCheckSummary: CredentialBreachCheckSummary?
     @State private var isCheckingBreachRisk = false
     @State private var breachCheckMessage: String?
@@ -769,6 +787,7 @@ struct CredentialDetailPane: View {
         }
         .onChange(of: item?.id) { _, _ in
             revealedSecret = nil
+            isRevealingSecret = false
             resetBreachCheck()
         }
     }
@@ -794,9 +813,10 @@ struct CredentialDetailPane: View {
                 Spacer()
 
                 Button { onEdit(item) } label: {
-                    Label("编辑", systemImage: "pencil")
+                    Label(isOpeningEditor ? "读取中" : "编辑", systemImage: "pencil")
                 }
                 .buttonStyle(.tactilePlain)
+                .disabled(isOpeningEditor)
 
                 Button(role: .destructive) {
                     isDeleteConfirmationPresented = true
@@ -816,12 +836,12 @@ struct CredentialDetailPane: View {
             CredentialSecretSection(
                 item: item,
                 secret: revealedSecret,
+                isRevealing: isRevealingSecret,
                 breachCheckSummary: breachCheckSummary,
                 isCheckingBreachRisk: isCheckingBreachRisk,
                 breachCheckMessage: breachCheckMessage,
                 onReveal: {
-                    revealedSecret = onReveal(item)
-                    resetBreachCheck()
+                    revealSecret(for: item)
                 },
                 onHide: {
                     revealedSecret = nil
@@ -874,6 +894,24 @@ struct CredentialDetailPane: View {
         breachCheckCredentialID = nil
     }
 
+    private func revealSecret(for item: CredentialItem) {
+        guard !isRevealingSecret else { return }
+        isRevealingSecret = true
+        let revealingCredentialID = item.id
+        Task {
+            let secret = await onReveal(item)
+            await MainActor.run {
+                guard revealingCredentialID == self.item?.id else {
+                    isRevealingSecret = false
+                    return
+                }
+                revealedSecret = secret
+                resetBreachCheck()
+                isRevealingSecret = false
+            }
+        }
+    }
+
     private func checkBreachRisk(for item: CredentialItem) {
         guard let secret = revealedSecret else {
             breachCheckMessage = "查看敏感字段后再检查"
@@ -921,6 +959,7 @@ struct CredentialDetailPane: View {
 struct CredentialSecretSection: View {
     let item: CredentialItem
     let secret: CredentialSecretPayload?
+    let isRevealing: Bool
     let breachCheckSummary: CredentialBreachCheckSummary?
     let isCheckingBreachRisk: Bool
     let breachCheckMessage: String?
@@ -938,9 +977,10 @@ struct CredentialSecretSection: View {
                 Spacer()
                 if secret == nil {
                     Button(action: onReveal) {
-                        Label("查看", systemImage: "eye")
+                        Label(isRevealing ? "读取中" : "查看", systemImage: "eye")
                     }
                     .buttonStyle(.tactilePlain)
+                    .disabled(isRevealing)
                 } else {
                     Button(action: onCheckRisk) {
                         Label(isCheckingBreachRisk ? "检查中" : "检查风险", systemImage: "shield.lefthalf.filled")

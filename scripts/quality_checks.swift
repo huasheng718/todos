@@ -36,6 +36,7 @@ struct DailyTodosChecks {
                 try checkHandbookCreateDraftTracksCreatedScope()
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
+                try checkSystemInputSourcePolicy()
                 try checkTodoStore()
                 try checkHandbookStore()
                 try checkCredentialBreachChecker()
@@ -63,6 +64,55 @@ func sourceFile(_ relativePath: String) throws -> String {
     return try String(contentsOf: url, encoding: .utf8)
 }
 
+func checkSystemInputSourcePolicy() throws {
+    let forbiddenInputSourceAPIs = [
+        "NSTextInputContext.current",
+        "selectedKeyboardInputSource",
+        "keyboardInputSource",
+        "TISSelectInputSource",
+        "activateKeyboardLayout",
+        "kTISPropertyInputSourceID",
+        "com.apple.keylayout",
+        "com.apple.inputmethod"
+    ]
+    let sourceFiles = [
+        "Sources/DailyTodos/ContentView.swift",
+        "Sources/DailyTodos/WorkspaceShellViews.swift",
+        "Sources/DailyTodos/TodoCaptureViews.swift",
+        "Sources/DailyTodos/HandbookEditableCanvas.swift",
+        "Sources/DailyTodos/CredentialViews.swift",
+        "Sources/DailyTodos/SettingsViews.swift"
+    ]
+
+    for relativePath in sourceFiles {
+        let source = try sourceFile(relativePath)
+        for forbiddenAPI in forbiddenInputSourceAPIs {
+            try expect(
+                !source.contains(forbiddenAPI),
+                "\(relativePath) 不应调用 \(forbiddenAPI)，输入法必须继承 macOS 当前系统配置"
+            )
+        }
+    }
+
+    let workspaceShellSource = try sourceFile("Sources/DailyTodos/WorkspaceShellViews.swift")
+    guard let topBarStart = workspaceShellSource.range(of: "struct GlobalTopBar")?.lowerBound,
+          let moduleRailStart = workspaceShellSource.range(of: "struct ModuleRail")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 GlobalTopBar")
+    }
+    let globalTopBarSource = String(workspaceShellSource[topBarStart..<moduleRailStart])
+    try expect(
+        !globalTopBarSource.contains(".frame(width: 1, height: 1)") &&
+            !globalTopBarSource.contains(".opacity(0.01)"),
+        "全局搜索不能保留 1x1/透明 TextField 常驻焦点树，避免影响系统输入法上下文"
+    )
+    try expect(
+        globalTopBarSource.contains("if isSearchPresented {") &&
+            globalTopBarSource.contains("TextField(\"\", text: $searchText)"),
+        "全局搜索输入框应仅在搜索打开时创建，避免隐藏 TextField 常驻抢占输入法上下文"
+    )
+}
+
 func checkP0PerformanceGuardrails() throws {
     let credentialStoreSource = try sourceFile("Sources/DailyTodos/CredentialStore.swift")
     try expect(
@@ -72,6 +122,56 @@ func checkP0PerformanceGuardrails() throws {
     try expect(
         credentialStoreSource.contains("Task.detached(priority: .userInitiated)"),
         "凭证加解密必须放到 Task.detached，不能在 MainActor 上执行 PBKDF2/AES 重活"
+    )
+    guard let credentialLoadStart = credentialStoreSource.range(of: "func load()")?.lowerBound,
+          let credentialInitializeStart = credentialStoreSource.range(of: "func initialize(")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialStore.load")
+    }
+    let credentialLoadSource = String(credentialStoreSource[credentialLoadStart..<credentialInitializeStart])
+    try expect(
+        !credentialLoadSource.contains("CredentialCrypto.unlockLocal"),
+        "CredentialStore.load 不能在 MainActor 同步执行本地解锁 PBKDF2，应改为后台解锁"
+    )
+    try expect(
+        credentialLoadSource.contains("guard !hasLoaded") || credentialLoadSource.contains("isLoading"),
+        "CredentialStore.load 应具备幂等/加载中保护，避免页面进入时重复加载"
+    )
+    try expect(
+        credentialLoadSource.contains("if isUnlocked") && credentialLoadSource.contains("force"),
+        "CredentialStore.load 应显式保护已解锁状态，刷新时只重读列表，不能回退为 locked"
+    )
+    guard let credentialFilterStart = credentialStoreSource.range(of: "func credentials(matching query: String, type: CredentialType?)")?.lowerBound,
+          let credentialAddStart = credentialStoreSource.range(of: "@discardableResult")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialStore.credentials(matching:type:)")
+    }
+    let credentialFilterSource = String(credentialStoreSource[credentialFilterStart..<credentialAddStart])
+    try expect(
+        !credentialFilterSource.contains("ensureAutoLock()"),
+        "CredentialStore.credentials(matching:type:) 是 SwiftUI body 路径，不能触发 ensureAutoLock/lock 等状态修改"
+    )
+    guard let secretPayloadStart = credentialStoreSource.range(of: "func secretPayload(for item: CredentialItem")?.lowerBound,
+          let exportBackupStart = credentialStoreSource.range(of: "func exportBackup(")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialStore.secretPayload")
+    }
+    let secretPayloadSource = String(credentialStoreSource[secretPayloadStart..<exportBackupStart])
+    try expect(
+        secretPayloadSource.contains("await Self.openSecretPayload") || secretPayloadSource.contains("openSecretPayload("),
+        "CredentialStore.secretPayload 应把 AES 解密移到后台 helper，避免查看/编辑/复制凭证时卡住主线程"
+    )
+
+    let credentialViewsSource = try sourceFile("Sources/DailyTodos/CredentialViews.swift")
+    guard let credentialSidebarStart = credentialViewsSource.range(of: "struct CredentialContextSidebar")?.lowerBound,
+          let credentialWorkspaceStart = credentialViewsSource.range(of: "struct CredentialWorkspaceContent")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 CredentialContextSidebar")
+    }
+    let credentialSidebarSource = String(credentialViewsSource[credentialSidebarStart..<credentialWorkspaceStart])
+    try expect(
+        !credentialSidebarSource.contains("credentialStore.load()"),
+        "CredentialContextSidebar 不应在 onAppear 重复加载凭证库，加载入口应集中在模块内容或应用启动"
     )
 
     let todoStoreSource = try sourceFile("Sources/DailyTodos/TodoStore.swift")
@@ -1012,7 +1112,7 @@ func checkCredentialStore() async throws {
     try FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
     let store = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
-    store.load()
+    await store.load()
     try expect(store.status == .uninitialized, "首次加载凭证库应处于未初始化状态")
 
     await store.initialize(masterPassword: "correct horse battery staple")
@@ -1034,7 +1134,7 @@ func checkCredentialStore() async throws {
     try expect(store.credentials(matching: "github", type: nil).count == 1, "凭证应支持标题搜索")
     try expect(store.credentials(matching: "sample-sensitive-token", type: nil).isEmpty, "敏感字段不应进入普通搜索")
 
-    guard let secret = store.secretPayload(for: item, auditAction: "测试查看") else {
+    guard let secret = await store.secretPayload(for: item, auditAction: "测试查看") else {
         throw CheckFailure.failed("解密凭证失败")
     }
     try expect(secret.secretValue == "sample-sensitive-token", "正确主密码应解密敏感字段")
@@ -1055,13 +1155,16 @@ func checkCredentialStore() async throws {
     try expect(store.status == .locked, "错误主密码不应解锁凭证库")
     await store.unlock(masterPassword: "correct horse battery staple")
     try expect(store.status == .unlocked, "正确主密码应重新解锁凭证库")
+    await store.load()
+    try expect(store.status == .unlocked, "已解锁凭证库重复 load 不应回退为 locked")
+    try expect(store.credentials.count == 1, "已解锁凭证库重复 load 不应清空内存列表")
 
     await store.setMasterPasswordRequired(false)
     try expect(!store.requiresMasterPassword, "应支持关闭主密码验证")
     store.lock()
     try expect(store.status == .unlocked, "关闭主密码后手动锁定不应要求验证")
     let noPasswordStore = CredentialStore(storageURL: databaseURL, autoLockInterval: 60)
-    noPasswordStore.load()
+    await noPasswordStore.load()
     try expect(noPasswordStore.status == .unlocked, "关闭主密码后重新加载应自动解锁")
     try expect(noPasswordStore.credentials.count == 1, "关闭主密码后凭证仍应可加载")
     await noPasswordStore.setMasterPasswordRequired(true, newMasterPassword: "new master password")
@@ -1077,12 +1180,12 @@ func checkCredentialStore() async throws {
         .appendingPathComponent("credentials.sqlite")
     try FileManager.default.createDirectory(at: importedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     let importedStore = CredentialStore(storageURL: importedURL, autoLockInterval: 60)
-    importedStore.load()
+    await importedStore.load()
     importedStore.importBackup(backup, password: "backup password", replaceExisting: true)
     await importedStore.unlock(masterPassword: "correct horse battery staple")
     try expect(importedStore.credentials.count == 1, "导入备份后应恢复凭证")
     guard let importedItem = importedStore.credentials.first,
-          let importedSecret = importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
+          let importedSecret = await importedStore.secretPayload(for: importedItem, auditAction: "测试查看") else {
         throw CheckFailure.failed("导入备份后无法解密凭证")
     }
     try expect(importedSecret.secretValue == "sample-sensitive-token", "导入备份后敏感字段应保持一致")

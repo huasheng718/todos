@@ -324,7 +324,9 @@ struct ContentView: View {
                 searchText: debouncedHandbookSearchText
             )
         case "credentials":
-            credentialStore.load()
+            Task {
+                await credentialStore.reload()
+            }
         case "settings":
             updateController.checkForUpdates()
         default:
