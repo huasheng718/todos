@@ -58,6 +58,10 @@ struct HandbookAttachmentStrip: View {
     }
 
     private func open(_ attachment: HandbookAttachment) {
+        guard !attachment.path.isEmpty,
+              FileManager.default.fileExists(atPath: attachment.path) else {
+            return
+        }
         let url = URL(fileURLWithPath: attachment.path)
         NSWorkspace.shared.open(url)
     }

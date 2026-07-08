@@ -33,6 +33,7 @@ struct DailyTodosChecks {
                 try checkHandbookCreateDraftTracksCreatedScope()
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
+                try checkHandbookDetailHandlesImagePaste()
                 try checkHandbookAttachmentStorage()
                 try checkTodoStore()
                 try checkCredentialBreachChecker()
@@ -665,6 +666,30 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
     try expect(
         source.contains("if folder != item.folder { folder = item.folder }"),
         "详情草稿应吸收同 ID 外部目录变化，避免自动保存写回旧目录"
+    )
+}
+
+func checkHandbookDetailHandlesImagePaste() throws {
+    let sourceURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("../Sources/DailyTodos/HandbookDetailPanel.swift")
+        .standardizedFileURL
+    let source = try String(contentsOf: sourceURL, encoding: .utf8)
+    try expect(
+        source.contains(".onPasteCommand(of: [.image])"),
+        "手记详情应在正文焦点内接管图片粘贴命令"
+    )
+    try expect(
+        source.contains("canvasFocus == .body"),
+        "图片粘贴必须限制在手记正文焦点中"
+    )
+    try expect(
+        source.contains("HandbookAttachmentStorage.appendingMarkdownImage"),
+        "图片粘贴应同步写入正文 Markdown 图片引用"
+    )
+    try expect(
+        source.contains("HandbookAttachmentStrip(attachments: $attachments, isEditing: true)"),
+        "手记详情应显示可编辑附件区"
     )
 }
 
