@@ -20,6 +20,7 @@ swiftc -parse-as-library \
   Sources/DailyTodos/AppUpdateDownloadProgress.swift \
   Sources/DailyTodos/HandbookEditorPlaceholderPolicy.swift \
   Sources/DailyTodos/HandbookEditorSyncPolicy.swift \
+  Sources/DailyTodos/HandbookAttachmentStorage.swift \
   Sources/DailyTodos/CredentialModels.swift \
   Sources/DailyTodos/CredentialCrypto.swift \
   Sources/DailyTodos/CredentialBreachChecker.swift \

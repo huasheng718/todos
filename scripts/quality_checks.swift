@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum CheckFailure: Error, CustomStringConvertible {
@@ -32,6 +33,7 @@ struct DailyTodosChecks {
                 try checkHandbookCreateDraftTracksCreatedScope()
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
+                try checkHandbookAttachmentStorage()
                 try checkTodoStore()
                 try checkCredentialBreachChecker()
                 try checkCredentialStore()
@@ -120,6 +122,45 @@ func checkHandbookEditorSyncPolicy() throws {
     try expect(
         !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
         "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
+    )
+}
+
+@MainActor
+func checkHandbookAttachmentStorage() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("DailyTodosAttachmentChecks-\(UUID().uuidString)", isDirectory: true)
+    let storage = HandbookAttachmentStorage(rootDirectory: root)
+    let noteID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+
+    let image = NSImage(size: NSSize(width: 8, height: 8))
+    image.lockFocus()
+    NSColor.systemTeal.setFill()
+    NSRect(x: 0, y: 0, width: 8, height: 8).fill()
+    image.unlockFocus()
+
+    let attachment = try storage.savePastedImage(
+        image,
+        noteID: noteID,
+        now: Date(timeIntervalSince1970: 1_777_777_777)
+    )
+
+    try expect(attachment.kind == .image, "粘贴图片应保存为 image 附件")
+    try expect(attachment.name.hasSuffix(".png"), "粘贴图片应规范化保存为 PNG")
+    try expect(attachment.path.contains(noteID.uuidString), "粘贴图片应按手记 ID 分目录保存")
+    try expect(FileManager.default.fileExists(atPath: attachment.path), "粘贴图片应写入磁盘")
+    try expect(
+        HandbookAttachmentStorage.markdownImageLine(for: attachment).contains("![\(attachment.name)](file://"),
+        "图片附件应生成 Markdown 图片引用"
+    )
+    try expect(
+        HandbookAttachmentStorage.appendingMarkdownImage(to: "", attachment: attachment)
+            == HandbookAttachmentStorage.markdownImageLine(for: attachment),
+        "空正文粘贴图片时只插入图片引用"
+    )
+    try expect(
+        HandbookAttachmentStorage.appendingMarkdownImage(to: "会议结论", attachment: attachment)
+            == "会议结论\n\n\(HandbookAttachmentStorage.markdownImageLine(for: attachment))",
+        "已有正文粘贴图片时应以空行追加图片引用"
     )
 }
 
