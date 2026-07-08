@@ -224,15 +224,17 @@ struct HandbookDetailPanel: View {
 
     private func handleImagePaste(_ providers: [NSItemProvider], for item: HandbookItem) {
         guard canvasFocus == .body else { return }
-        guard let provider = providers.first(where: { $0.canLoadObject(ofClass: NSImage.self) }) else { return }
+        guard let provider = providers.first(where: { imageTypeIdentifier(in: $0) != nil }),
+              let typeIdentifier = imageTypeIdentifier(in: provider) else { return }
 
-        provider.loadObject(ofClass: NSImage.self) { object, error in
+        provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
+            let errorDescription = error?.localizedDescription
             Task { @MainActor in
-                if let error {
-                    pasteErrorMessage = "保存图片失败：\(error.localizedDescription)"
+                if let errorDescription {
+                    pasteErrorMessage = "保存图片失败：\(errorDescription)"
                     return
                 }
-                guard let image = object as? NSImage else {
+                guard let data, let image = NSImage(data: data) else {
                     pasteErrorMessage = "无法读取剪贴板图片"
                     return
                 }
@@ -249,6 +251,23 @@ struct HandbookDetailPanel: View {
                     pasteErrorMessage = "保存图片失败：\(error.localizedDescription)"
                 }
             }
+        }
+    }
+
+    private func imageTypeIdentifier(in provider: NSItemProvider) -> String? {
+        let preferredTypeIdentifiers = [
+            UTType.png.identifier,
+            UTType.jpeg.identifier,
+            UTType.tiff.identifier
+        ]
+        if let preferred = preferredTypeIdentifiers.first(where: {
+            provider.hasItemConformingToTypeIdentifier($0)
+        }) {
+            return preferred
+        }
+
+        return provider.registeredTypeIdentifiers.first { identifier in
+            UTType(identifier)?.conforms(to: .image) == true
         }
     }
 
