@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct HandbookDetailPanel: View {
     let item: HandbookItem?
@@ -17,7 +19,10 @@ struct HandbookDetailPanel: View {
     @State private var isSyncingDraft = false
     @State private var bodyMetricsTask: Task<Void, Never>?
     @State private var autoSaveTask: Task<Void, Never>?
+    @State private var pasteErrorMessage: String?
     @FocusState private var canvasFocus: HandbookCanvasFocus?
+
+    private let attachmentStorage = HandbookAttachmentStorage()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -92,9 +97,26 @@ struct HandbookDetailPanel: View {
                 )
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
+                .onPasteCommand(of: [.image]) { providers in
+                    handleImagePaste(providers, for: item)
+                }
+
+                if let pasteErrorMessage {
+                    Text(pasteErrorMessage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.workspaceTokens.danger)
+                        .frame(maxWidth: 880, alignment: .leading)
+                        .padding(.bottom, 10)
+                }
 
                 if !outline.isEmpty {
                     HandbookOutlineStrip(entries: outline)
+                        .frame(maxWidth: 880, alignment: .leading)
+                        .padding(.bottom, 16)
+                }
+
+                if !attachments.isEmpty {
+                    HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
                         .frame(maxWidth: 880, alignment: .leading)
                         .padding(.bottom, 16)
                 }
@@ -183,6 +205,7 @@ struct HandbookDetailPanel: View {
                 if !preservesLocalTextEdits, title != item.title { title = item.title }
                 if !preservesLocalTextEdits, bodyText != item.body { bodyText = item.body }
                 if attachments != item.attachments { attachments = item.attachments }
+                pasteErrorMessage = nil
             }
         }
         scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyText : item.body)
@@ -197,6 +220,55 @@ struct HandbookDetailPanel: View {
         scheduleBodyMetricsUpdate(for: newValue)
         isDirty = computeIsDirty(comparedTo: item)
         scheduleAutoSave(for: item)
+    }
+
+    private func handleImagePaste(_ providers: [NSItemProvider], for item: HandbookItem) {
+        guard canvasFocus == .body else { return }
+        guard let provider = providers.first(where: { imageTypeIdentifier(in: $0) != nil }),
+              let typeIdentifier = imageTypeIdentifier(in: provider) else { return }
+
+        provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
+            let errorDescription = error?.localizedDescription
+            Task { @MainActor in
+                if let errorDescription {
+                    pasteErrorMessage = "保存图片失败：\(errorDescription)"
+                    return
+                }
+                guard let data, let image = NSImage(data: data) else {
+                    pasteErrorMessage = "无法读取剪贴板图片"
+                    return
+                }
+                do {
+                    let attachment = try attachmentStorage.savePastedImage(image, noteID: item.id)
+                    attachments.append(attachment)
+                    bodyText = HandbookAttachmentStorage.appendingMarkdownImage(
+                        to: bodyText,
+                        attachment: attachment
+                    )
+                    pasteErrorMessage = nil
+                    canvasFocus = .body
+                } catch {
+                    pasteErrorMessage = "保存图片失败：\(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func imageTypeIdentifier(in provider: NSItemProvider) -> String? {
+        let preferredTypeIdentifiers = [
+            UTType.png.identifier,
+            UTType.jpeg.identifier,
+            UTType.tiff.identifier
+        ]
+        if let preferred = preferredTypeIdentifiers.first(where: {
+            provider.hasItemConformingToTypeIdentifier($0)
+        }) {
+            return preferred
+        }
+
+        return provider.registeredTypeIdentifiers.first { identifier in
+            UTType(identifier)?.conforms(to: .image) == true
+        }
     }
 
     private func scheduleAutoSave(for item: HandbookItem) {

@@ -1,6 +1,6 @@
 {
-  "version": "1.2.25",
-  "build": 54,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.25/AntOrder-1.2.25.pkg",
-  "releaseNotes": "修复凭证页加载卡顿和状态抖动；优化敏感字段异步读取；修复隐藏全局搜索输入框影响系统输入法配置的问题。"
+  "version": "1.2.26",
+  "build": 55,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.26/AntOrder-1.2.26.pkg",
+  "releaseNotes": "手记支持直接粘贴图片，自动保存为本地附件，并在正文追加 Markdown 图片引用。"
 }
