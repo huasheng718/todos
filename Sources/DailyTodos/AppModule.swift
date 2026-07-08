@@ -31,26 +31,30 @@ final class AppModuleRegistry: ObservableObject {
             TodoAppModule(),
             HandbookAppModule(),
             CredentialsAppModule(),
-            SettingsAppModule(),
-            AccountAppModule()
+            SettingsAppModule()
         ]
 
         // 从 UserDefaults 读取已安装模块
         let savedIDs = UserDefaults.standard.stringArray(forKey: Self.installedModulesKey) ?? []
         let defaultIDs = modules.filter { $0.isDefault }.map { $0.id }
+        let registeredIDs = Set(modules.map(\.id))
         let installed: Set<String>
         if savedIDs.isEmpty {
             // 首次启动，安装所有默认模块
             installed = Set(defaultIDs)
         } else {
-            installed = Set(savedIDs).union(defaultIDs)
+            installed = Set(savedIDs).intersection(registeredIDs).union(defaultIDs)
         }
 
         registeredModules = modules
         installedModuleIDs = installed
 
+        let requestedInitialModuleID = ProcessInfo.processInfo.environment["DAILY_TODOS_UIQA_MODULE"]
+
         // 激活第一个按注册顺序安装的模块，避免 Set.first 带来的启动页随机性。
-        activeModuleID = modules.first(where: { installed.contains($0.id) })?.id ?? modules.first!.id
+        activeModuleID = modules.first(where: { $0.id == requestedInitialModuleID && installed.contains($0.id) })?.id
+            ?? modules.first(where: { installed.contains($0.id) })?.id
+            ?? modules.first!.id
 
         if !savedIDs.isEmpty, installed != Set(savedIDs) {
             persistInstalledModules(installed)

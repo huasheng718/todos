@@ -1,7 +1,25 @@
 import Foundation
 
+enum CachedDateFormatter {
+    private static let lock = NSLock()
+    private static let fullFollowUpFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = .current
+        formatter.locale = .autoupdatingCurrent
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    static func fullFollowUpDate(_ date: Date) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return fullFollowUpFormatter.string(from: date)
+    }
+}
+
 func formatFullFollowUpDate(_ date: Date, calendar: Calendar = .current) -> String {
-    let dateText = date.formatted(.dateTime.year().month().day())
+    let dateText = CachedDateFormatter.fullFollowUpDate(date)
     let suffix = timeSuffix(for: date, calendar: calendar)
     return suffix.isEmpty ? dateText : "\(dateText) \(suffix)"
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct TodoItem: Identifiable, Codable, Equatable {
+struct TodoItem: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var title: String
     var notes: String
@@ -65,7 +65,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     }
 }
 
-enum TodoProgress: String, Codable, CaseIterable, Identifiable, Equatable {
+enum TodoProgress: String, Codable, CaseIterable, Identifiable, Equatable, Sendable {
     case pending
     case inProgress
     case waiting
@@ -107,7 +107,7 @@ enum TodoProgress: String, Codable, CaseIterable, Identifiable, Equatable {
     }
 }
 
-enum TodoPriority: String, Codable, CaseIterable, Identifiable, Equatable {
+enum TodoPriority: String, Codable, CaseIterable, Identifiable, Equatable, Sendable {
     case high
     case medium
     case low

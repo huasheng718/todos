@@ -9,7 +9,9 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
     let globalSearchResults: [GlobalSearchModule: [GlobalSearchResult]]
     let globalSearchContext: GlobalCommandSearchContext
     let hasUpdate: Bool
-    let onOpenSettings: () -> Void
+    let onRefreshWorkspace: () -> Void
+    let onOpenAccount: () -> Void
+    @Binding var isPrimarySidebarVisible: Bool
     let onActivateModule: (String) -> Void
     let onGlobalSearchFocused: () -> Void
     let onGlobalSearchDismiss: () -> Void
@@ -18,44 +20,55 @@ struct WorkspaceShell<ContextSidebar: View, Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 0) {
-            GlobalTopBar(
-                workspaceName: "个人空间",
-                searchText: $globalSearchText,
-                isSearchPresented: $isGlobalSearchPresented,
-                isSearchFocused: isGlobalSearchFocused,
-                groupedResults: globalSearchResults,
-                searchContext: globalSearchContext,
-                hasUpdate: hasUpdate,
-                onOpenSettings: onOpenSettings,
-                onSearchFocused: onGlobalSearchFocused,
-                onSearchDismiss: onGlobalSearchDismiss,
-                onSelectResult: onSelectGlobalSearchResult
-            )
-            .frame(height: 52)
-
-            Divider()
-                .overlay(AppTheme.hairline)
-
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
+            if isPrimarySidebarVisible {
                 ModuleRail(
                     activeModuleID: $activeModuleID,
                     installedModules: installedModules,
                     onActivateModule: onActivateModule
                 )
+                .transition(.move(edge: .leading).combined(with: .opacity))
+
+                Divider()
+                    .overlay(AppTheme.hairline)
+                    .transition(.opacity)
+            }
+
+            VStack(spacing: 0) {
+                GlobalTopBar(
+                    workspaceName: "个人空间",
+                    searchText: $globalSearchText,
+                    isSearchPresented: $isGlobalSearchPresented,
+                    isSearchFocused: isGlobalSearchFocused,
+                    groupedResults: globalSearchResults,
+                    searchContext: globalSearchContext,
+                    hasUpdate: hasUpdate,
+                    onRefreshWorkspace: onRefreshWorkspace,
+                    onOpenAccount: onOpenAccount,
+                    isPrimarySidebarVisible: $isPrimarySidebarVisible,
+                    onSearchFocused: onGlobalSearchFocused,
+                    onSearchDismiss: onGlobalSearchDismiss,
+                    onSelectResult: onSelectGlobalSearchResult
+                )
+                .frame(height: 34)
+                .zIndex(isGlobalSearchPresented ? 100 : 0)
 
                 Divider()
                     .overlay(AppTheme.hairline)
 
-                contextSidebar()
+                HStack(spacing: 0) {
+                    contextSidebar()
 
-                Divider()
-                    .overlay(AppTheme.hairline.opacity(0.82))
+                    Divider()
+                        .overlay(AppTheme.hairline.opacity(0.82))
 
-                content()
+                    content()
+                }
             }
         }
+        .animation(AppMotion.reveal, value: isPrimarySidebarVisible)
         .background(AppTheme.workspaceTokens.canvas.ignoresSafeArea())
+        .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
         .font(.system(size: 13, weight: .regular, design: .default))
         .overlay {
@@ -80,7 +93,9 @@ struct GlobalTopBar: View {
     let groupedResults: [GlobalSearchModule: [GlobalSearchResult]]
     let searchContext: GlobalCommandSearchContext
     let hasUpdate: Bool
-    let onOpenSettings: () -> Void
+    let onRefreshWorkspace: () -> Void
+    let onOpenAccount: () -> Void
+    @Binding var isPrimarySidebarVisible: Bool
     let onSearchFocused: () -> Void
     let onSearchDismiss: () -> Void
     let onSelectResult: (GlobalSearchResult) -> Void
@@ -91,49 +106,59 @@ struct GlobalTopBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: 9) {
-                AppLogoImage()
-                    .frame(width: 30, height: 30)
-                Text("蚁序")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
-                Text(workspaceName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppTheme.workspaceTokens.textMuted)
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                WorkspaceIconButton(
+                    systemName: isPrimarySidebarVisible ? "sidebar.leading" : "sidebar.left",
+                    title: isPrimarySidebarVisible ? "隐藏模块侧栏" : "显示模块侧栏",
+                    action: togglePrimarySidebar
+                )
+
+                WorkspaceIconButton(
+                    systemName: hasUpdate ? "arrow.down.circle.fill" : "arrow.triangle.2.circlepath",
+                    title: hasUpdate ? "有可用更新" : "刷新当前模块",
+                    action: onRefreshWorkspace
+                )
+                .overlay(alignment: .topTrailing) {
+                    if hasUpdate {
+                        UpdateDot(size: 7)
+                            .offset(x: -1, y: 2)
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                }
             }
-            .frame(width: 220, alignment: .leading)
 
             ZStack(alignment: .topLeading) {
-                WorkspaceSearchField(
-                    text: $searchText,
-                    placeholder: "搜索蚁序",
-                    shortcutHint: "⌘K",
-                    isFocused: isSearchFocused
-                )
-                .onChange(of: isSearchFocused.wrappedValue) { _, focused in
-                    if focused {
-                        isSearchPresented = true
-                        onSearchFocused()
-                        syncSelectedSearchResult()
-                    }
-                }
-                .onChange(of: searchText) { _, newValue in
-                    if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        isSearchPresented = true
-                        onSearchFocused()
-                    }
-                    syncSelectedSearchResult()
-                }
-                .onExitCommand {
-                    searchText = ""
-                    isSearchPresented = false
-                    isSearchFocused.wrappedValue = false
-                    onSearchDismiss()
-                    selectedGlobalSearchResultID = nil
-                }
-
                 if isSearchPresented {
+                    TextField("", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .focused(isSearchFocused)
+                        .frame(width: 260, height: 28)
+                        .padding(.horizontal, 10)
+                        .background(AppTheme.workspaceTokens.contentSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(AppTheme.workspaceTokens.hairline)
+                        )
+                        .accessibilityLabel("搜索蚁序")
+                        .onAppear {
+                            isSearchFocused.wrappedValue = true
+                            onSearchFocused()
+                            syncSelectedSearchResult()
+                        }
+                        .onChange(of: isSearchFocused.wrappedValue) { _, focused in
+                            if focused {
+                                onSearchFocused()
+                                syncSelectedSearchResult()
+                            }
+                        }
+                        .onChange(of: searchText) { _, _ in
+                            syncSelectedSearchResult()
+                        }
+                        .onExitCommand {
+                            closeSearch()
+                        }
+
                     GlobalCommandSearchPanel(
                         query: searchText,
                         groupedResults: groupedResults,
@@ -146,11 +171,11 @@ struct GlobalTopBar: View {
                             handleSelectedResult(result)
                         }
                     )
-                    .offset(y: 38)
+                    .offset(y: 28)
                     .zIndex(20)
                 }
             }
-            .frame(maxWidth: 520)
+            .frame(width: isSearchPresented ? 260 : 1, height: isSearchPresented ? 28 : 1)
             .onMoveCommand(perform: handleMoveCommand)
             .onSubmit(handleSubmit)
             .onChange(of: groupedResults) { _, _ in
@@ -164,29 +189,26 @@ struct GlobalTopBar: View {
                 }
             }
 
-            Spacer(minLength: 16)
+            Spacer(minLength: 10)
 
-            ZStack(alignment: .topTrailing) {
-                WorkspaceIconButton(
-                    systemName: hasUpdate ? "arrow.down.circle.fill" : "arrow.triangle.2.circlepath",
-                    title: "更新",
-                    action: onOpenSettings
-                )
-
-                if hasUpdate {
-                    UpdateDot(size: 7)
-                        .offset(x: -1, y: 2)
-                        .transition(.scale.combined(with: .opacity))
-                }
+            Button(action: onOpenAccount) {
+                Circle()
+                    .fill(AppTheme.accentSoft)
+                    .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
+                    .frame(width: 28, height: 28)
             }
-            WorkspaceIconButton(systemName: "gearshape", title: "设置", action: onOpenSettings)
-            Circle()
-                .fill(AppTheme.accentSoft)
-                .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
-                .frame(width: 30, height: 30)
+            .buttonStyle(.plain)
+            .help("账户")
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, isPrimarySidebarVisible ? 14 : 92)
+        .padding(.trailing, 14)
         .background(AppTheme.workspaceTokens.topBar)
+    }
+
+    private func togglePrimarySidebar() {
+        withAnimation(AppMotion.reveal) {
+            isPrimarySidebarVisible.toggle()
+        }
     }
 
     private func handleMoveCommand(_ direction: MoveCommandDirection) {
@@ -216,9 +238,14 @@ struct GlobalTopBar: View {
 
     private func handleSelectedResult(_ result: GlobalSearchResult) {
         onSelectResult(result)
+        closeSearch()
+    }
+
+    private func closeSearch() {
         searchText = ""
         isSearchPresented = false
         isSearchFocused.wrappedValue = false
+        onSearchDismiss()
         selectedGlobalSearchResultID = nil
     }
 
@@ -248,7 +275,24 @@ struct ModuleRail: View {
     let onActivateModule: (String) -> Void
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 9) {
+                AppLogoImage(size: 26, shadowRadius: 2)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("蚁序")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
+
+                    Text("个人空间")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.workspaceTokens.textMuted)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+
             ForEach(installedModules, id: \.id) { module in
                 ModuleRailButton(module: module, isSelected: activeModuleID == module.id) {
                     PerformanceMonitor.event("ModuleRail.activate", detail: module.id)
@@ -257,7 +301,8 @@ struct ModuleRail: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.top, 12)
+        .padding(.top, 32)
+        .padding(.horizontal, 9)
         .frame(width: primarySidebarWidth)
         .frame(maxHeight: .infinity)
         .background(AppTheme.workspaceTokens.moduleRail)
@@ -272,21 +317,22 @@ struct ModuleRailButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            HStack(spacing: 10) {
                 Image(systemName: module.icon)
-                    .font(.system(size: 17, weight: .bold))
-                    .frame(width: 34, height: 30)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 18, height: 20)
+
                 Text(module.displayName)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 13, weight: isSelected ? .bold : .semibold))
                     .lineLimit(1)
+
+                Spacer(minLength: 0)
             }
             .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textSecondary)
-            .frame(width: primarySidebarWidth - 12, height: 48)
+            .padding(.horizontal, 9)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? AppTheme.workspaceTokens.accentSoft : (isHovered ? AppTheme.adaptiveWhite(0.52) : Color.clear))
-            )
+            .background(rowFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(module.description)
@@ -294,21 +340,58 @@ struct ModuleRailButton: View {
         .animation(AppMotion.hover, value: isHovered)
         .animation(AppMotion.smooth, value: isSelected)
     }
+
+    private var rowFill: Color {
+        if isSelected {
+            return AppTheme.workspaceTokens.accentSoft
+        }
+        if isHovered {
+            return AppTheme.adaptiveWhite(0.50)
+        }
+        return Color.clear
+    }
+}
+
+enum WorkspaceChromeMetrics {
+    static let headerHeight: CGFloat = 46
 }
 
 struct WorkspaceContentContainer<Header: View, Toolbar: View, BodyContent: View>: View {
+    let headerHeight: CGFloat
+    let showsHeader: Bool
+    let showsToolbar: Bool
     @ViewBuilder let header: () -> Header
     @ViewBuilder let toolbar: () -> Toolbar
     @ViewBuilder let bodyContent: () -> BodyContent
 
+    init(
+        headerHeight: CGFloat = WorkspaceChromeMetrics.headerHeight,
+        showsHeader: Bool = true,
+        showsToolbar: Bool = true,
+        @ViewBuilder header: @escaping () -> Header,
+        @ViewBuilder toolbar: @escaping () -> Toolbar,
+        @ViewBuilder bodyContent: @escaping () -> BodyContent
+    ) {
+        self.headerHeight = headerHeight
+        self.showsHeader = showsHeader
+        self.showsToolbar = showsToolbar
+        self.header = header
+        self.toolbar = toolbar
+        self.bodyContent = bodyContent
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            header()
-                .frame(height: 56)
-            Divider().overlay(AppTheme.hairline)
-            toolbar()
-                .frame(minHeight: 44)
-            Divider().overlay(AppTheme.hairline.opacity(0.72))
+            if showsHeader {
+                header()
+                    .frame(height: headerHeight)
+                Divider().overlay(AppTheme.hairline)
+            }
+            if showsToolbar {
+                toolbar()
+                    .frame(height: WorkspaceChromeMetrics.headerHeight)
+                Divider().overlay(AppTheme.hairline.opacity(0.72))
+            }
             bodyContent()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -327,7 +410,7 @@ struct WorkspaceContextHeader: View {
                 Text(title)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
-                .lineLimit(1)
+                    .lineLimit(1)
                 Text(subtitle)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.workspaceTokens.textMuted)
@@ -338,9 +421,9 @@ struct WorkspaceContextHeader: View {
 
             SecondarySidebarCollapseButton(isCollapsed: $isCollapsed)
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 12)
-        .frame(height: 52)
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .frame(height: WorkspaceChromeMetrics.headerHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.workspaceTokens.contextSidebar)
     }
@@ -361,20 +444,21 @@ struct WorkspaceContentHeader<Actions: View>: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                     .lineLimit(1)
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 16)
             actions()
         }
         .padding(.horizontal, 20)
-        .frame(height: 56)
+        .frame(height: WorkspaceChromeMetrics.headerHeight)
         .background(AppTheme.workspaceTokens.contentSurface)
     }
 }
@@ -388,8 +472,7 @@ struct WorkspaceLocalToolbar<Content: View>: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 7)
-        .frame(minHeight: 44)
+        .frame(height: WorkspaceChromeMetrics.headerHeight)
         .background(AppTheme.workspaceTokens.contentSurface)
     }
 }
@@ -434,7 +517,7 @@ struct WorkspaceSearchField: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 32)
+        .frame(height: 30)
         .background(
             AppTheme.adaptiveWhite(focusBinding.wrappedValue || isHovered ? 0.96 : 0.84),
             in: RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -471,7 +554,7 @@ struct WorkspaceSegmentedControl<Option: WorkspaceSegmentedOption>: View {
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(selection == option ? .white : AppTheme.workspaceTokens.textMuted)
-                    .frame(height: 30)
+                    .frame(height: 28)
                     .frame(maxWidth: .infinity)
                     .background(selectionBackground(for: option))
                     .contentShape(Rectangle())

@@ -1,6 +1,6 @@
 {
-  "version": "1.2.21",
-  "build": 50,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.21/AntOrder-1.2.21.pkg",
-  "releaseNotes": "蚁序 1.2.21 更新：统一待办、手记、凭证和设置的工作台框架，优化全局搜索、侧栏层级、内容区视觉一致性与交互响应。"
+  "version": "1.2.25",
+  "build": 54,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.25/AntOrder-1.2.25.pkg",
+  "releaseNotes": "修复凭证页加载卡顿和状态抖动；优化敏感字段异步读取；修复隐藏全局搜索输入框影响系统输入法配置的问题。"
 }

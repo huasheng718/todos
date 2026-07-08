@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum AppSettingsSection: String, CaseIterable, Identifiable {
+    case account
     case appearance
     case credentials
     case ai
@@ -11,6 +12,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .account: "账户"
         case .appearance: "外观"
         case .credentials: "凭证"
         case .ai: "AI"
@@ -21,6 +23,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .account: "空间、订阅、账单"
         case .appearance: "主题与视觉密度"
         case .credentials: "导入、备份、安全"
         case .ai: "DeepSeek 连接"
@@ -31,6 +34,7 @@ enum AppSettingsSection: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .account: "person.crop.circle"
         case .appearance: "paintpalette.fill"
         case .credentials: "key.fill"
         case .ai: "sparkles"
@@ -90,56 +94,62 @@ struct SettingsContextSidebar: View {
                 CollapsedContextRail(title: "设置", isCollapsed: $isSecondarySidebarCollapsed)
                     .frame(width: collapsedSecondarySidebarWidth)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
                     WorkspaceContextHeader(
                         title: "设置",
                         subtitle: "外观、AI、更新、安全",
                         isCollapsed: $isSecondarySidebarCollapsed
                     )
 
-                    ForEach(AppSettingsSection.allCases) { section in
-                        Button {
-                            withAnimation(AppMotion.smooth) {
-                                selectedSection = section
-                            }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: section.icon)
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
-                                    .frame(width: 16)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(section.title)
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(AppTheme.ink)
-                                    Text(section.subtitle)
-                                        .font(.system(size: 10, weight: .semibold))
+                    Divider()
+                        .overlay(AppTheme.hairline.opacity(0.72))
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(AppSettingsSection.allCases) { section in
+                            Button {
+                                withAnimation(AppMotion.smooth) {
+                                    selectedSection = section
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: section.icon)
+                                        .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
-                                        .lineLimit(1)
+                                        .frame(width: 16)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(section.title)
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(AppTheme.ink)
+                                        Text(section.subtitle)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                    if section == .ai {
+                                        Circle()
+                                            .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
+                                            .frame(width: 6, height: 6)
+                                    } else if section == .updates, updateController.hasAvailableUpdate {
+                                        Circle()
+                                            .fill(TodoPriority.high.displayColor)
+                                            .frame(width: 6, height: 6)
+                                    }
                                 }
-                                Spacer(minLength: 0)
-                                if section == .ai {
-                                    Circle()
-                                        .fill(aiSettings.canUseAI ? AppTheme.success : AppTheme.mutedInk.opacity(0.36))
-                                        .frame(width: 6, height: 6)
-                                } else if section == .updates, updateController.hasAvailableUpdate {
-                                    Circle()
-                                        .fill(TodoPriority.high.displayColor)
-                                        .frame(width: 6, height: 6)
-                                }
+                                .padding(.horizontal, 10)
+                                .frame(height: 46)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                                .background(
+                                    selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                )
                             }
+                            .buttonStyle(.plain)
                             .padding(.horizontal, 10)
-                            .frame(height: 46)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                            .background(
-                                selectedSection == section ? AppTheme.sidebarSelected : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            )
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 10)
                     }
+                    .padding(.top, 6)
 
                     Spacer(minLength: 0)
 
@@ -166,15 +176,13 @@ struct SettingsModuleView: View {
     @Binding var selectedSection: AppSettingsSection
 
     var body: some View {
-        WorkspaceContentContainer {
+        VStack(spacing: 0) {
             ContentHeader(title: selectedSection.title, subtitle: selectedSection.subtitle)
-        } toolbar: {
-            ContentToolbar {
-                Label("设置", systemImage: selectedSection.icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(AppTheme.mutedInk)
-            }
-        } bodyContent: {
+                .frame(height: WorkspaceChromeMetrics.headerHeight)
+
+            Divider()
+                .overlay(AppTheme.hairline)
+
             ScrollView {
                 SettingsContentView(
                     selectedSkinRawValue: $selectedSkinRawValue,
@@ -185,6 +193,8 @@ struct SettingsModuleView: View {
             .scrollIndicators(.visible)
             .background(AppTheme.workspaceSurface)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.workspaceTokens.contentSurface)
         .sheet(isPresented: $credentialActions.isBackupSheetPresented) {
             CredentialBackupSheet()
                 .environmentObject(credentialStore)
@@ -198,6 +208,7 @@ private struct SettingsContentView: View {
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var credentialStore: CredentialStore
     @EnvironmentObject private var credentialActions: CredentialManagementActions
+    @AppStorage(AppMotion.reduceMotionStorageKey) private var reduceMotion = false
     @Binding var selectedSkinRawValue: String
     @Binding var selectedSection: AppSettingsSection
 
@@ -220,6 +231,8 @@ private struct SettingsContentView: View {
     @ViewBuilder
     private var settingsContent: some View {
         switch selectedSection {
+        case .account:
+            accountSettings
         case .appearance:
             appearanceSettings
         case .credentials:
@@ -233,13 +246,14 @@ private struct SettingsContentView: View {
         }
     }
 
+    private var accountSettings: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AccountSettingsContent()
+        }
+    }
+
     private var appearanceSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "外观",
-                subtitle: "选择当前工作台皮肤，切换后立即应用到整套界面。"
-            )
-
             settingsPanel(title: "皮肤", icon: "paintpalette.fill") {
                 LazyVGrid(columns: skinColumns, alignment: .leading, spacing: 8) {
                     ForEach(AppSkin.allCases) { skin in
@@ -247,27 +261,31 @@ private struct SettingsContentView: View {
                     }
                 }
             }
+
+            settingsPanel(title: "动态效果", icon: "figure.walk.motion") {
+                Toggle(isOn: $reduceMotion) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("减少动态效果")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AppTheme.ink)
+                        Text("降低弹簧、缩放和列表转场强度，优先保证稳定阅读。")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.mutedInk)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
         }
     }
 
     private var aiSettingsPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "AI 配置",
-                subtitle: "统一管理 DeepSeek 连接、模型、API Key 和连接测试。"
-            )
-
             AISettingsContentView()
         }
     }
 
     private var credentialSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "凭证",
-                subtitle: "统一管理凭证导入、加密备份和主密码验证。"
-            )
-
             settingsPanel(title: "凭证库", icon: "key.fill") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center, spacing: 12) {
@@ -282,10 +300,12 @@ private struct SettingsContentView: View {
                         Toggle(isOn: Binding(
                             get: { credentialStore.requiresMasterPassword },
                             set: { value in
-                                credentialActions.updateMasterPasswordRequirement(
-                                    store: credentialStore,
-                                    required: value
-                                )
+                                Task {
+                                    await credentialActions.updateMasterPasswordRequirement(
+                                        store: credentialStore,
+                                        required: value
+                                    )
+                                }
                             }
                         )) {
                             Text("主密码验证")
@@ -320,11 +340,13 @@ private struct SettingsContentView: View {
                         CredentialSecuritySettingsPane(
                             error: credentialStore.lastError,
                             onSave: { password, repeatedPassword in
-                                credentialActions.enableMasterPassword(
-                                    store: credentialStore,
-                                    password: password,
-                                    repeatedPassword: repeatedPassword
-                                )
+                                Task {
+                                    await credentialActions.enableMasterPassword(
+                                        store: credentialStore,
+                                        password: password,
+                                        repeatedPassword: repeatedPassword
+                                    )
+                                }
                             },
                             onCancel: { credentialActions.clearTransientModes() }
                         )
@@ -338,11 +360,6 @@ private struct SettingsContentView: View {
 
     private var moduleSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "模块",
-                subtitle: "控制工作台左侧模块入口，卸载不会删除本地数据。"
-            )
-
             settingsPanel(title: "已注册模块", icon: "puzzlepiece.extension.fill") {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(moduleRegistry.registeredModules, id: \.id) { module in
@@ -360,11 +377,6 @@ private struct SettingsContentView: View {
 
     private var updateSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            settingsContentHeader(
-                title: "更新",
-                subtitle: "检查版本、下载新包，并查看当前下载进度。"
-            )
-
             settingsPanel(title: "版本状态", icon: "arrow.triangle.2.circlepath") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center, spacing: 12) {
@@ -423,18 +435,6 @@ private struct SettingsContentView: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .stroke(isPrimary ? AppTheme.adaptiveWhite(0.26) : AppTheme.hairline)
         )
-    }
-
-    private func settingsContentHeader(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppTheme.ink)
-            Text(subtitle)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.mutedInk)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func settingsPanel<Content: View>(

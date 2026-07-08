@@ -12,10 +12,12 @@ swiftc -parse-as-library \
   Sources/DailyTodos/TodoQuickInputParser.swift \
   Sources/DailyTodos/AppStateModels.swift \
   Sources/DailyTodos/ViewDerivedModels.swift \
+  Sources/DailyTodos/HandbookVisualTokens.swift \
   Sources/DailyTodos/HandbookRepository.swift \
   Sources/DailyTodos/HandbookWorkspaceViewModel.swift \
   Sources/DailyTodos/PerformanceMonitor.swift \
   Sources/DailyTodos/TodoStore.swift \
+  Sources/DailyTodos/HandbookStore.swift \
   Sources/DailyTodos/AppUpdateAvailability.swift \
   Sources/DailyTodos/AppUpdateDownloadProgress.swift \
   Sources/DailyTodos/HandbookEditorPlaceholderPolicy.swift \

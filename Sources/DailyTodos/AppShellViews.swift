@@ -48,6 +48,9 @@ struct SkinPickerButton: View {
 }
 
 struct AppLogoImage: View {
+    var size: CGFloat = 46
+    var shadowRadius: CGFloat = 5
+
     var body: some View {
         Group {
             if let image = Self.logoImage {
@@ -60,8 +63,8 @@ struct AppLogoImage: View {
                     .foregroundStyle(AppTheme.accent)
             }
         }
-        .frame(width: 46, height: 46)
-        .shadow(color: AppTheme.adaptiveBlack(0.10), radius: 5, x: 0, y: 3)
+        .frame(width: size, height: size)
+        .shadow(color: AppTheme.adaptiveBlack(0.10), radius: shadowRadius, x: 0, y: shadowRadius > 0 ? 3 : 0)
         .accessibilityHidden(true)
     }
 
@@ -108,16 +111,16 @@ struct SecondarySidebarCollapseButton: View {
             Image(systemName: isCollapsed ? "sidebar.leading" : "sidebar.left")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(isCollapsed ? AppTheme.accent : AppTheme.mutedInk)
-                .frame(width: 34, height: 30)
-                .background(buttonBackground, in: Capsule())
+                .frame(width: 28, height: 28)
+                .background(buttonBackground, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .overlay(
-                    Capsule()
-                        .stroke(AppTheme.hairline.opacity(isHovered || isCollapsed ? 0.92 : 0.56))
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(AppTheme.hairline.opacity(isHovered || isCollapsed ? 0.78 : 0.0))
                 )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
-        .interactionHitArea()
+        .interactionHitArea(32)
         .help(isCollapsed ? "展开辅导航" : "收起辅导航")
         .onHover { hovered in
             withAnimation(AppMotion.hover) {
@@ -128,12 +131,12 @@ struct SecondarySidebarCollapseButton: View {
 
     private var buttonBackground: Color {
         if isCollapsed {
-            return AppTheme.panel.opacity(0.96)
+            return AppTheme.workspaceTokens.accentSoft
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(0.82)
+            return AppTheme.adaptiveWhite(0.62)
         }
-        return AppTheme.adaptiveWhite(0.58)
+        return Color.clear
     }
 }
 

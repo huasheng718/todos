@@ -53,12 +53,16 @@ struct TodoWorkspaceContent: View {
     let onDelete: (TodoItem) -> Void
 
     var body: some View {
-        WorkspaceContentContainer {
-            WorkspaceContentHeader(title: contentTitle, subtitle: contentSubtitle)
+        WorkspaceContentContainer(headerHeight: 46, showsToolbar: false) {
+            TodoWorkspaceHeader(
+                title: contentTitle,
+                subtitle: contentSubtitle,
+                searchText: $searchText,
+                allTodosViewMode: $allTodosViewMode,
+                scope: scope
+            )
         } toolbar: {
-            WorkspaceLocalToolbar {
-                ListToolbar(searchText: $searchText, allTodosViewMode: $allTodosViewMode, scope: scope)
-            }
+            EmptyView()
         } bodyContent: {
             VStack(alignment: .leading, spacing: 0) {
                 if let error = store.lastError {
@@ -88,9 +92,9 @@ struct TodoWorkspaceContent: View {
                     aiResultSummary: quickCaptureAIResultSummary,
                     isAIEnabled: isAIEnabled
                 )
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 7)
 
                 TodoListView(
                     todos: filteredTodosCache,
@@ -105,12 +109,30 @@ struct TodoWorkspaceContent: View {
                     isSearching: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || !debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 )
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 12)
                 .padding(.bottom, 20)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(AppTheme.workspaceSurface)
         }
+    }
+}
+
+struct TodoWorkspaceHeader: View {
+    let title: String
+    let subtitle: String
+    @Binding var searchText: String
+    @Binding var allTodosViewMode: AllTodosViewMode
+    let scope: TodoScope
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            ListToolbar(searchText: $searchText, allTodosViewMode: $allTodosViewMode, scope: scope)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .background(AppTheme.workspaceTokens.contentSurface)
     }
 }
 
@@ -158,7 +180,7 @@ struct HandbookContextSidebar: View {
 }
 
 struct HandbookWorkspaceContent: View {
-    @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var handbookStore: HandbookStore
 
     @ObservedObject var workspaceModel: HandbookWorkspaceViewModel
     @Binding var handbookCategory: HandbookCategory?
@@ -172,13 +194,16 @@ struct HandbookWorkspaceContent: View {
     private let notesListWidth: CGFloat = 368
 
     var body: some View {
-        WorkspaceContentContainer {
+        WorkspaceContentContainer(showsHeader: false) {
             WorkspaceContentHeader(
                 title: handbookCategory?.title ?? "全部手记",
                 subtitle: handbookCategory?.subtitle ?? "收集业务规则、调研、会议和灵感"
             )
         } toolbar: {
             WorkspaceLocalToolbar {
+                WorkspaceSearchField(text: $handbookSearchText, placeholder: "搜索标题或正文")
+                    .frame(minWidth: 240, idealWidth: 320, maxWidth: 380)
+
                 Button(action: createDraftHandbookItem) {
                     Label("新建", systemImage: "square.and.pencil")
                         .font(.system(size: 12, weight: .bold))
@@ -191,11 +216,10 @@ struct HandbookWorkspaceContent: View {
                     snapshot: workspaceModel.listSnapshot,
                     selectedCategory: $handbookCategory,
                     selectedFolder: $handbookFolder,
-                    searchText: $handbookSearchText,
+                    searchText: handbookSearchText,
                     selectedItemID: workspaceModel.selectedItemID,
-                    isLoaded: store.didLoadHandbookItems,
+                    isLoaded: handbookStore.didLoadHandbookItems,
                     onSelect: { workspaceModel.selectItem(id: $0) },
-                    onCreateDraft: createDraftHandbookItem,
                     onDelete: { itemID in
                         guard let item = workspaceModel.item(for: itemID) else { return }
                         onDelete(item)
@@ -225,13 +249,13 @@ struct HandbookWorkspaceContent: View {
         }
         .onAppear {
             workspaceModel.refresh(
-                items: store.handbookItems,
+                items: handbookStore.handbookItems,
                 selectedCategory: handbookCategory,
                 selectedFolder: handbookFolder,
                 searchText: debouncedHandbookSearchText
             )
         }
-        .onChange(of: store.handbookItems) { _, newItems in
+        .onChange(of: handbookStore.handbookItems) { _, newItems in
             workspaceModel.refresh(
                 items: newItems,
                 selectedCategory: handbookCategory,
@@ -269,7 +293,7 @@ struct HandbookWorkspaceContent: View {
         handbookCategory = category
         handbookFolder = createdItem.trimmedFolder.isEmpty ? nil : createdItem.trimmedFolder
         workspaceModel.refresh(
-            items: store.handbookItems,
+            items: handbookStore.handbookItems,
             selectedCategory: handbookCategory,
             selectedFolder: handbookFolder,
             searchText: debouncedHandbookSearchText

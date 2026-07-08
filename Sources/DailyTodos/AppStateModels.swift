@@ -24,7 +24,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     }
 }
 
-enum TodoScope: Equatable {
+enum TodoScope: Equatable, Sendable {
     case dashboard
     case all
     case waiting
@@ -42,7 +42,7 @@ enum TodoScope: Equatable {
     }
 }
 
-enum AllTodosViewMode: String, CaseIterable, Identifiable {
+enum AllTodosViewMode: String, CaseIterable, Identifiable, Sendable {
     case compact
     case grouped
     case board
@@ -73,12 +73,7 @@ enum FocusField: Hashable {
     case newTitle
 }
 
-enum HandbookFocusField: Hashable {
-    case title
-    case body
-}
-
-struct TodoDraft: Equatable {
+struct TodoDraft: Equatable, Sendable {
     var title: String
     var notes: String
     var priority: TodoPriority
