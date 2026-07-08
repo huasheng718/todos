@@ -944,13 +944,34 @@ func checkHandbookDetailHandlesImagePaste() throws {
         .appendingPathComponent("../Sources/DailyTodos/HandbookDetailPanel.swift")
         .standardizedFileURL
     let source = try String(contentsOf: sourceURL, encoding: .utf8)
+    let canvasSourceURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("../Sources/DailyTodos/HandbookEditableCanvas.swift")
+        .standardizedFileURL
+    let canvasSource = try String(contentsOf: canvasSourceURL, encoding: .utf8)
     try expect(
-        source.contains(".onPasteCommand(of: [.image])"),
-        "手记详情应在正文焦点内接管图片粘贴命令"
+        canvasSource.contains("let onPasteImages: ([NSItemProvider]) -> Void"),
+        "手记正文编辑器应接收图片粘贴回调，不能只把粘贴命令挂在外层容器"
     )
     try expect(
-        source.contains("canvasFocus == .body"),
-        "图片粘贴必须限制在手记正文焦点中"
+        canvasSource.contains(".onPasteCommand(of: [.image], perform: onPasteImages)"),
+        "图片粘贴命令应挂在实际获得焦点的 TextEditor 上，避免被正文编辑器吞掉"
+    )
+    try expect(
+        !source.contains("guard canvasFocus == .body else { return }"),
+        "选中手记但正文尚未聚焦时，图片粘贴也应落到正文末尾，不能静默忽略"
+    )
+    try expect(
+        source.contains("guard canvasFocus != .title else { return }"),
+        "标题焦点中粘贴图片时应避免误写正文"
+    )
+    try expect(
+        source.contains("focusBodyAfterItemSelection(newValue.id)"),
+        "从列表选中手记后应把正文设为粘贴目标，避免图片粘贴停在列表焦点中失效"
+    )
+    try expect(
+        source.contains("private func focusBodyAfterItemSelection(_ selectedItemID: UUID)"),
+        "手记详情应有专门的选择后正文聚焦 helper，避免焦点逻辑散落在同步流程里"
     )
     try expect(
         source.contains("HandbookAttachmentStorage.appendingMarkdownImage"),
