@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 enum CheckFailure: Error, CustomStringConvertible {
     case failed(String)
@@ -38,6 +39,7 @@ struct DailyTodosChecks {
                 try checkHandbookDragTargetsClearFolder()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
+                try checkHandbookPasteboardImageReader()
                 try checkHandbookAttachmentStorage()
                 try checkSystemInputSourcePolicy()
                 try checkTodoStore()
@@ -431,6 +433,34 @@ func checkHandbookAttachmentStorage() throws {
             == "会议结论\n\n\(HandbookAttachmentStorage.markdownImageLine(for: attachment))",
         "已有正文粘贴图片时应以空行追加图片引用"
     )
+}
+
+func checkHandbookPasteboardImageReader() throws {
+    let pasteboard = NSPasteboard.withUniqueName()
+    pasteboard.clearContents()
+
+    let image = NSImage(size: NSSize(width: 8, height: 8))
+    image.lockFocus()
+    NSColor.systemBlue.setFill()
+    NSRect(x: 0, y: 0, width: 8, height: 8).fill()
+    image.unlockFocus()
+
+    guard let data = checkPNGData(from: image) else {
+        throw CheckFailure.failed("测试图片应能编码为 PNG")
+    }
+    let didWrite = pasteboard.setData(data, forType: NSPasteboard.PasteboardType(UTType.png.identifier))
+    try expect(didWrite, "测试粘贴板应能写入 PNG 数据")
+
+    let pastedImage = HandbookPasteboardImageReader.image(from: pasteboard)
+    try expect(pastedImage != nil, "截图粘贴板中的 PNG 数据应能还原为 NSImage")
+}
+
+private func checkPNGData(from image: NSImage) -> Data? {
+    guard let tiffData = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData) else {
+        return nil
+    }
+    return bitmap.representation(using: .png, properties: [:])
 }
 
 func makeCalendar() -> Calendar {
@@ -954,13 +984,31 @@ func checkHandbookDetailHandlesImagePaste() throws {
         .appendingPathComponent("../Sources/DailyTodos/HandbookAttachmentViews.swift")
         .standardizedFileURL
     let attachmentViewsSource = try String(contentsOf: attachmentViewsSourceURL, encoding: .utf8)
+    let pasteEditorSource = try sourceFile("Sources/DailyTodos/HandbookPastingTextEditor.swift")
+    let pasteboardReaderSource = try sourceFile("Sources/DailyTodos/HandbookPasteboardImageReader.swift")
     try expect(
-        canvasSource.contains("let onPasteImages: ([NSItemProvider]) -> Void"),
-        "手记正文编辑器应接收图片粘贴回调，不能只把粘贴命令挂在外层容器"
+        canvasSource.contains("let onPasteImage: (NSImage) -> Void"),
+        "手记正文编辑器应接收 AppKit 图片粘贴回调，不能只依赖 SwiftUI 粘贴命令"
     )
     try expect(
-        canvasSource.contains(".onPasteCommand(of: [.image], perform: onPasteImages)"),
-        "图片粘贴命令应挂在实际获得焦点的 TextEditor 上，避免被正文编辑器吞掉"
+        canvasSource.contains("HandbookPastingTextEditor("),
+        "正文编辑器应使用可拦截 NSTextView paste(_:) 的编辑器，避免 TextEditor 吞掉截图粘贴事件"
+    )
+    try expect(
+        pasteEditorSource.contains("override func paste(_ sender: Any?)")
+            && pasteEditorSource.contains("HandbookPasteboardImageReader.image(from: NSPasteboard.general)"),
+        "图片粘贴应在 AppKit responder 层读取 NSPasteboard，而不是等待 SwiftUI onPasteCommand"
+    )
+    try expect(
+        !canvasSource.contains(".onPasteCommand(of: [.image]"),
+        "手记正文图片粘贴不应继续依赖 TextEditor 上的 onPasteCommand；该路径在 NSTextView 焦点中不会稳定触发"
+    )
+    try expect(
+        pasteboardReaderSource.contains("NSImage(pasteboard: pasteboard)")
+            && pasteboardReaderSource.contains("UTType.png.identifier")
+            && pasteboardReaderSource.contains("UTType.jpeg.identifier")
+            && pasteboardReaderSource.contains("UTType.tiff.identifier"),
+        "截图粘贴应直接支持 NSPasteboard 中的 png/jpeg/tiff 位图数据"
     )
     try expect(
         !source.contains("guard canvasFocus == .body else { return }"),
