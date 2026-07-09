@@ -8,6 +8,7 @@ struct HandbookEditableCanvas: View {
     @Binding var bodyText: String
     @Binding var attachments: [HandbookAttachment]
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
+    let onPasteImages: ([NSItemProvider]) -> Void
     let characterCount: Int
     let editorHeight: CGFloat
     let isBodyEmpty: Bool
@@ -42,6 +43,7 @@ struct HandbookEditableCanvas: View {
                     .padding(.horizontal, -4)
                     .frame(height: editorHeight)
                     .focused(focusedField, equals: .body)
+                    .onPasteCommand(of: [.image], perform: onPasteImages)
 
                 if shouldShowBodyPlaceholder {
                     Text("从这里开始写手记")

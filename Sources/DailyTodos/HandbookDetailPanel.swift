@@ -54,6 +54,9 @@ struct HandbookDetailPanel: View {
                 submitEdit(for: oldValue, force: true)
             }
             syncDraft(with: newValue)
+            if let newValue {
+                focusBodyAfterItemSelection(newValue.id)
+            }
             isDirty = false
         }
         .onAppear {
@@ -89,6 +92,9 @@ struct HandbookDetailPanel: View {
                     bodyText: $bodyText,
                     attachments: $attachments,
                     focusedField: $canvasFocus,
+                    onPasteImages: { providers in
+                        handleImagePaste(providers, for: item)
+                    },
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
                     isBodyEmpty: bodyMetrics.isEmpty,
@@ -97,9 +103,6 @@ struct HandbookDetailPanel: View {
                 )
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
-                .onPasteCommand(of: [.image]) { providers in
-                    handleImagePaste(providers, for: item)
-                }
 
                 if let pasteErrorMessage {
                     Text(pasteErrorMessage)
@@ -215,6 +218,14 @@ struct HandbookDetailPanel: View {
         }
     }
 
+    private func focusBodyAfterItemSelection(_ selectedItemID: UUID) {
+        Task { @MainActor in
+            await Task.yield()
+            guard item?.id == selectedItemID, canvasFocus != .title else { return }
+            canvasFocus = .body
+        }
+    }
+
     private func handleBodyTextChange(_ newValue: String, for item: HandbookItem) {
         guard !isSyncingDraft else { return }
         scheduleBodyMetricsUpdate(for: newValue)
@@ -223,7 +234,7 @@ struct HandbookDetailPanel: View {
     }
 
     private func handleImagePaste(_ providers: [NSItemProvider], for item: HandbookItem) {
-        guard canvasFocus == .body else { return }
+        guard canvasFocus != .title else { return }
         guard let provider = providers.first(where: { imageTypeIdentifier(in: $0) != nil }),
               let typeIdentifier = imageTypeIdentifier(in: provider) else { return }
 
