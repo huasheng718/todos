@@ -2,6 +2,102 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+struct HandbookInlineImagePreviewList: View {
+    @Binding var attachments: [HandbookAttachment]
+    let isEditing: Bool
+
+    private var imageAttachments: [HandbookAttachment] {
+        attachments.filter { attachment in
+            attachment.kind == .image &&
+                !attachment.path.isEmpty &&
+                FileManager.default.fileExists(atPath: attachment.path)
+        }
+    }
+
+    var body: some View {
+        if !imageAttachments.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(imageAttachments) { attachment in
+                    HandbookInlineImagePreviewCard(
+                        attachment: attachment,
+                        isEditing: isEditing,
+                        onOpen: { open(attachment) },
+                        onDelete: { remove(attachment) }
+                    )
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func open(_ attachment: HandbookAttachment) {
+        guard !attachment.path.isEmpty,
+              FileManager.default.fileExists(atPath: attachment.path) else {
+            return
+        }
+        NSWorkspace.shared.open(URL(fileURLWithPath: attachment.path))
+    }
+
+    private func remove(_ attachment: HandbookAttachment) {
+        attachments.removeAll { $0.id == attachment.id }
+    }
+}
+
+private struct HandbookInlineImagePreviewCard: View {
+    let attachment: HandbookAttachment
+    let isEditing: Bool
+    let onOpen: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        if let image = NSImage(contentsOfFile: attachment.path) {
+            VStack(alignment: .leading, spacing: 6) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 360, alignment: .center)
+                    .padding(6)
+                    .background(
+                        AppTheme.adaptiveWhite(isHovered ? 0.90 : 0.74),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(AppTheme.border.opacity(isHovered ? 0.94 : 0.62))
+                    )
+                    .overlay(alignment: .topTrailing) {
+                        if isEditing {
+                            Button(action: onDelete) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .frame(width: 26, height: 26)
+                            }
+                            .buttonStyle(.tactilePlain)
+                            .foregroundStyle(AppTheme.ink)
+                            .background(AppTheme.adaptiveWhite(0.92), in: Circle())
+                            .padding(8)
+                            .help("移除图片")
+                        }
+                    }
+
+                Text(attachment.name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
+            .onHover { hovered in
+                withAnimation(AppMotion.hover) {
+                    isHovered = hovered
+                }
+            }
+        }
+    }
+}
+
 struct HandbookAttachmentStrip: View {
     @Binding var attachments: [HandbookAttachment]
     let isEditing: Bool

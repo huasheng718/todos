@@ -1,6 +1,6 @@
 {
-  "version": "1.2.27",
-  "build": 56,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.27/AntOrder-1.2.27.pkg",
-  "releaseNotes": "修复手记图片粘贴失败：选中手记后可直接粘贴图片，正文编辑器会保存为本地附件并追加 Markdown 图片引用。"
+  "version": "1.2.28",
+  "build": 57,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.28/AntOrder-1.2.28.pkg",
+  "releaseNotes": "手记粘贴图片后会在正文区域直接显示图片预览，避免只保存为附件但正文区域仍为空白。"
 }

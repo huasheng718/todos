@@ -41,7 +41,7 @@ struct HandbookEditableCanvas: View {
                     .lineSpacing(6)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, -4)
-                    .frame(height: editorHeight)
+                    .frame(height: bodyEditorHeight)
                     .focused(focusedField, equals: .body)
                     .onPasteCommand(of: [.image], perform: onPasteImages)
 
@@ -53,6 +53,8 @@ struct HandbookEditableCanvas: View {
                         .allowsHitTesting(false)
                 }
             }
+
+            HandbookInlineImagePreviewList(attachments: $attachments, isEditing: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -62,6 +64,22 @@ struct HandbookEditableCanvas: View {
             isBodyEmpty: isBodyEmpty,
             isBodyFocused: focusedField.wrappedValue == .body
         )
+    }
+
+    private var bodyEditorHeight: CGFloat {
+        guard attachments.contains(where: { $0.kind == .image }) else {
+            return editorHeight
+        }
+
+        let trimmed = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return 112 }
+
+        let estimatedLines = bodyText
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { partialResult, line in
+                partialResult + max(1, (line.count + 62) / 63)
+            }
+        return min(editorHeight, max(112, CGFloat(estimatedLines) * 25 + 34))
     }
 }
 

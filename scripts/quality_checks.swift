@@ -949,6 +949,11 @@ func checkHandbookDetailHandlesImagePaste() throws {
         .appendingPathComponent("../Sources/DailyTodos/HandbookEditableCanvas.swift")
         .standardizedFileURL
     let canvasSource = try String(contentsOf: canvasSourceURL, encoding: .utf8)
+    let attachmentViewsSourceURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("../Sources/DailyTodos/HandbookAttachmentViews.swift")
+        .standardizedFileURL
+    let attachmentViewsSource = try String(contentsOf: attachmentViewsSourceURL, encoding: .utf8)
     try expect(
         canvasSource.contains("let onPasteImages: ([NSItemProvider]) -> Void"),
         "手记正文编辑器应接收图片粘贴回调，不能只把粘贴命令挂在外层容器"
@@ -976,6 +981,21 @@ func checkHandbookDetailHandlesImagePaste() throws {
     try expect(
         source.contains("HandbookAttachmentStorage.appendingMarkdownImage"),
         "图片粘贴应同步写入正文 Markdown 图片引用"
+    )
+    try expect(
+        canvasSource.contains("HandbookInlineImagePreviewList(attachments: $attachments"),
+        "粘贴后的图片应在正文编辑区下方以内联预览显示，不能只作为附件芯片存在"
+    )
+    try expect(
+        canvasSource.contains("private var bodyEditorHeight: CGFloat") &&
+            canvasSource.contains(".frame(height: bodyEditorHeight)"),
+        "有图片附件时正文编辑器应使用动态高度，让图片出现在正文空白区域内"
+    )
+    try expect(
+        attachmentViewsSource.contains("struct HandbookInlineImagePreviewList")
+            && attachmentViewsSource.contains("NSImage(contentsOfFile: attachment.path)")
+            && attachmentViewsSource.contains("Image(nsImage: image)"),
+        "图片附件预览应直接读取本地图片并渲染位图，而不是只显示文件名"
     )
     try expect(
         source.contains("HandbookAttachmentStrip(attachments: $attachments, isEditing: true)"),
