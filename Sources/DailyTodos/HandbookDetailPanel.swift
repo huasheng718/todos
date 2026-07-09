@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct HandbookDetailPanel: View {
     let item: HandbookItem?
@@ -92,8 +91,8 @@ struct HandbookDetailPanel: View {
                     bodyText: $bodyText,
                     attachments: $attachments,
                     focusedField: $canvasFocus,
-                    onPasteImages: { providers in
-                        handleImagePaste(providers, for: item)
+                    onPasteImage: { image in
+                        handlePastedImage(image, for: item)
                     },
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
@@ -233,52 +232,20 @@ struct HandbookDetailPanel: View {
         scheduleAutoSave(for: item)
     }
 
-    private func handleImagePaste(_ providers: [NSItemProvider], for item: HandbookItem) {
+    private func handlePastedImage(_ image: NSImage, for item: HandbookItem) {
         guard canvasFocus != .title else { return }
-        guard let provider = providers.first(where: { imageTypeIdentifier(in: $0) != nil }),
-              let typeIdentifier = imageTypeIdentifier(in: provider) else { return }
-
-        provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
-            let errorDescription = error?.localizedDescription
-            Task { @MainActor in
-                if let errorDescription {
-                    pasteErrorMessage = "保存图片失败：\(errorDescription)"
-                    return
-                }
-                guard let data, let image = NSImage(data: data) else {
-                    pasteErrorMessage = "无法读取剪贴板图片"
-                    return
-                }
-                do {
-                    let attachment = try attachmentStorage.savePastedImage(image, noteID: item.id)
-                    attachments.append(attachment)
-                    bodyText = HandbookAttachmentStorage.appendingMarkdownImage(
-                        to: bodyText,
-                        attachment: attachment
-                    )
-                    pasteErrorMessage = nil
-                    canvasFocus = .body
-                } catch {
-                    pasteErrorMessage = "保存图片失败：\(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    private func imageTypeIdentifier(in provider: NSItemProvider) -> String? {
-        let preferredTypeIdentifiers = [
-            UTType.png.identifier,
-            UTType.jpeg.identifier,
-            UTType.tiff.identifier
-        ]
-        if let preferred = preferredTypeIdentifiers.first(where: {
-            provider.hasItemConformingToTypeIdentifier($0)
-        }) {
-            return preferred
-        }
-
-        return provider.registeredTypeIdentifiers.first { identifier in
-            UTType(identifier)?.conforms(to: .image) == true
+        do {
+            let attachment = try attachmentStorage.savePastedImage(image, noteID: item.id)
+            bodyText = HandbookAttachmentStorage.appendingMarkdownImage(
+                to: bodyText,
+                attachment: attachment
+            )
+            attachments.append(attachment)
+            pasteErrorMessage = nil
+            canvasFocus = .body
+            submitEdit(for: item, force: true)
+        } catch {
+            pasteErrorMessage = "保存图片失败：\(error.localizedDescription)"
         }
     }
 

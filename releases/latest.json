@@ -1,6 +1,6 @@
 {
-  "version": "1.2.28",
-  "build": 57,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.28/AntOrder-1.2.28.pkg",
-  "releaseNotes": "手记粘贴图片后会在正文区域直接显示图片预览，避免只保存为附件但正文区域仍为空白。"
+  "version": "1.2.29",
+  "build": 58,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.29/AntOrder-1.2.29.pkg",
+  "releaseNotes": "修复手记正文截图粘贴仍失效的问题：正文编辑器现在在 AppKit 粘贴响应层直接读取剪贴板图片，粘贴后会保存为附件并立即插入正文预览。"
 }
