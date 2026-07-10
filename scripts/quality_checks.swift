@@ -40,6 +40,7 @@ struct DailyTodosChecks {
                 try checkTodoIssueListUsesContextMenu()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
+                try checkHandbookImagePasteMenuValidation()
                 try checkHandbookPasteboardImageReader()
                 try checkHandbookAttachmentStorage()
                 try checkSystemInputSourcePolicy()
@@ -1084,6 +1085,17 @@ func checkHandbookDetailHandlesImagePaste() throws {
     try expect(
         source.contains("HandbookAttachmentStrip(attachments: $attachments, isEditing: true)"),
         "手记详情应显示可编辑附件区"
+    )
+}
+
+func checkHandbookImagePasteMenuValidation() throws {
+    let source = try sourceFile("Sources/DailyTodos/HandbookPastingTextEditor.swift")
+    try expect(
+        source.contains("override func validateUserInterfaceItem")
+            && source.contains("item.action == #selector(paste(_:))")
+            && source.contains("HandbookPasteboardImageReader.image(from: NSPasteboard.general) != nil")
+            && source.contains("return super.validateUserInterfaceItem(item)"),
+        "截图图片在剪贴板中时，手记正文右键菜单的粘贴项应保持可用，不能只覆盖 paste(_:)"
     )
 }
 

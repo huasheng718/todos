@@ -132,6 +132,14 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
 private final class PasteInterceptingTextView: NSTextView {
     var onPasteImage: ((NSImage) -> Void)?
 
+    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(paste(_:)),
+           HandbookPasteboardImageReader.image(from: NSPasteboard.general) != nil {
+            return true
+        }
+        return super.validateUserInterfaceItem(item)
+    }
+
     override func paste(_ sender: Any?) {
         if let image = HandbookPasteboardImageReader.image(from: NSPasteboard.general) {
             onPasteImage?(image)
