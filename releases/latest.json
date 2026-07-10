@@ -1,6 +1,6 @@
 {
-  "version": "1.2.29",
-  "build": 58,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.29/AntOrder-1.2.29.pkg",
-  "releaseNotes": "修复手记正文截图粘贴仍失效的问题：正文编辑器现在在 AppKit 粘贴响应层直接读取剪贴板图片，粘贴后会保存为附件并立即插入正文预览。"
+  "version": "1.2.30",
+  "build": 59,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.30/AntOrder-1.2.30.pkg",
+  "releaseNotes": "优化待办列表为更轻量的 issue 风格：内容保持不变，行内常驻操作收敛到右键菜单，支持状态、优先级、跟进日期、编辑、复制和删除。"
 }
