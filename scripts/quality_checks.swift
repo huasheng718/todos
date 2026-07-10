@@ -37,6 +37,7 @@ struct DailyTodosChecks {
                 try checkHandbookWorkspaceSelectionUsesCurrentScope()
                 try checkHandbookCreateDraftTracksCreatedScope()
                 try checkHandbookDragTargetsClearFolder()
+                try checkTodoIssueListUsesContextMenu()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
                 try checkHandbookPasteboardImageReader()
@@ -947,6 +948,41 @@ func checkHandbookDragTargetsClearFolder() throws {
     try expect(
         moduleSource.contains("onUpdate(item, category ?? item.category, folder ?? \"\", item.title, item.body, item.attachments)"),
         "拖拽更新应区分清空目录和保留分类，folder nil 不应写回旧目录"
+    )
+}
+
+func checkTodoIssueListUsesContextMenu() throws {
+    let rowSource = try sourceFile("Sources/DailyTodos/TodoFlowRow.swift")
+    let listSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
+    let menuSource = try sourceFile("Sources/DailyTodos/TodoContextMenuViews.swift")
+
+    try expect(
+        rowSource.contains("TodoIssueStatusMarker")
+            && rowSource.contains("TodoIssueProgressText")
+            && rowSource.contains("TodoContextMenuContent(")
+            && rowSource.contains(".contextMenu"),
+        "紧凑/分组待办行应使用 issue 风格状态视觉，并通过右键菜单承载操作"
+    )
+    try expect(
+        !rowSource.contains("ProgressMenuTag(progress: todo.progress")
+            && !rowSource.contains("Image(systemName: \"pencil\")"),
+        "普通待办行不应保留行内状态下拉或 pencil 操作入口"
+    )
+    try expect(
+        listSource.contains("TodoBoardCard")
+            && listSource.contains("TodoContextMenuContent(")
+            && !listSource.contains("ProgressMenuTag(progress: todo.progress")
+            && !listSource.contains("Image(systemName: \"pencil\")"),
+        "看板卡片也应把状态/编辑操作收进右键菜单，避免与列表规则不一致"
+    )
+    try expect(
+        menuSource.contains("Menu(\"状态\")")
+            && menuSource.contains("Menu(\"优先级\")")
+            && menuSource.contains("Menu(\"跟进日期\")")
+            && menuSource.contains("Label(\"编辑\", systemImage: \"pencil\")")
+            && menuSource.contains("Label(\"复制标题\", systemImage: \"doc.on.doc\")")
+            && menuSource.contains("Label(\"删除\", systemImage: \"trash\")"),
+        "右键菜单应覆盖状态、优先级、跟进日期、编辑、复制和删除这些原行内操作"
     )
 }
 

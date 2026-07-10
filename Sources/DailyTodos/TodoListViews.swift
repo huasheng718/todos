@@ -586,40 +586,11 @@ struct TodoBoardCard: View {
 
                     Spacer(minLength: 6)
 
-                    ProgressMenuTag(progress: todo.progress, onSelect: onProgressChange)
-
-                    Button {
-                        withAnimation(AppMotion.quick) {
-                            isEditing = true
-                        }
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .semibold))
-                            .interactionHitArea()
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(AppTheme.mutedInk)
-                    .help("编辑")
+                    TodoIssueProgressText(progress: todo.progress)
                 }
 
                 HStack(alignment: .top, spacing: 9) {
-                    Button(action: onToggle) {
-                        ZStack {
-                            Circle()
-                                .fill(todo.isDone ? TodoProgress.done.displayColor.opacity(0.17) : AppTheme.adaptiveWhite(isHovered || isHighlighted ? 0.94 : 0.72))
-                                .overlay(
-                                    Circle()
-                                        .stroke(todo.isDone ? TodoProgress.done.displayColor.opacity(0.38) : AppTheme.hairline, lineWidth: 1)
-                                )
-                                .frame(width: 22, height: 22)
-                            Image(systemName: todo.isDone ? "checkmark" : "circle")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .interactionHitArea()
-                    }
-                    .buttonStyle(.tactilePlain)
-                    .foregroundStyle(todo.isDone ? TodoProgress.done.displayColor : AppTheme.mutedInk)
-                    .help(todo.isDone ? "标记为待处理" : "标记为完成")
+                    TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted)
 
                     VStack(alignment: .leading, spacing: hasNotes ? 7 : 0) {
                         Text(titleText)
@@ -682,6 +653,17 @@ struct TodoBoardCard: View {
                 y: isHovered || isHighlighted ? 5 : 3
             )
             .opacity(cardOpacity)
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .contextMenu {
+                TodoContextMenuContent(
+                    todo: todo,
+                    onEdit: startEditing,
+                    onToggle: onToggle,
+                    onProgressChange: onProgressChange,
+                    onUpdate: onUpdate,
+                    onDelete: onDelete
+                )
+            }
             .onHover { hovered in
                 withAnimation(AppMotion.hover) {
                     isHovered = hovered
@@ -751,6 +733,12 @@ struct TodoBoardCard: View {
             return 1
         }
         return isHighlighted ? 0.88 : 0.78
+    }
+
+    private func startEditing() {
+        withAnimation(AppMotion.quick) {
+            isEditing = true
+        }
     }
 }
 
