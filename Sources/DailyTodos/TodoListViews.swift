@@ -97,7 +97,7 @@ struct TodoListView: View {
     }
 
     private func dashboardList(snapshot: TodoListSnapshot) -> some View {
-        LazyVStack(spacing: 6) {
+        LazyVStack(spacing: 4) {
             if aiSettings.canUseAI {
                 DailySuggestionCard(
                     suggestion: dailySuggestion,
@@ -186,7 +186,7 @@ struct TodoListView: View {
     }
 
     private var compactList: some View {
-        LazyVStack(spacing: 7) {
+        LazyVStack(spacing: 3) {
             if todos.isEmpty {
                 EmptyTodoHint(isAllScope: true)
             } else {
@@ -208,7 +208,7 @@ struct TodoListView: View {
     }
 
     private func groupedList(snapshot: TodoListSnapshot) -> some View {
-        LazyVStack(spacing: 6) {
+        LazyVStack(spacing: 3) {
             if todos.isEmpty {
                 EmptyTodoHint(isAllScope: scope == .all)
             } else if scope == .all {
@@ -452,7 +452,7 @@ struct TodoMatrixQuadrant: View {
             .padding(.horizontal, 10)
             .padding(.top, 10)
 
-            LazyVStack(spacing: 6) {
+            LazyVStack(spacing: 4) {
                 if group.todos.isEmpty {
                     Text("暂无事项")
                         .font(.system(size: 12, weight: .semibold))
@@ -515,7 +515,7 @@ struct TodoBoardColumn: View {
             .padding(.horizontal, 12)
             .padding(.top, 12)
 
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 4) {
                 if todos.isEmpty {
                     Text("暂无事项")
                         .font(.system(size: 12, weight: .semibold))
@@ -570,23 +570,19 @@ struct TodoBoardCard: View {
             )
             .transition(AppMotion.inlineTransition)
         } else {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .center, spacing: 8) {
-                    PriorityOutlineTag(priority: todo.priority, isCompact: true)
-                        .fixedSize()
-
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 6) {
+                    TodoIssuePriorityIcon(priority: todo.priority)
+                    TodoIssueProgressIcon(progress: todo.progress)
                     if isOverdue {
-                        Text("逾期")
-                            .font(.system(size: 10, weight: .bold))
+                        Image(systemName: "clock")
+                            .font(.system(size: 10.5, weight: .semibold))
                             .foregroundStyle(TodoPriority.high.displayColor)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(TodoPriority.high.displayColor.opacity(0.10), in: Capsule())
+                            .frame(width: 16, height: 20)
+                            .help("逾期")
                     }
 
                     Spacer(minLength: 6)
-
-                    TodoIssueProgressText(progress: todo.progress)
                 }
 
                 HStack(alignment: .top, spacing: 9) {
@@ -631,9 +627,9 @@ struct TodoBoardCard: View {
                 }
                 .padding(.leading, 41)
             }
-            .padding(.vertical, 11)
-            .padding(.leading, 13)
-            .padding(.trailing, 11)
+            .padding(.vertical, 9)
+            .padding(.leading, 12)
+            .padding(.trailing, 10)
             .background(cardBackgroundColor, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             .overlay(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 999, style: .continuous)
@@ -701,22 +697,22 @@ struct TodoBoardCard: View {
     }
 
     private var boardDateColor: Color {
-        isOverdue ? TodoPriority.high.displayColor : AppTheme.mutedInk
+        isOverdue ? TodoPriority.high.displayColor.opacity(AppTheme.isDark ? 0.78 : 0.68) : AppTheme.mutedInk
     }
 
     private var cardBackgroundColor: Color {
         if isHighlighted {
             return AppTheme.accentSoft.opacity(0.96)
         }
-        return AppTheme.rowTint(priority: todo.priority, isOverdue: isOverdue)
+        if isHovered {
+            return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.18 : 0.86)
+        }
+        return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.14 : 0.78)
     }
 
     private var cardBorderColor: Color {
         if isHighlighted {
             return AppTheme.accent.opacity(0.36)
-        }
-        if isOverdue {
-            return TodoPriority.high.displayColor.opacity(isHovered ? 0.42 : 0.26)
         }
         return isHovered ? todo.priority.displayColor.opacity(0.36) : AppTheme.border
     }
@@ -725,7 +721,7 @@ struct TodoBoardCard: View {
         if todo.isDone {
             return TodoProgress.done.displayColor.opacity(isHighlighted ? 0.70 : 0.48)
         }
-        return isOverdue ? TodoPriority.high.displayColor : todo.priority.displayColor.opacity(0.78)
+        return todo.priority.displayColor.opacity(isOverdue ? 0.48 : 0.78)
     }
 
     private var cardOpacity: Double {

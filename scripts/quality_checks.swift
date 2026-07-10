@@ -38,6 +38,7 @@ struct DailyTodosChecks {
                 try checkHandbookCreateDraftTracksCreatedScope()
                 try checkHandbookDragTargetsClearFolder()
                 try checkTodoIssueListUsesContextMenu()
+                try checkTodoDenseNaturalListPresentation()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
                 try checkHandbookImagePasteMenuValidation()
@@ -959,10 +960,10 @@ func checkTodoIssueListUsesContextMenu() throws {
 
     try expect(
         rowSource.contains("TodoIssueStatusMarker")
-            && rowSource.contains("TodoIssueProgressText")
+            && rowSource.contains("TodoIssueProgressIcon")
             && rowSource.contains("TodoContextMenuContent(")
             && rowSource.contains(".contextMenu"),
-        "紧凑/分组待办行应使用 issue 风格状态视觉，并通过右键菜单承载操作"
+        "紧凑/分组待办行应使用 issue 风格 icon 状态视觉，并通过右键菜单承载操作"
     )
     try expect(
         !rowSource.contains("ProgressMenuTag(progress: todo.progress")
@@ -984,6 +985,46 @@ func checkTodoIssueListUsesContextMenu() throws {
             && menuSource.contains("Label(\"复制标题\", systemImage: \"doc.on.doc\")")
             && menuSource.contains("Label(\"删除\", systemImage: \"trash\")"),
         "右键菜单应覆盖状态、优先级、跟进日期、编辑、复制和删除这些原行内操作"
+    )
+}
+
+func checkTodoDenseNaturalListPresentation() throws {
+    let rowSource = try sourceFile("Sources/DailyTodos/TodoFlowRow.swift")
+    let listSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
+    guard
+        let rowBackgroundStart = rowSource.range(of: "private var rowBackground: Color"),
+        let rowStrokeStart = rowSource.range(of: "private var rowStroke: Color")
+    else {
+        throw CheckFailure.failed("待办行应保留 rowBackground/rowStroke 视觉分层入口")
+    }
+    let rowBackgroundSource = String(rowSource[rowBackgroundStart.lowerBound..<rowStrokeStart.lowerBound])
+
+    try expect(
+        rowSource.contains("TodoIssuePriorityIcon(priority: todo.priority)")
+            && rowSource.contains("TodoIssueProgressIcon(progress: todo.progress)"),
+        "紧凑/分组待办行应把优先级和推进状态收敛为 icon，而不是文字标签"
+    )
+    try expect(
+        !rowSource.contains("PriorityOutlineTag(priority: todo.priority")
+            && !rowSource.contains("TodoIssueProgressText(progress: todo.progress)"),
+        "普通待办行不应继续使用“高/中/低”或“待/推进/完成”的文字标签"
+    )
+    try expect(
+        rowSource.contains("naturalFollowUpText")
+            && rowSource.contains("Text(naturalFollowUpText)")
+            && rowSource.contains("Text(titleText)"),
+        "待办主行应把跟进时间和标题组合成自然语言阅读顺序"
+    )
+    try expect(
+        !rowBackgroundSource.contains("isOverdue")
+            && !rowBackgroundSource.contains("TodoPriority.high.displayColor"),
+        "逾期普通行不应再使用红色背景底色"
+    )
+    try expect(
+        listSource.contains("LazyVStack(spacing: 3)")
+            && listSource.contains("LazyVStack(spacing: 4)")
+            && !listSource.contains("LazyVStack(spacing: 7)"),
+        "待办列表行距应压缩，提高信息密度"
     )
 }
 

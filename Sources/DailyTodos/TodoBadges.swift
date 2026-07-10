@@ -176,6 +176,14 @@ extension TodoProgress {
 }
 
 extension TodoPriority {
+    var issueIcon: String {
+        switch self {
+        case .high: "exclamationmark.circle.fill"
+        case .medium: "flag"
+        case .low: "arrow.down.circle"
+        }
+    }
+
     var displayColor: Color {
         if AppTheme.isDark {
             switch self {
