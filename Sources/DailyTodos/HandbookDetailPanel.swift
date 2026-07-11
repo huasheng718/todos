@@ -181,6 +181,7 @@ struct HandbookDetailPanel: View {
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !attachments.isEmpty
     }
 
     private func submitEdit(for item: HandbookItem, force: Bool = false) {
@@ -193,6 +194,11 @@ struct HandbookDetailPanel: View {
 
     private func syncDraft(with item: HandbookItem?, preservesLocalTextEdits: Bool = false) {
         guard let item else { return }
+        let cleanedStoredBody = HandbookAttachmentStorage.removingLegacyPastedImageLinks(
+            from: item.body,
+            attachments: item.attachments
+        )
+        let shouldPersistLegacyImageCleanup = !preservesLocalTextEdits && cleanedStoredBody != item.body
         if !preservesLocalTextEdits {
             autoSaveTask?.cancel()
         }
@@ -205,15 +211,21 @@ struct HandbookDetailPanel: View {
                 if category != item.category { category = item.category }
                 if folder != item.folder { folder = item.folder }
                 if !preservesLocalTextEdits, title != item.title { title = item.title }
-                if !preservesLocalTextEdits, bodyText != item.body { bodyText = item.body }
+                if !preservesLocalTextEdits, bodyText != cleanedStoredBody { bodyText = cleanedStoredBody }
                 if attachments != item.attachments { attachments = item.attachments }
                 pasteErrorMessage = nil
             }
         }
-        scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyText : item.body)
-        isDirty = preservesLocalTextEdits ? computeIsDirty(comparedTo: item) : false
+        scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyText : cleanedStoredBody)
+        isDirty = preservesLocalTextEdits
+            ? computeIsDirty(comparedTo: item)
+            : shouldPersistLegacyImageCleanup
         Task { @MainActor in
+            guard self.item?.id == item.id else { return }
             isSyncingDraft = false
+            if shouldPersistLegacyImageCleanup {
+                submitEdit(for: item, force: true)
+            }
         }
     }
 
@@ -236,10 +248,6 @@ struct HandbookDetailPanel: View {
         guard canvasFocus != .title else { return }
         do {
             let attachment = try attachmentStorage.savePastedImage(image, noteID: item.id)
-            bodyText = HandbookAttachmentStorage.appendingMarkdownImage(
-                to: bodyText,
-                attachment: attachment
-            )
             attachments.append(attachment)
             pasteErrorMessage = nil
             canvasFocus = .body

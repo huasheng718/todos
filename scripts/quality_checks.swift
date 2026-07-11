@@ -422,19 +422,42 @@ func checkHandbookAttachmentStorage() throws {
     try expect(attachment.name.hasSuffix(".png"), "粘贴图片应规范化保存为 PNG")
     try expect(attachment.path.contains(noteID.uuidString), "粘贴图片应按手记 ID 分目录保存")
     try expect(FileManager.default.fileExists(atPath: attachment.path), "粘贴图片应写入磁盘")
+
+    let legacyImageLine = "![\(attachment.name)](\(URL(fileURLWithPath: attachment.path).absoluteString))"
     try expect(
-        HandbookAttachmentStorage.markdownImageLine(for: attachment).contains("![\(attachment.name)](file://"),
-        "图片附件应生成 Markdown 图片引用"
+        HandbookAttachmentStorage.removingLegacyPastedImageLinks(
+            from: "会议结论\n\n\(legacyImageLine)",
+            attachments: [attachment]
+        ) == "会议结论",
+        "升级后应移除与现有图片附件匹配的旧本地 Markdown 引用"
     )
     try expect(
-        HandbookAttachmentStorage.appendingMarkdownImage(to: "", attachment: attachment)
-            == HandbookAttachmentStorage.markdownImageLine(for: attachment),
-        "空正文粘贴图片时只插入图片引用"
+        HandbookAttachmentStorage.removingLegacyPastedImageLinks(
+            from: "会议结论\n\n![外部图](https://example.com/image.png)",
+            attachments: [attachment]
+        ) == "会议结论\n\n![外部图](https://example.com/image.png)",
+        "清理旧粘贴记录时不应删除用户自己的 Markdown 图片链接"
     )
     try expect(
-        HandbookAttachmentStorage.appendingMarkdownImage(to: "会议结论", attachment: attachment)
-            == "会议结论\n\n\(HandbookAttachmentStorage.markdownImageLine(for: attachment))",
-        "已有正文粘贴图片时应以空行追加图片引用"
+        HandbookAttachmentStorage.removingLegacyPastedImageLinks(
+            from: "会议结论\n\n  \(legacyImageLine)",
+            attachments: [attachment]
+        ) == "会议结论\n\n  \(legacyImageLine)",
+        "自动清理只能删除完全匹配的历史生成行，不能删除用户缩进过的内容"
+    )
+    try expect(
+        HandbookAttachmentStorage.removingLegacyPastedImageLinks(
+            from: "\(legacyImageLine)\n\n用户补充",
+            attachments: [attachment]
+        ) == "\(legacyImageLine)\n\n用户补充",
+        "自动清理只能处理历史生成器追加的正文末尾后缀"
+    )
+    try expect(
+        HandbookAttachmentStorage.removingLegacyPastedImageLinks(
+            from: "会议结论\r\n补充说明",
+            attachments: [attachment]
+        ) == "会议结论\r\n补充说明",
+        "没有匹配历史后缀时应逐字节保留正文换行格式"
     )
 }
 
@@ -1105,8 +1128,19 @@ func checkHandbookDetailHandlesImagePaste() throws {
         "手记详情应有专门的选择后正文聚焦 helper，避免焦点逻辑散落在同步流程里"
     )
     try expect(
-        source.contains("HandbookAttachmentStorage.appendingMarkdownImage"),
-        "图片粘贴应同步写入正文 Markdown 图片引用"
+        !source.contains("HandbookAttachmentStorage.appendingMarkdownImage"),
+        "图片粘贴只应添加图片预览与附件，不能把本地文件 Markdown 链接写入正文"
+    )
+    try expect(
+        source.contains("HandbookAttachmentStorage.removingLegacyPastedImageLinks")
+            && source.contains("shouldPersistLegacyImageCleanup")
+            && source.contains("guard self.item?.id == item.id else { return }")
+            && source.contains("submitEdit(for: item, force: true)"),
+        "打开旧手记时应清理并保存历史图片引用，且不能在快速切换时回写到其他手记"
+    )
+    try expect(
+        source.contains("|| !attachments.isEmpty"),
+        "仅包含图片或附件的手记也应允许保存清理后的正文"
     )
     try expect(
         canvasSource.contains("HandbookInlineImagePreviewList(attachments: $attachments"),
@@ -1339,6 +1373,38 @@ func checkHandbookStore() throws {
         throw CheckFailure.failed("未找到已合并脏字段的手记")
     }
     try expect(mergedDirtyItem.dirtyFields == ["body", "title"], "连续本地更新应累积同步脏字段，不能被本次 delta 覆盖")
+
+    let legacyAttachment = HandbookAttachment(kind: .image, name: "pasted-image.png", path: "/tmp/pasted-image.png")
+    let legacyImageLine = "![\(legacyAttachment.name)](\(URL(fileURLWithPath: legacyAttachment.path).absoluteString))"
+    guard let imageOnlyItem = store.addHandbookItem(
+        category: .inspiration,
+        title: "",
+        body: legacyImageLine,
+        attachments: [legacyAttachment]
+    ) else {
+        throw CheckFailure.failed("创建历史图片手记失败")
+    }
+    store.update(
+        imageOnlyItem,
+        category: imageOnlyItem.category,
+        folder: imageOnlyItem.folder,
+        title: "",
+        body: "",
+        attachments: imageOnlyItem.attachments
+    )
+    let imageOnlyReloadStore = HandbookStore(storageURL: databaseURL)
+    imageOnlyReloadStore.loadHandbookItemsIfNeeded()
+    guard let reloadedImageOnlyItem = imageOnlyReloadStore.handbookItems.first(where: { $0.id == imageOnlyItem.id }) else {
+        throw CheckFailure.failed("仅含图片附件的手记清理后未持久化")
+    }
+    try expect(reloadedImageOnlyItem.body.isEmpty, "历史图片链接清理后正文应保持为空")
+    try expect(
+        reloadedImageOnlyItem.attachments.count == 1
+            && reloadedImageOnlyItem.attachments[0].kind == legacyAttachment.kind
+            && reloadedImageOnlyItem.attachments[0].name == legacyAttachment.name
+            && reloadedImageOnlyItem.attachments[0].path == legacyAttachment.path,
+        "历史图片链接清理后附件应继续保留"
+    )
 
     store.delete(item)
     try expect(!store.handbookItems.contains(where: { $0.id == item.id }), "软删除后 UI 内存列表不应保留手记")

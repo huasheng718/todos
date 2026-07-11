@@ -68,7 +68,7 @@ final class HandbookStore: ObservableObject {
     ) -> HandbookItem? {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return nil }
+        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty || !attachments.isEmpty else { return nil }
 
         let item = HandbookItem(
             category: category,
@@ -103,7 +103,7 @@ final class HandbookStore: ObservableObject {
         let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedFolder = folder.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty else { return }
+        guard !cleanedTitle.isEmpty || !cleanedBody.isEmpty || !attachments.isEmpty else { return }
         guard let index = handbookItems.firstIndex(where: { $0.id == item.id }) else { return }
         let current = handbookItems[index]
         guard current.category != category

@@ -38,16 +38,40 @@ struct HandbookAttachmentStorage {
         return HandbookAttachment(kind: .image, name: filename, path: url.path)
     }
 
-    static func markdownImageLine(for attachment: HandbookAttachment) -> String {
-        let url = URL(fileURLWithPath: attachment.path).absoluteString
-        return "![\(attachment.name)](\(url))"
-    }
+    static func removingLegacyPastedImageLinks(
+        from body: String,
+        attachments: [HandbookAttachment]
+    ) -> String {
+        let legacyLines = Set(
+            attachments
+                .filter { $0.kind == .image }
+                .map { attachment in
+                    let url = URL(fileURLWithPath: attachment.path).absoluteString
+                    return "![\(attachment.name)](\(url))"
+                }
+        )
+        guard !legacyLines.isEmpty else { return body }
 
-    static func appendingMarkdownImage(to body: String, attachment: HandbookAttachment) -> String {
-        let line = markdownImageLine(for: attachment)
-        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return line }
-        return "\(body.trimmingCharacters(in: .newlines))\n\n\(line)"
+        var cleanedBody = body
+        var removedSuffix = true
+        while removedSuffix {
+            removedSuffix = false
+            for line in legacyLines {
+                if cleanedBody == line {
+                    cleanedBody = ""
+                    removedSuffix = true
+                    break
+                }
+
+                let suffix = "\n\n\(line)"
+                if cleanedBody.hasSuffix(suffix) {
+                    cleanedBody.removeLast(suffix.count)
+                    removedSuffix = true
+                    break
+                }
+            }
+        }
+        return cleanedBody
     }
 
     private static func pngData(from image: NSImage) -> Data? {
