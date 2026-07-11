@@ -1,6 +1,6 @@
 {
-  "version": "1.2.31",
-  "build": 60,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.31/AntOrder-1.2.31.pkg",
-  "releaseNotes": "蚁序 1.2.31：修复手记正文右键菜单无法粘贴截图的问题，图片剪贴板内容现在可直接插入手记。"
+  "version": "1.2.32",
+  "build": 61,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.32/AntOrder-1.2.32.pkg",
+  "releaseNotes": "蚁序 1.2.32：手记粘贴截图仅显示图片预览和附件，不再把本地文件链接写入正文，并自动清理历史粘贴链接；同时上线更紧凑的待办列表、弱化逾期标记，以时间加标题呈现待办并用图标显示状态和优先级。"
 }
