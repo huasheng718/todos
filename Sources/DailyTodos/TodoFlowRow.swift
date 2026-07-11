@@ -53,17 +53,27 @@ struct TodoFlowRow: View, @MainActor Equatable {
                 .transition(AppMotion.inlineTransition)
             }
         } else {
-            HStack(alignment: hasNotes ? .top : .center, spacing: 10) {
+            HStack(alignment: hasNotes ? .top : .center, spacing: 7) {
                 TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted)
+                    .padding(.top, hasNotes ? 1 : 0)
+
+                TodoIssuePriorityIcon(priority: todo.priority)
                     .padding(.top, hasNotes ? 2 : 0)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        PriorityOutlineTag(priority: todo.priority, isCompact: true)
+                TodoIssueProgressIcon(progress: todo.progress)
+                    .padding(.top, hasNotes ? 2 : 0)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(naturalFollowUpText)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(dateColor)
+                            .lineLimit(1)
                             .fixedSize()
 
                         Text(titleText)
-                            .font(.system(size: 13.5, weight: todo.isDone ? .regular : .semibold))
+                            .font(.system(size: 13.2, weight: todo.isDone ? .regular : .semibold))
                             .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
                             .strikethrough(todo.isDone, color: AppTheme.mutedInk)
                             .lineLimit(1)
@@ -80,51 +90,36 @@ struct TodoFlowRow: View, @MainActor Equatable {
 
                     if hasNotes {
                         Text(todo.trimmedNotes)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(AppTheme.mutedInk)
                             .strikethrough(todo.isDone, color: AppTheme.mutedInk)
-                            .lineLimit(2)
+                            .lineLimit(1)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .padding(.top, hasNotes ? 2 : 0)
+                .padding(.top, hasNotes ? 1 : 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 14) {
-                    TodoIssueProgressText(progress: todo.progress)
-                        .frame(width: 46, alignment: .leading)
-
-                    Text(followUpText)
-                        .font(.system(size: 12, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(dateColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .frame(width: 84, alignment: .leading)
-                }
-                .padding(.top, hasNotes ? 0 : 0)
-                .fixedSize()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, hasNotes ? 9 : 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, hasNotes ? 5 : 4)
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(rowBackground)
                     .overlay(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                             .fill(issueRailColor)
-                            .frame(width: 3)
+                            .frame(width: 2)
                             .opacity(sideRailOpacity)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, 5)
                     }
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(rowStroke)
             )
             .opacity(rowOpacity)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .contextMenu {
                 TodoContextMenuContent(
                     todo: todo,
@@ -156,7 +151,7 @@ struct TodoFlowRow: View, @MainActor Equatable {
         !todo.trimmedNotes.isEmpty
     }
 
-    private var followUpText: String {
+    private var naturalFollowUpText: String {
         let calendar = Calendar.current
         let timeText = timeSuffix(for: todo.date, calendar: calendar)
         if calendar.isDateInToday(todo.date) { return "今天\(timeText)" }
@@ -180,7 +175,7 @@ struct TodoFlowRow: View, @MainActor Equatable {
     }
 
     private var dateColor: Color {
-        isOverdue ? TodoPriority.high.displayColor : AppTheme.mutedInk
+        isOverdue ? TodoPriority.high.displayColor.opacity(AppTheme.isDark ? 0.78 : 0.68) : AppTheme.mutedInk
     }
 
     private var rowBackground: Color {
@@ -190,16 +185,10 @@ struct TodoFlowRow: View, @MainActor Equatable {
         if isHovered {
             return AppTheme.adaptiveBlack(AppTheme.isDark ? 0.22 : 0.045)
         }
-        if isOverdue {
-            return TodoPriority.high.displayColor.opacity(AppTheme.isDark ? 0.16 : 0.075)
-        }
         return Color.clear
     }
 
     private var rowStroke: Color {
-        if isOverdue {
-            return TodoPriority.high.displayColor.opacity(AppTheme.isDark ? 0.30 : 0.16)
-        }
         if isHighlighted {
             return AppTheme.accent.opacity(0.30)
         }
@@ -211,7 +200,7 @@ struct TodoFlowRow: View, @MainActor Equatable {
 
     private var issueRailColor: Color {
         if isOverdue {
-            return TodoPriority.high.displayColor
+            return TodoPriority.high.displayColor.opacity(0.70)
         }
         return todo.priority.displayColor
     }
@@ -221,12 +210,15 @@ struct TodoFlowRow: View, @MainActor Equatable {
             return isHighlighted ? 0.42 : 0.18
         }
         if isHighlighted {
-            return 0.95
+            return 0.78
         }
-        if isOverdue || isHovered {
-            return 0.82
+        if isOverdue {
+            return 0.36
         }
-        return todo.priority == .high ? 0.64 : 0.0
+        if isHovered {
+            return 0.46
+        }
+        return todo.priority == .high ? 0.32 : 0.0
     }
 
     private var rowOpacity: Double {
@@ -259,11 +251,11 @@ struct TodoIssueStatusMarker: View {
 
             if todo.isDone {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(TodoProgress.done.displayColor)
             }
         }
-        .frame(width: 26, height: 28)
+        .frame(width: 22, height: 24)
         .accessibilityLabel(todo.isDone ? "已完成" : "未完成")
     }
 
@@ -285,14 +277,30 @@ struct TodoIssueStatusMarker: View {
     }
 }
 
-struct TodoIssueProgressText: View {
+struct TodoIssuePriorityIcon: View {
+    let priority: TodoPriority
+
+    var body: some View {
+        Image(systemName: priority.issueIcon)
+            .font(.system(size: priority == .high ? 11.5 : 10.5, weight: .bold))
+            .foregroundStyle(priority.displayColor.opacity(priority == .low ? 0.70 : 0.92))
+            .frame(width: 16, height: 20)
+            .contentShape(Rectangle())
+            .help(priority.label + "优先级")
+            .accessibilityLabel(priority.label + "优先级")
+    }
+}
+
+struct TodoIssueProgressIcon: View {
     let progress: TodoProgress
 
     var body: some View {
-        Text(progress.shortLabel)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(progress.displayColor)
-            .lineLimit(1)
+        Image(systemName: progress.boardIcon)
+            .font(.system(size: progress == .pending ? 10.5 : 11.5, weight: .semibold))
+            .foregroundStyle(progress.displayColor.opacity(progress == .pending ? 0.72 : 0.94))
+            .frame(width: 16, height: 20)
+            .contentShape(Rectangle())
+            .help(progress.label)
             .accessibilityLabel(progress.label)
     }
 }
