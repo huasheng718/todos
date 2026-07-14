@@ -26,7 +26,6 @@ struct DailyTodosApp: App {
                 .task {
                     store.loadStartupData()
                     handbookStore.scheduleLoadHandbookItemsIfNeeded()
-                    await credentialStore.load()
                     updateController.startMonitoring()
                     try? await Task.sleep(for: .milliseconds(900))
                     updateController.checkForUpdatesIfNeeded()

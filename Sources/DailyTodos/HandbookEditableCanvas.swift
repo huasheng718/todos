@@ -5,13 +5,10 @@ struct HandbookEditableCanvas: View {
     @Binding var category: HandbookCategory
     @Binding var folder: String
     @Binding var title: String
-    @Binding var bodyText: String
     @Binding var attachments: [HandbookAttachment]
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
-    let onPasteImage: (NSImage) -> Void
     let characterCount: Int
     let editorHeight: CGFloat
-    let isBodyEmpty: Bool
     let formattedDate: String
     let attachmentCount: Int
 
@@ -34,55 +31,14 @@ struct HandbookEditableCanvas: View {
             )
             .padding(.bottom, 4)
 
-            ZStack(alignment: .topLeading) {
-                HandbookPastingTextEditor(
-                    text: $bodyText,
-                    focusedField: focusedField,
-                    onPasteImage: onPasteImage
-                )
-                    .padding(.horizontal, -4)
-                    .frame(height: bodyEditorHeight)
-
-                if shouldShowBodyPlaceholder {
-                    Text("从这里开始写手记")
-                        .font(.system(size: 15.5, weight: .regular))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .padding(.top, 8)
-                        .allowsHitTesting(false)
-                }
-            }
-
             HandbookInlineImagePreviewList(attachments: $attachments, isEditing: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    private var shouldShowBodyPlaceholder: Bool {
-        HandbookEditorPlaceholderPolicy.shouldShowBodyPlaceholder(
-            isBodyEmpty: isBodyEmpty,
-            isBodyFocused: focusedField.wrappedValue == .body
-        )
-    }
-
-    private var bodyEditorHeight: CGFloat {
-        guard attachments.contains(where: { $0.kind == .image }) else {
-            return editorHeight
-        }
-
-        let trimmed = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return 112 }
-
-        let estimatedLines = bodyText
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .reduce(0) { partialResult, line in
-                partialResult + max(1, (line.count + 62) / 63)
-            }
-        return min(editorHeight, max(112, CGFloat(estimatedLines) * 25 + 34))
-    }
 }
 
 struct HandbookEditorToolbar: View {
-    @Binding var bodyText: String
+    let bridge: HandbookEditorBridge
     @Binding var attachments: [HandbookAttachment]
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
 
@@ -240,46 +196,52 @@ struct HandbookEditorToolbar: View {
     }
 
     private func appendLine(_ value: String) {
-        let trimmed = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        bodyText = trimmed.isEmpty ? value : "\(bodyText)\n\(value)"
+        bridge.mutate { bodyText in
+            let trimmed = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+            bodyText = trimmed.isEmpty ? value : "\(bodyText)\n\(value)"
+        }
         focusBody()
     }
 
     private func wrap(prefix: String, suffix: String, sample: String) {
-        let trimmed = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let snippet = "\(prefix)\(sample)\(suffix)"
-        bodyText = trimmed.isEmpty ? snippet : "\(bodyText)\n\(snippet)"
+        bridge.mutate { bodyText in
+            let trimmed = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let snippet = "\(prefix)\(sample)\(suffix)"
+            bodyText = trimmed.isEmpty ? snippet : "\(bodyText)\n\(snippet)"
+        }
         focusBody()
     }
 
     private func removeLeadingIndent() {
-        let lines = bodyText
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { line -> String in
-                let value = String(line)
-                if value.hasPrefix("    ") {
-                    return String(value.dropFirst(4))
+        bridge.mutate { bodyText in
+            let lines = bodyText
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map { line -> String in
+                    let value = String(line)
+                    if value.hasPrefix("    ") {
+                        return String(value.dropFirst(4))
+                    }
+                    if value.hasPrefix("\t") {
+                        return String(value.dropFirst())
+                    }
+                    return value
                 }
-                if value.hasPrefix("\t") {
-                    return String(value.dropFirst())
-                }
-                return value
-            }
-        bodyText = lines.joined(separator: "\n")
+            bodyText = lines.joined(separator: "\n")
+        }
         focusBody()
     }
 
     private func clearMarkdownMarkers() {
-        var cleaned = bodyText
-        for marker in ["**", "~~", "`"] {
-            cleaned = cleaned.replacingOccurrences(of: marker, with: "")
+        bridge.mutate { bodyText in
+            for marker in ["**", "~~", "`"] {
+                bodyText = bodyText.replacingOccurrences(of: marker, with: "")
+            }
+            bodyText = bodyText
+                .replacingOccurrences(of: #"(?m)^\s{0,3}#{1,6}\s+"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"(?m)^\s{0,3}>\s?"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"(?m)^\s*[-*+]\s+"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"(?m)^\s*\d+\.\s+"#, with: "", options: .regularExpression)
         }
-        cleaned = cleaned
-            .replacingOccurrences(of: #"(?m)^\s{0,3}#{1,6}\s+"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"(?m)^\s{0,3}>\s?"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"(?m)^\s*[-*+]\s+"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"(?m)^\s*\d+\.\s+"#, with: "", options: .regularExpression)
-        bodyText = cleaned
         focusBody()
     }
 

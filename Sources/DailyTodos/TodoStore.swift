@@ -232,13 +232,35 @@ final class TodoStore: ObservableObject {
         try execute("PRAGMA journal_mode = WAL")
     }
 
+    /// 当前期望的 schema 版本。建表/迁移只在 `user_version` 落后时才执行一次。
+    private let currentSchemaVersion: Int32 = 1
+
     private func prepareDatabase() throws {
         try openDatabase()
         guard !isDatabasePrepared else { return }
 
-        try createSchema()
+        if try currentSchemaUserVersion() != currentSchemaVersion {
+            try createSchema()
+            try setSchemaUserVersion(currentSchemaVersion)
+        }
         try migrateLegacyJSONIfNeeded()
         isDatabasePrepared = true
+    }
+
+    private func currentSchemaUserVersion() throws -> Int32 {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &statement, nil) == SQLITE_OK else {
+            throw SQLiteStoreError.prepare(message: databaseErrorMessage)
+        }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw SQLiteStoreError.execute(message: databaseErrorMessage)
+        }
+        return sqlite3_column_int(statement, 0)
+    }
+
+    private func setSchemaUserVersion(_ version: Int32) throws {
+        try execute("PRAGMA user_version = \(version)")
     }
 
     private func loadStartupDataInternal() throws {

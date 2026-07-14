@@ -9,15 +9,16 @@ struct HandbookDetailPanel: View {
     @State private var category: HandbookCategory = .businessRule
     @State private var folder = ""
     @State private var title = ""
-    @State private var bodyText = ""
     @State private var attachments: [HandbookAttachment] = []
     @State private var outline: [MarkdownOutlineEntry] = []
     @State private var bodyMetrics = HandbookBodyMetrics.empty
     @State private var outlineUpdateToken = UUID()
     @State private var isDirty = false
     @State private var isSyncingDraft = false
-    @State private var bodyMetricsTask: Task<Void, Never>?
-    @State private var autoSaveTask: Task<Void, Never>?
+    @State private var bodyBridge = HandbookEditorBridge()
+    @State private var seededBody = ""
+    @State private var bodyEditorResetID = UUID()
+    @State private var editorTasks = HandbookEditorTasks()
     @State private var pasteErrorMessage: String?
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
@@ -69,7 +70,7 @@ struct HandbookDetailPanel: View {
                 Spacer(minLength: 0)
 
                 HandbookEditorToolbar(
-                    bodyText: $bodyText,
+                    bridge: bodyBridge,
                     attachments: $attachments,
                     focusedField: $canvasFocus
                 )
@@ -88,18 +89,28 @@ struct HandbookDetailPanel: View {
                     category: $category,
                     folder: $folder,
                     title: $title,
-                    bodyText: $bodyText,
                     attachments: $attachments,
                     focusedField: $canvasFocus,
-                    onPasteImage: { image in
-                        handlePastedImage(image, for: item)
-                    },
                     characterCount: bodyMetrics.characterCount,
                     editorHeight: bodyMetrics.editorHeight,
-                    isBodyEmpty: bodyMetrics.isEmpty,
                     formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute()),
                     attachmentCount: attachments.count
                 )
+                .frame(maxWidth: 880, alignment: .leading)
+                .padding(.bottom, 16)
+
+                HandbookBodyEditorSection(
+                    seed: seededBody,
+                    editorHeight: bodyMetrics.editorHeight,
+                    hasImageAttachments: attachments.contains { $0.kind == .image },
+                    focusedField: $canvasFocus,
+                    bridge: bodyBridge,
+                    onPasteImage: { image in
+                        handlePastedImage(image, for: item)
+                    },
+                    onChange: { handleBodyTextChange($0, for: item) }
+                )
+                .id(bodyEditorResetID)
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
 
@@ -149,9 +160,6 @@ struct HandbookDetailPanel: View {
                 isDirty = computeIsDirty(comparedTo: item)
                 scheduleAutoSave(for: item)
             }
-            .onChange(of: bodyText) { _, newValue in
-                handleBodyTextChange(newValue, for: item)
-            }
             .scrollIndicators(.hidden)
             .padding(.horizontal, 38)
             .padding(.top, 26)
@@ -180,15 +188,15 @@ struct HandbookDetailPanel: View {
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !bodyBridge.currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachments.isEmpty
     }
 
     private func submitEdit(for item: HandbookItem, force: Bool = false) {
-        autoSaveTask?.cancel()
+        editorTasks.autoSave?.cancel()
         guard canSubmit else { return }
         guard force || computeIsDirty(comparedTo: item) else { return }
-        onUpdate(item, category, folder, title, bodyText, attachments)
+        onUpdate(item, category, folder, title, bodyBridge.currentText, attachments)
         isDirty = false
     }
 
@@ -200,7 +208,7 @@ struct HandbookDetailPanel: View {
         )
         let shouldPersistLegacyImageCleanup = !preservesLocalTextEdits && cleanedStoredBody != item.body
         if !preservesLocalTextEdits {
-            autoSaveTask?.cancel()
+            editorTasks.autoSave?.cancel()
         }
         isSyncingDraft = true
         PerformanceMonitor.event("HandbookDetail.syncDraft", detail: "\(item.id.uuidString) chars=\(item.body.count)")
@@ -211,12 +219,15 @@ struct HandbookDetailPanel: View {
                 if category != item.category { category = item.category }
                 if folder != item.folder { folder = item.folder }
                 if !preservesLocalTextEdits, title != item.title { title = item.title }
-                if !preservesLocalTextEdits, bodyText != cleanedStoredBody { bodyText = cleanedStoredBody }
                 if attachments != item.attachments { attachments = item.attachments }
                 pasteErrorMessage = nil
             }
         }
-        scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyText : cleanedStoredBody)
+        if !preservesLocalTextEdits, seededBody != cleanedStoredBody {
+            seededBody = cleanedStoredBody
+            bodyEditorResetID = UUID()
+        }
+        scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyBridge.currentText : cleanedStoredBody)
         isDirty = preservesLocalTextEdits
             ? computeIsDirty(comparedTo: item)
             : shouldPersistLegacyImageCleanup
@@ -258,8 +269,8 @@ struct HandbookDetailPanel: View {
     }
 
     private func scheduleAutoSave(for item: HandbookItem) {
-        autoSaveTask?.cancel()
-        autoSaveTask = Task {
+        editorTasks.autoSave?.cancel()
+        editorTasks.autoSave = Task {
             try? await Task.sleep(for: .milliseconds(650))
             guard !Task.isCancelled else { return }
             await MainActor.run {
@@ -269,8 +280,8 @@ struct HandbookDetailPanel: View {
     }
 
     private func scheduleBodyMetricsUpdate(for text: String) {
-        bodyMetricsTask?.cancel()
-        bodyMetricsTask = Task {
+        editorTasks.bodyMetrics?.cancel()
+        editorTasks.bodyMetrics = Task {
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
 
@@ -306,7 +317,7 @@ struct HandbookDetailPanel: View {
         category != item.category
             || folder.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedFolder
             || title.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedTitle
-            || bodyText.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedBody
+            || bodyBridge.currentText.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedBody
             || attachments != item.attachments
     }
 }

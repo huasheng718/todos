@@ -80,6 +80,7 @@ struct ContentView: View {
             onActivateModule: { moduleRegistry.activate($0) },
             onGlobalSearchFocused: {
                 handbookStore.scheduleLoadHandbookItemsIfNeeded()
+                Task { await credentialStore.load() }
             },
             onGlobalSearchDismiss: {
                 clearGlobalSearch()
