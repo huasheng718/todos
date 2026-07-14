@@ -1,6 +1,6 @@
 {
-  "version": "1.2.36",
-  "build": 65,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.36/AntOrder-1.2.36.pkg",
-  "releaseNotes": "待办增加「未完成」「已完成」分类，页面布局与全部待办一致（紧凑/分组/看板/四象限）；侧边栏新增两个入口并显示对应计数。"
+  "version": "1.2.37",
+  "build": 66,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.37/AntOrder-1.2.37.pkg",
+  "releaseNotes": "修复启动崩溃：AppLogoImage 不再依赖 SwiftPM 生成的 Bundle.module（在打包后的 .app 中无法定位资源包会导致 fatalError），改为稳健的资源包查找，并将 InAppLogo.png 直接放入 Contents/Resources 作为兜底。"
 }
