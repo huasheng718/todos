@@ -1,6 +1,6 @@
 {
-  "version": "1.2.34",
-  "build": 63,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.34/AntOrder-1.2.34.pkg",
-  "releaseNotes": "蚁序 1.2.34 hotfix：修复手记正文编辑器左侧首字被遮挡的问题；进一步将 isDirty 状态移入 class 容器，避免每次击键仍触发整棵详情面板重算，继续缓解输入卡顿。"
+  "version": "1.2.35",
+  "build": 64,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.35/AntOrder-1.2.35.pkg",
+  "releaseNotes": "蚁序 1.2.35 hotfix：修复手记正文输入时光标突然失去焦点的问题；将 bodyMetrics/outline 从父面板 @State 下沉到 ObservableObject 的 EditorState，击键不再触发整棵详情面板 body 重算，避免 NSTextView 被临时移除并 resignFirstResponder。"
 }
