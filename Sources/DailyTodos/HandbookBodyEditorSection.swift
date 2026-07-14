@@ -27,13 +27,16 @@ final class HandbookEditorBridge {
     }
 }
 
-/// 存放正文防抖任务的容器。
+/// 存放正文编辑器相关状态与防抖任务的容器。
 ///
 /// 若把这些 `Task` 直接放在详情面板的 `@State` 上，则每次击键“取消旧任务 + 建新任务”
 /// 的重新赋值都会触发父面板 `body` 重算——即便正文本身已下沉隔离，父层仍会逐字重建。
+/// `isDirty` 同理：它只在回调逻辑中使用，不驱动 UI，若作为 `@State` 每击键重新赋值
+/// 会同样触发整棵详情面板重算。
 /// 用 class 承载后，父面板以 `@State` 持有它（只跟踪身份），改内部属性不会触发失效。
 @MainActor
-final class HandbookEditorTasks {
+final class HandbookEditorState {
+    var isDirty = false
     var bodyMetrics: Task<Void, Never>?
     var autoSave: Task<Void, Never>?
 }
@@ -82,7 +85,6 @@ struct HandbookBodyEditorSection: View {
                 focusedField: focusedField,
                 onPasteImage: onPasteImage
             )
-            .padding(.horizontal, -4)
             .frame(height: resolvedEditorHeight)
 
             if shouldShowBodyPlaceholder {
