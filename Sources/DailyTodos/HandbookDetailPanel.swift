@@ -13,12 +13,11 @@ struct HandbookDetailPanel: View {
     @State private var outline: [MarkdownOutlineEntry] = []
     @State private var bodyMetrics = HandbookBodyMetrics.empty
     @State private var outlineUpdateToken = UUID()
-    @State private var isDirty = false
     @State private var isSyncingDraft = false
     @State private var bodyBridge = HandbookEditorBridge()
     @State private var seededBody = ""
     @State private var bodyEditorResetID = UUID()
-    @State private var editorTasks = HandbookEditorTasks()
+    @State private var editorState = HandbookEditorState()
     @State private var pasteErrorMessage: String?
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
@@ -41,12 +40,12 @@ struct HandbookDetailPanel: View {
                     syncDraft(
                         with: newValue,
                         preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(
-                            isDirty: isDirty,
+                            isDirty: editorState.isDirty,
                             isEditorFocused: canvasFocus != nil
                         )
                     )
                 } else {
-                    isDirty = false
+                    editorState.isDirty = false
                 }
                 return
             }
@@ -57,7 +56,7 @@ struct HandbookDetailPanel: View {
             if let newValue {
                 focusBodyAfterItemSelection(newValue.id)
             }
-            isDirty = false
+            editorState.isDirty = false
         }
         .onAppear {
             syncDraft(with: item)
@@ -136,17 +135,17 @@ struct HandbookDetailPanel: View {
             }
             .onChange(of: attachments) { _, _ in
                 guard !isSyncingDraft else { return }
-                isDirty = computeIsDirty(comparedTo: item)
+                editorState.isDirty = computeIsDirty(comparedTo: item)
                 submitEdit(for: item, force: true)
             }
             .onChange(of: category) { _, _ in
                 guard !isSyncingDraft else { return }
-                isDirty = computeIsDirty(comparedTo: item)
+                editorState.isDirty = computeIsDirty(comparedTo: item)
                 submitEdit(for: item, force: true)
             }
             .onChange(of: folder) { _, _ in
                 guard !isSyncingDraft else { return }
-                isDirty = computeIsDirty(comparedTo: item)
+                editorState.isDirty = computeIsDirty(comparedTo: item)
                 submitEdit(for: item, force: true)
             }
             .onChange(of: canvasFocus) { oldValue, newValue in
@@ -157,7 +156,7 @@ struct HandbookDetailPanel: View {
             }
             .onChange(of: title) { _, _ in
                 guard !isSyncingDraft else { return }
-                isDirty = computeIsDirty(comparedTo: item)
+                editorState.isDirty = computeIsDirty(comparedTo: item)
                 scheduleAutoSave(for: item)
             }
             .scrollIndicators(.hidden)
@@ -193,11 +192,11 @@ struct HandbookDetailPanel: View {
     }
 
     private func submitEdit(for item: HandbookItem, force: Bool = false) {
-        editorTasks.autoSave?.cancel()
+        editorState.autoSave?.cancel()
         guard canSubmit else { return }
         guard force || computeIsDirty(comparedTo: item) else { return }
         onUpdate(item, category, folder, title, bodyBridge.currentText, attachments)
-        isDirty = false
+        editorState.isDirty = false
     }
 
     private func syncDraft(with item: HandbookItem?, preservesLocalTextEdits: Bool = false) {
@@ -208,7 +207,7 @@ struct HandbookDetailPanel: View {
         )
         let shouldPersistLegacyImageCleanup = !preservesLocalTextEdits && cleanedStoredBody != item.body
         if !preservesLocalTextEdits {
-            editorTasks.autoSave?.cancel()
+            editorState.autoSave?.cancel()
         }
         isSyncingDraft = true
         PerformanceMonitor.event("HandbookDetail.syncDraft", detail: "\(item.id.uuidString) chars=\(item.body.count)")
@@ -228,7 +227,7 @@ struct HandbookDetailPanel: View {
             bodyEditorResetID = UUID()
         }
         scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyBridge.currentText : cleanedStoredBody)
-        isDirty = preservesLocalTextEdits
+        editorState.isDirty = preservesLocalTextEdits
             ? computeIsDirty(comparedTo: item)
             : shouldPersistLegacyImageCleanup
         Task { @MainActor in
@@ -251,7 +250,7 @@ struct HandbookDetailPanel: View {
     private func handleBodyTextChange(_ newValue: String, for item: HandbookItem) {
         guard !isSyncingDraft else { return }
         scheduleBodyMetricsUpdate(for: newValue)
-        isDirty = computeIsDirty(comparedTo: item)
+        editorState.isDirty = computeIsDirty(comparedTo: item)
         scheduleAutoSave(for: item)
     }
 
@@ -269,8 +268,8 @@ struct HandbookDetailPanel: View {
     }
 
     private func scheduleAutoSave(for item: HandbookItem) {
-        editorTasks.autoSave?.cancel()
-        editorTasks.autoSave = Task {
+        editorState.autoSave?.cancel()
+        editorState.autoSave = Task {
             try? await Task.sleep(for: .milliseconds(650))
             guard !Task.isCancelled else { return }
             await MainActor.run {
@@ -280,8 +279,8 @@ struct HandbookDetailPanel: View {
     }
 
     private func scheduleBodyMetricsUpdate(for text: String) {
-        editorTasks.bodyMetrics?.cancel()
-        editorTasks.bodyMetrics = Task {
+        editorState.bodyMetrics?.cancel()
+        editorState.bodyMetrics = Task {
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
 
