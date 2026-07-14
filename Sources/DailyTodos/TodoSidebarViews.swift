@@ -59,7 +59,7 @@ struct TodoSidebarView: View {
             DateButton(
                 title: "今日推进",
                 subtitle: "风险优先，推进今天",
-                systemImage: "target",
+                systemImage: "scope",
                 count: metrics.dashboardCount,
                 alertCount: metrics.overdueCount,
                 isSelected: scope == .dashboard
@@ -68,9 +68,20 @@ struct TodoSidebarView: View {
             }
 
             DateButton(
+                title: "未完成",
+                subtitle: "所有尚未关闭的事项",
+                systemImage: "circle.dashed",
+                count: metrics.activeCount,
+                alertCount: metrics.overdueCount,
+                isSelected: scope == .unfinished
+            ) {
+                scope = .unfinished
+            }
+
+            DateButton(
                 title: "等待反馈",
                 subtitle: "需要别人推进",
-                systemImage: "person.2.fill",
+                systemImage: "hourglass",
                 count: metrics.waitingCount,
                 isSelected: scope == .waiting
             ) {
@@ -80,32 +91,11 @@ struct TodoSidebarView: View {
             DateButton(
                 title: "本周固定",
                 subtitle: "重复管理动作",
-                systemImage: "repeat",
+                systemImage: "repeat.circle",
                 count: metrics.weeklyCount,
                 isSelected: scope == .weekly
             ) {
                 scope = .weekly
-            }
-
-            DateButton(
-                title: "全部待办",
-                subtitle: "完整任务池",
-                systemImage: "tray.full.fill",
-                count: metrics.activeCount,
-                isSelected: scope == .all
-            ) {
-                scope = .all
-            }
-
-            DateButton(
-                title: "未完成",
-                subtitle: "所有尚未关闭的事项",
-                systemImage: "circle",
-                count: metrics.activeCount,
-                alertCount: metrics.overdueCount,
-                isSelected: scope == .unfinished
-            ) {
-                scope = .unfinished
             }
 
             DateButton(
@@ -116,6 +106,16 @@ struct TodoSidebarView: View {
                 isSelected: scope == .completed
             ) {
                 scope = .completed
+            }
+
+            DateButton(
+                title: "全部待办",
+                subtitle: "完整任务池",
+                systemImage: "tray.full.fill",
+                count: metrics.activeCount,
+                isSelected: scope == .all
+            ) {
+                scope = .all
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -187,9 +187,10 @@ struct DateButton: View {
                     .frame(width: 3, height: 30)
 
                 Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
-                    .frame(width: 18)
+                    .frame(width: 20, height: 20)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)

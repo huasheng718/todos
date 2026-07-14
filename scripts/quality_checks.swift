@@ -1014,6 +1014,7 @@ func checkTodoIssueListUsesContextMenu() throws {
 func checkTodoDenseNaturalListPresentation() throws {
     let rowSource = try sourceFile("Sources/DailyTodos/TodoFlowRow.swift")
     let listSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
+    let sidebarSource = try sourceFile("Sources/DailyTodos/TodoSidebarViews.swift")
     guard
         let rowBackgroundStart = rowSource.range(of: "private var rowBackground: Color"),
         let rowStrokeStart = rowSource.range(of: "private var rowStroke: Color")
@@ -1049,6 +1050,43 @@ func checkTodoDenseNaturalListPresentation() throws {
             && !listSource.contains("LazyVStack(spacing: 7)"),
         "待办列表行距应压缩，提高信息密度"
     )
+
+    let expectedNavigation = [
+        ("今日推进", "scope"),
+        ("未完成", "circle.dashed"),
+        ("等待反馈", "hourglass"),
+        ("本周固定", "repeat.circle"),
+        ("已完成", "checkmark.circle.fill"),
+        ("全部待办", "tray.full.fill")
+    ]
+    let navigationTitleIndexes = expectedNavigation.compactMap { title, _ in
+        sidebarSource.range(of: "title: \"\(title)\"")?.lowerBound
+    }
+    try expect(
+        navigationTitleIndexes.count == expectedNavigation.count
+            && zip(navigationTitleIndexes, navigationTitleIndexes.dropFirst()).allSatisfy(<),
+        "待办侧栏应按今日推进、未完成、等待反馈、本周固定、已完成、全部待办排列"
+    )
+    for (title, symbol) in expectedNavigation {
+        guard let titleRange = sidebarSource.range(of: "title: \"\(title)\"") else {
+            throw CheckFailure.failed("待办侧栏缺少 \(title)")
+        }
+        let remainingSource = sidebarSource[titleRange.lowerBound...]
+        try expect(
+            remainingSource.prefix(220).contains("systemImage: \"\(symbol)\""),
+            "\(title) 应使用 \(symbol) 图标"
+        )
+        try expect(
+            NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil,
+            "当前 macOS 不支持待办侧栏图标 \(symbol)"
+        )
+    }
+    try expect(
+        sidebarSource.contains(".symbolRenderingMode(.hierarchical)")
+            && sidebarSource.contains(".font(.system(size: 14, weight: .semibold))")
+            && sidebarSource.contains(".frame(width: 20, height: 20)"),
+        "待办侧栏图标应统一使用 hierarchical 渲染和 20x20 稳定尺寸"
+    )
 }
 
 func checkHandbookDetailReconcilesSameItemUpdates() throws {
@@ -1075,6 +1113,7 @@ func checkHandbookDetailHandlesImagePaste() throws {
         .appendingPathComponent("../Sources/DailyTodos/HandbookDetailPanel.swift")
         .standardizedFileURL
     let source = try String(contentsOf: sourceURL, encoding: .utf8)
+    let bodyEditorSource = try sourceFile("Sources/DailyTodos/HandbookBodyEditorSection.swift")
     let canvasSourceURL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .appendingPathComponent("../Sources/DailyTodos/HandbookEditableCanvas.swift")
@@ -1088,11 +1127,11 @@ func checkHandbookDetailHandlesImagePaste() throws {
     let pasteEditorSource = try sourceFile("Sources/DailyTodos/HandbookPastingTextEditor.swift")
     let pasteboardReaderSource = try sourceFile("Sources/DailyTodos/HandbookPasteboardImageReader.swift")
     try expect(
-        canvasSource.contains("let onPasteImage: (NSImage) -> Void"),
+        bodyEditorSource.contains("let onPasteImage: (NSImage) -> Void"),
         "手记正文编辑器应接收 AppKit 图片粘贴回调，不能只依赖 SwiftUI 粘贴命令"
     )
     try expect(
-        canvasSource.contains("HandbookPastingTextEditor("),
+        bodyEditorSource.contains("HandbookPastingTextEditor("),
         "正文编辑器应使用可拦截 NSTextView paste(_:) 的编辑器，避免 TextEditor 吞掉截图粘贴事件"
     )
     try expect(
@@ -1101,7 +1140,7 @@ func checkHandbookDetailHandlesImagePaste() throws {
         "图片粘贴应在 AppKit responder 层读取 NSPasteboard，而不是等待 SwiftUI onPasteCommand"
     )
     try expect(
-        !canvasSource.contains(".onPasteCommand(of: [.image]"),
+        !bodyEditorSource.contains(".onPasteCommand(of: [.image]"),
         "手记正文图片粘贴不应继续依赖 TextEditor 上的 onPasteCommand；该路径在 NSTextView 焦点中不会稳定触发"
     )
     try expect(
@@ -1147,8 +1186,8 @@ func checkHandbookDetailHandlesImagePaste() throws {
         "粘贴后的图片应在正文编辑区下方以内联预览显示，不能只作为附件芯片存在"
     )
     try expect(
-        canvasSource.contains("private var bodyEditorHeight: CGFloat") &&
-            canvasSource.contains(".frame(height: bodyEditorHeight)"),
+        bodyEditorSource.contains("private var resolvedEditorHeight: CGFloat") &&
+            bodyEditorSource.contains(".frame(height: resolvedEditorHeight)"),
         "有图片附件时正文编辑器应使用动态高度，让图片出现在正文空白区域内"
     )
     try expect(
