@@ -10,8 +10,6 @@ struct HandbookDetailPanel: View {
     @State private var folder = ""
     @State private var title = ""
     @State private var attachments: [HandbookAttachment] = []
-    @State private var outline: [MarkdownOutlineEntry] = []
-    @State private var bodyMetrics = HandbookBodyMetrics.empty
     @State private var outlineUpdateToken = UUID()
     @State private var isSyncingDraft = false
     @State private var bodyBridge = HandbookEditorBridge()
@@ -90,20 +88,18 @@ struct HandbookDetailPanel: View {
                     title: $title,
                     attachments: $attachments,
                     focusedField: $canvasFocus,
-                    characterCount: bodyMetrics.characterCount,
-                    editorHeight: bodyMetrics.editorHeight,
-                    formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute()),
-                    attachmentCount: attachments.count
+                    editorState: editorState,
+                    formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute())
                 )
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
 
                 HandbookBodyEditorSection(
                     seed: seededBody,
-                    editorHeight: bodyMetrics.editorHeight,
                     hasImageAttachments: attachments.contains { $0.kind == .image },
                     focusedField: $canvasFocus,
                     bridge: bodyBridge,
+                    editorState: editorState,
                     onPasteImage: { image in
                         handlePastedImage(image, for: item)
                     },
@@ -121,11 +117,7 @@ struct HandbookDetailPanel: View {
                         .padding(.bottom, 10)
                 }
 
-                if !outline.isEmpty {
-                    HandbookOutlineStrip(entries: outline)
-                        .frame(maxWidth: 880, alignment: .leading)
-                        .padding(.bottom, 16)
-                }
+                HandbookOutlineContainer(editorState: editorState)
 
                 if !attachments.isEmpty {
                     HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
@@ -279,8 +271,8 @@ struct HandbookDetailPanel: View {
     }
 
     private func scheduleBodyMetricsUpdate(for text: String) {
-        editorState.bodyMetrics?.cancel()
-        editorState.bodyMetrics = Task {
+        editorState.bodyMetricsTask?.cancel()
+        editorState.bodyMetricsTask = Task {
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
 
@@ -302,11 +294,11 @@ struct HandbookDetailPanel: View {
             }
 
             await MainActor.run {
-                if bodyMetrics != metrics {
-                    bodyMetrics = metrics
+                if editorState.bodyMetrics != metrics {
+                    editorState.bodyMetrics = metrics
                 }
-                if outline != newOutline {
-                    outline = newOutline
+                if editorState.outline != newOutline {
+                    editorState.outline = newOutline
                 }
             }
         }
@@ -318,6 +310,18 @@ struct HandbookDetailPanel: View {
             || title.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedTitle
             || bodyBridge.currentText.trimmingCharacters(in: .whitespacesAndNewlines) != item.trimmedBody
             || attachments != item.attachments
+    }
+}
+
+struct HandbookOutlineContainer: View {
+    @ObservedObject var editorState: HandbookEditorState
+
+    var body: some View {
+        if !editorState.outline.isEmpty {
+            HandbookOutlineStrip(entries: editorState.outline)
+                .frame(maxWidth: 880, alignment: .leading)
+                .padding(.bottom, 16)
+        }
     }
 }
 

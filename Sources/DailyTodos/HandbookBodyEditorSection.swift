@@ -29,15 +29,19 @@ final class HandbookEditorBridge {
 
 /// 存放正文编辑器相关状态与防抖任务的容器。
 ///
-/// 若把这些 `Task` 直接放在详情面板的 `@State` 上，则每次击键“取消旧任务 + 建新任务”
+/// 若把这些状态/任务直接放在详情面板的 `@State` 上，则每次击键“取消旧任务 + 建新任务”
 /// 的重新赋值都会触发父面板 `body` 重算——即便正文本身已下沉隔离，父层仍会逐字重建。
-/// `isDirty` 同理：它只在回调逻辑中使用，不驱动 UI，若作为 `@State` 每击键重新赋值
-/// 会同样触发整棵详情面板重算。
-/// 用 class 承载后，父面板以 `@State` 持有它（只跟踪身份），改内部属性不会触发失效。
+/// `isDirty`/`bodyMetrics`/`outline` 同理：它们只在回调逻辑或子视图中使用，不驱动父层布局，
+/// 若作为 `@State` 每击键重新赋值会同样触发整棵详情面板重算，严重时导致 `NSTextView` 被临时
+/// 从视图层级移除并 resignFirstResponder，表现为“光标突然失去焦点”。
+/// 用 class 承载后，父面板以 `@State` 持有它（只跟踪身份），改内部属性不会触发父层失效；
+/// 需要这些数据的子视图用 `@ObservedObject` 持有并读取属性，即可订阅更新。
 @MainActor
-final class HandbookEditorState {
-    var isDirty = false
-    var bodyMetrics: Task<Void, Never>?
+final class HandbookEditorState: ObservableObject {
+    @Published var isDirty = false
+    @Published var bodyMetrics = HandbookBodyMetrics.empty
+    @Published var outline: [MarkdownOutlineEntry] = []
+    var bodyMetricsTask: Task<Void, Never>?
     var autoSave: Task<Void, Never>?
 }
 
@@ -51,10 +55,10 @@ final class HandbookEditorState {
 /// 编辑器高度在“含图片附件且正文很短”时会收缩以露出图片预览，逻辑从
 /// `HandbookEditableCanvas` 平移至此，避免父层为计算该高度而读取逐字变化的正文。
 struct HandbookBodyEditorSection: View {
-    let editorHeight: CGFloat
     let hasImageAttachments: Bool
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
     let bridge: HandbookEditorBridge
+    @ObservedObject var editorState: HandbookEditorState
     let onPasteImage: (NSImage) -> Void
     let onChange: (String) -> Void
 
@@ -62,17 +66,17 @@ struct HandbookBodyEditorSection: View {
 
     init(
         seed: String,
-        editorHeight: CGFloat,
         hasImageAttachments: Bool,
         focusedField: FocusState<HandbookCanvasFocus?>.Binding,
         bridge: HandbookEditorBridge,
+        editorState: HandbookEditorState,
         onPasteImage: @escaping (NSImage) -> Void,
         onChange: @escaping (String) -> Void
     ) {
-        self.editorHeight = editorHeight
         self.hasImageAttachments = hasImageAttachments
         self.focusedField = focusedField
         self.bridge = bridge
+        self.editorState = editorState
         self.onPasteImage = onPasteImage
         self.onChange = onChange
         _text = State(initialValue: seed)
@@ -111,7 +115,7 @@ struct HandbookBodyEditorSection: View {
     }
 
     private var resolvedEditorHeight: CGFloat {
-        guard hasImageAttachments else { return editorHeight }
+        guard hasImageAttachments else { return editorState.bodyMetrics.editorHeight }
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return 112 }
@@ -121,6 +125,6 @@ struct HandbookBodyEditorSection: View {
             .reduce(0) { partialResult, line in
                 partialResult + max(1, (line.count + 62) / 63)
             }
-        return min(editorHeight, max(112, CGFloat(estimatedLines) * 25 + 34))
+        return min(editorState.bodyMetrics.editorHeight, max(112, CGFloat(estimatedLines) * 25 + 34))
     }
 }

@@ -7,10 +7,8 @@ struct HandbookEditableCanvas: View {
     @Binding var title: String
     @Binding var attachments: [HandbookAttachment]
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
-    let characterCount: Int
-    let editorHeight: CGFloat
+    @ObservedObject var editorState: HandbookEditorState
     let formattedDate: String
-    let attachmentCount: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -25,9 +23,9 @@ struct HandbookEditableCanvas: View {
             HandbookDetailMetaBar(
                 category: $category,
                 folder: $folder,
-                characterCount: characterCount,
+                characterCount: editorState.bodyMetrics.characterCount,
                 formattedDate: formattedDate,
-                attachmentCount: attachmentCount
+                attachmentCount: attachments.count
             )
             .padding(.bottom, 4)
 
