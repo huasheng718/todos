@@ -11,7 +11,7 @@ struct ListToolbar: View {
                 .frame(minWidth: 160, maxWidth: .infinity)
                 .frame(height: 30)
 
-            if scope == .all {
+            if scope.usesAllTodosLayout {
                 Divider()
                     .frame(height: 22)
                     .overlay(AppTheme.adaptiveBlack(0.10))
@@ -174,15 +174,15 @@ struct TodoListView: View {
     }
 
     private var isCompactAllTodos: Bool {
-        scope == .all && allTodosViewMode == .compact
+        scope.usesAllTodosLayout && allTodosViewMode == .compact
     }
 
     private var isBoardAllTodos: Bool {
-        scope == .all && allTodosViewMode == .board
+        scope.usesAllTodosLayout && allTodosViewMode == .board
     }
 
     private var isMatrixAllTodos: Bool {
-        scope == .all && allTodosViewMode == .matrix
+        scope.usesAllTodosLayout && allTodosViewMode == .matrix
     }
 
     private var compactList: some View {
@@ -210,8 +210,8 @@ struct TodoListView: View {
     private func groupedList(snapshot: TodoListSnapshot) -> some View {
         LazyVStack(spacing: 3) {
             if todos.isEmpty {
-                EmptyTodoHint(isAllScope: scope == .all)
-            } else if scope == .all {
+                EmptyTodoHint(isAllScope: scope.usesAllTodosLayout)
+            } else if scope.usesAllTodosLayout {
                 ForEach(snapshot.groupedTodos) { group in
                     TodoDateGroupHeader(date: group.date, count: group.todos.count)
                     ForEach(group.todos) { todo in

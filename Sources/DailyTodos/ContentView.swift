@@ -301,6 +301,10 @@ struct ContentView: View {
             filteredTodosCache = store.todos(matching: debouncedSearchText).filter { $0.progress == .waiting }
         case .weekly:
             filteredTodosCache = store.todos(matching: debouncedSearchText).filter(\.isWeekly)
+        case .unfinished:
+            filteredTodosCache = store.todos(matching: debouncedSearchText).filter { !$0.isDone }
+        case .completed:
+            filteredTodosCache = store.todos(matching: debouncedSearchText).filter(\.isDone)
         }
     }
 
@@ -429,6 +433,10 @@ struct ContentView: View {
             return "等待反馈"
         case .weekly:
             return "本周固定"
+        case .unfinished:
+            return "未完成"
+        case .completed:
+            return "已完成"
         case .day(let selectedDate):
             if calendar.isDateInToday(selectedDate) {
                 return "今天"
@@ -453,6 +461,10 @@ struct ContentView: View {
             return "所有需要别人反馈或推进的事项"
         case .weekly:
             return "每周重复出现的管理动作"
+        case .unfinished:
+            return "所有尚未关闭的事项"
+        case .completed:
+            return "已经关闭的事项"
         case .day(let selectedDate):
             return selectedDate.formatted(.dateTime.year().month().day().weekday(.wide))
         }
