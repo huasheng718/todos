@@ -1,6 +1,6 @@
 {
-  "version": "1.2.35",
-  "build": 64,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.35/AntOrder-1.2.35.pkg",
-  "releaseNotes": "蚁序 1.2.35 hotfix：修复手记正文输入时光标突然失去焦点的问题；将 bodyMetrics/outline 从父面板 @State 下沉到 ObservableObject 的 EditorState，击键不再触发整棵详情面板 body 重算，避免 NSTextView 被临时移除并 resignFirstResponder。"
+  "version": "1.2.36",
+  "build": 65,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.36/AntOrder-1.2.36.pkg",
+  "releaseNotes": "待办增加「未完成」「已完成」分类，页面布局与全部待办一致（紧凑/分组/看板/四象限）；侧边栏新增两个入口并显示对应计数。"
 }
