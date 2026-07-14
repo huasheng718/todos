@@ -69,17 +69,41 @@ struct AppLogoImage: View {
     }
 
     private static var logoImage: NSImage? {
-        if let url = Bundle.module.url(forResource: "InAppLogo", withExtension: "png"),
+        // Prefer a top-level app resource (present when packaged as a .app).
+        if let url = Bundle.main.url(forResource: "InAppLogo", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             return image
         }
 
-        if let url = Bundle.main.url(forResource: "InAppLogo", withExtension: "png") {
-            return NSImage(contentsOf: url)
+        // Fall back to the SwiftPM resource bundle. We resolve it ourselves
+        // instead of using the generated `Bundle.module`, which fails to locate
+        // the bundle inside a packaged .app and triggers a launch-time crash.
+        if let bundle = resourceBundle,
+           let url = bundle.url(forResource: "InAppLogo", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            return image
         }
 
         return nil
     }
+
+    /// Resolves the SwiftPM resource bundle across both dev (`swift build`/Xcode)
+    /// and packaged `.app` layouts. Uses `Bundle(path:)` so a missing bundle
+    /// returns `nil` instead of crashing.
+    private static let resourceBundle: Bundle? = {
+        let bundleName = "DailyTodos_DailyTodos.bundle"
+        let candidates = [
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources").appendingPathComponent(bundleName),
+            Bundle.main.bundleURL.appendingPathComponent(bundleName),
+            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent(bundleName),
+        ]
+        for candidate in candidates {
+            if let bundle = Bundle(path: candidate.path) {
+                return bundle
+            }
+        }
+        return nil
+    }()
 }
 
 struct UpdateDot: View {

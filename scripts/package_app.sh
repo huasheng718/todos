@@ -39,6 +39,11 @@ cp "$BUILD_DIR/DailyTodos" "$MACOS_DIR/DailyTodos"
 cp "$ROOT_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
 if [ -d "$BUILD_DIR/DailyTodos_DailyTodos.bundle" ]; then
   cp -R "$BUILD_DIR/DailyTodos_DailyTodos.bundle" "$RESOURCES_DIR/"
+  # Copy the logo to a top-level resource so Bundle.main can load it directly
+  # without depending on the generated Bundle.module (which is fragile inside a .app).
+  if [ -f "$BUILD_DIR/DailyTodos_DailyTodos.bundle/InAppLogo.png" ]; then
+    cp "$BUILD_DIR/DailyTodos_DailyTodos.bundle/InAppLogo.png" "$RESOURCES_DIR/"
+  fi
 fi
 cp "$ICON_SOURCE" "$RESOURCES_DIR/AppIcon.png"
 
