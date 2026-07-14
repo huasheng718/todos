@@ -1,6 +1,6 @@
 {
-  "version": "1.2.33",
-  "build": 62,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.33/AntOrder-1.2.33.pkg",
-  "releaseNotes": "蚁序 1.2.33 性能优化：手记正文编辑器隔离为独立视图，输入不再触发标题/元信息栏/大纲/工具栏整树重算，消除逐字卡顿；凭据库改为懒加载，首屏不再解密全部凭据；数据库迁移改用 PRAGMA user_version，命中版本只跑一次。"
+  "version": "1.2.34",
+  "build": 63,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.34/AntOrder-1.2.34.pkg",
+  "releaseNotes": "蚁序 1.2.34 hotfix：修复手记正文编辑器左侧首字被遮挡的问题；进一步将 isDirty 状态移入 class 容器，避免每次击键仍触发整棵详情面板重算，继续缓解输入卡顿。"
 }
