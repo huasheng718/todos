@@ -30,6 +30,8 @@ enum TodoScope: Equatable, Sendable {
     case waiting
     case weekly
     case day(Date)
+    case unfinished
+    case completed
 
     var analyticsName: String {
         switch self {
@@ -38,6 +40,17 @@ enum TodoScope: Equatable, Sendable {
         case .waiting: "waiting"
         case .weekly: "weekly"
         case .day: "day"
+        case .unfinished: "unfinished"
+        case .completed: "completed"
+        }
+    }
+
+    var usesAllTodosLayout: Bool {
+        switch self {
+        case .all, .unfinished, .completed:
+            return true
+        case .dashboard, .waiting, .weekly, .day:
+            return false
         }
     }
 }

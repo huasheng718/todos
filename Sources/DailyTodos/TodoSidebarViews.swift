@@ -96,6 +96,27 @@ struct TodoSidebarView: View {
             ) {
                 scope = .all
             }
+
+            DateButton(
+                title: "未完成",
+                subtitle: "所有尚未关闭的事项",
+                systemImage: "circle",
+                count: metrics.activeCount,
+                alertCount: metrics.overdueCount,
+                isSelected: scope == .unfinished
+            ) {
+                scope = .unfinished
+            }
+
+            DateButton(
+                title: "已完成",
+                subtitle: "已经关闭的事项",
+                systemImage: "checkmark.circle.fill",
+                count: metrics.completedCount,
+                isSelected: scope == .completed
+            ) {
+                scope = .completed
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

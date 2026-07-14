@@ -4,6 +4,7 @@ import SwiftUI
 struct TodoSidebarMetrics: Equatable {
     static let empty = TodoSidebarMetrics(
         activeCount: 0,
+        completedCount: 0,
         overdueCount: 0,
         waitingCount: 0,
         weeklyCount: 0,
@@ -14,6 +15,7 @@ struct TodoSidebarMetrics: Equatable {
     )
 
     let activeCount: Int
+    let completedCount: Int
     let overdueCount: Int
     let waitingCount: Int
     let weeklyCount: Int
@@ -24,6 +26,7 @@ struct TodoSidebarMetrics: Equatable {
 
     init(
         activeCount: Int,
+        completedCount: Int,
         overdueCount: Int,
         waitingCount: Int,
         weeklyCount: Int,
@@ -33,6 +36,7 @@ struct TodoSidebarMetrics: Equatable {
         pendingCountByDay: [Date: Int]
     ) {
         self.activeCount = activeCount
+        self.completedCount = completedCount
         self.overdueCount = overdueCount
         self.waitingCount = waitingCount
         self.weeklyCount = weeklyCount
@@ -45,6 +49,7 @@ struct TodoSidebarMetrics: Equatable {
     init(todos: [TodoItem], calendar: Calendar, now: Date) {
         let today = calendar.startOfDay(for: now)
         var activeCount = 0
+        var completedCount = 0
         var overdueCount = 0
         var waitingCount = 0
         var weeklyCount = 0
@@ -59,6 +64,8 @@ struct TodoSidebarMetrics: Equatable {
             if todo.progress != .done {
                 activeCount += 1
                 pendingCountByDay[day, default: 0] += 1
+            } else {
+                completedCount += 1
             }
             if todo.progress != .done && todo.progress != .waiting && day < today {
                 overdueCount += 1
@@ -75,6 +82,7 @@ struct TodoSidebarMetrics: Equatable {
         }
 
         self.activeCount = activeCount
+        self.completedCount = completedCount
         self.overdueCount = overdueCount
         self.waitingCount = waitingCount
         self.weeklyCount = weeklyCount
