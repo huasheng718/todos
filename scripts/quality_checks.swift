@@ -1184,10 +1184,10 @@ func checkTodoIssueListUsesContextMenu() throws {
 
     try expect(
         rowSource.contains("TodoIssueStatusMarker")
-            && rowSource.contains("TodoIssueProgressIcon")
+            && rowSource.contains("TodoIssueSignalIcon(todo: todo)")
             && rowSource.contains("TodoContextMenuContent(")
             && rowSource.contains(".contextMenu"),
-        "紧凑/分组待办行应使用 issue 风格 icon 状态视觉，并通过右键菜单承载操作"
+        "待办行应使用完成框与单一 issue 信号，并通过右键菜单承载操作"
     )
     try expect(
         !rowSource.contains("ProgressMenuTag(progress: todo.progress")
@@ -1218,16 +1218,36 @@ func checkTodoDenseNaturalListPresentation() throws {
     let sidebarSource = try sourceFile("Sources/DailyTodos/TodoSidebarViews.swift")
     guard
         let rowBackgroundStart = rowSource.range(of: "private var rowBackground: Color"),
-        let rowStrokeStart = rowSource.range(of: "private var rowStroke: Color")
+        let rowOpacityStart = rowSource.range(of: "private var rowOpacity: Double")
     else {
-        throw CheckFailure.failed("待办行应保留 rowBackground/rowStroke 视觉分层入口")
+        throw CheckFailure.failed("待办行应保留 rowBackground 视觉分层入口")
     }
-    let rowBackgroundSource = String(rowSource[rowBackgroundStart.lowerBound..<rowStrokeStart.lowerBound])
+    let rowBackgroundSource = String(rowSource[rowBackgroundStart.lowerBound..<rowOpacityStart.lowerBound])
 
     try expect(
-        rowSource.contains("TodoIssuePriorityIcon(priority: todo.priority)")
-            && rowSource.contains("TodoIssueProgressIcon(progress: todo.progress)"),
-        "紧凑/分组待办行应把优先级和推进状态收敛为 icon，而不是文字标签"
+        rowSource.contains("TodoIssueSignalIcon(todo: todo)")
+            && listSource.contains("TodoIssueSignalIcon(todo: todo)"),
+        "紧凑、分组和看板待办应复用单一状态信号"
+    )
+    try expect(
+        !rowSource.contains("TodoIssuePriorityIcon")
+            && !rowSource.contains("TodoIssueProgressIcon")
+            && !listSource.contains("TodoIssuePriorityIcon")
+            && !listSource.contains("TodoIssueProgressIcon"),
+        "普通待办不能同时展示优先级和进度两个彩色 icon"
+    )
+    try expect(
+        !rowSource.contains("issueRailColor")
+            && !rowSource.contains("sideRailOpacity")
+            && rowSource.contains("AppTheme.workspaceTokens.danger")
+            && rowSource.contains("AppTheme.workspaceTokens.textSecondary"),
+        "任务行应取消状态竖线，并用语义色区分逾期日期与普通日期"
+    )
+    try expect(
+        rowSource.contains(".font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))")
+            && rowSource.contains(".font(.system(size: 12, weight: .regular))")
+            && rowSource.contains(".lineLimit(2)"),
+        "任务标题和备注应使用 14/12 的清晰文字层级"
     )
     try expect(
         !rowSource.contains("PriorityOutlineTag(priority: todo.priority")

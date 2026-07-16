@@ -572,15 +572,7 @@ struct TodoBoardCard: View {
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .center, spacing: 6) {
-                    TodoIssuePriorityIcon(priority: todo.priority)
-                    TodoIssueProgressIcon(progress: todo.progress)
-                    if isOverdue {
-                        Image(systemName: "clock")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(TodoPriority.high.displayColor)
-                            .frame(width: 16, height: 20)
-                            .help("逾期")
-                    }
+                    TodoIssueSignalIcon(todo: todo)
 
                     Spacer(minLength: 6)
                 }
