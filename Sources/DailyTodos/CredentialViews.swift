@@ -376,7 +376,7 @@ struct CredentialTypeButton: View {
             HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textMuted)
                     .frame(width: 18)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -386,7 +386,7 @@ struct CredentialTypeButton: View {
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textMuted)
                         .lineLimit(1)
                 }
 
@@ -678,7 +678,7 @@ struct CredentialListRow: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: item.type.icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk)
                     .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -692,7 +692,7 @@ struct CredentialListRow: View {
 
                         Text(item.type.title)
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(typeBadgeFill, in: Capsule())
@@ -700,13 +700,13 @@ struct CredentialListRow: View {
 
                     Text(item.displayService)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk)
                         .lineLimit(1)
 
                     if !item.tags.isEmpty {
                         Text(item.tags.prefix(3).joined(separator: " · "))
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.mutedInk.opacity(0.86))
+                            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk.opacity(0.86))
                             .lineLimit(1)
                     }
                 }

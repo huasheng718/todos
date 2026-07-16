@@ -24,6 +24,8 @@ struct DailyTodosChecks {
                 try checkStoreArchitectureGuardrails()
                 try checkDeadCodeGuardrails()
                 try checkDisabledTactilePlainConsumers()
+                try checkWorkspaceSelectedContentConsumers()
+                try checkUpdateIndicatorVisualSemantics()
                 try checkWorkspaceVisualClarityTheme()
                 try checkTodoSidebarVisualClarity()
                 try checkQuickInputParser()
@@ -177,6 +179,77 @@ func checkDisabledTactilePlainConsumers() throws {
         }
     }
     try expect(consumerCount == 17, "禁用 tactile-plain 控件清单发生变化，应逐项审查；当前 \(consumerCount) 项")
+}
+
+func checkWorkspaceSelectedContentConsumers() throws {
+    let appShellSource = try sourceFile("Sources/DailyTodos/AppShellViews.swift")
+    let credentialSource = try sourceFile("Sources/DailyTodos/CredentialViews.swift")
+    let settingsSource = try sourceFile("Sources/DailyTodos/SettingsViews.swift")
+    let globalSearchSource = try sourceFile("Sources/DailyTodos/GlobalCommandSearch.swift")
+    let handbookSource = try sourceFile("Sources/DailyTodos/HandbookNotesWorkspaceView.swift")
+    let todoNotesSource = try sourceFile("Sources/DailyTodos/TodoNotesViews.swift")
+    let todoSectionSource = try sourceFile("Sources/DailyTodos/TodoSectionViews.swift")
+
+    try expect(
+        appShellSource.contains(".foregroundStyle(AppTheme.workspaceTokens.selectedContent)")
+            && appShellSource.contains("isCollapsed ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textMuted"),
+        "皮肤入口和折叠按钮在 accentSoft 上必须使用 selectedContent"
+    )
+    for requiredCredentialState in [
+        "isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textMuted",
+        "isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textMuted",
+        "isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk",
+        "isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk",
+        "isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk.opacity(0.86)"
+    ] {
+        try expect(credentialSource.contains(requiredCredentialState), "凭证选中态缺少可访问前景：\(requiredCredentialState)")
+    }
+    for requiredSettingsState in [
+        "selectedSection == section ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk",
+        "selectedSection == section ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk",
+        "isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk",
+        "isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk"
+    ] {
+        try expect(settingsSource.contains(requiredSettingsState), "设置选中态缺少可访问前景：\(requiredSettingsState)")
+    }
+    try expect(
+        globalSearchSource.contains("isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textMuted"),
+        "全局搜索选中结果的详情文字必须使用 textSecondary"
+    )
+    try expect(
+        handbookSource.contains("isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.secondaryText")
+            && handbookSource.contains("isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.ink"),
+        "手记目录和标签选中内容必须使用 selectedContent"
+    )
+    try expect(
+        todoNotesSource.contains("enabledForeground: AppTheme.workspaceTokens.selectedContent")
+            && todoSectionSource.contains("enabledForeground: AppTheme.workspaceTokens.selectedContent"),
+        "accentSoft 上的待办操作标签必须使用 selectedContent"
+    )
+}
+
+func checkUpdateIndicatorVisualSemantics() throws {
+    let shellSource = try sourceFile("Sources/DailyTodos/AppShellViews.swift")
+    let settingsSource = try sourceFile("Sources/DailyTodos/SettingsViews.swift")
+    guard let updateDotStart = shellSource.range(of: "struct UpdateDot"),
+          let collapseButtonStart = shellSource.range(of: "struct SecondarySidebarCollapseButton")
+    else {
+        throw CheckFailure.failed("无法定位 UpdateDot")
+    }
+    let updateDotSource = String(shellSource[updateDotStart.lowerBound..<collapseButtonStart.lowerBound])
+    try expect(
+        updateDotSource.contains(".fill(AppTheme.workspaceTokens.warning)")
+            && !updateDotSource.contains("TodoPriority.high.displayColor")
+            && !updateDotSource.contains(".shadow("),
+        "普通可用更新必须使用 warning 且不能显示危险红或投影"
+    )
+    try expect(
+        settingsSource.contains(".fill(AppTheme.workspaceTokens.warning)")
+            && settingsSource.contains("updateController.availableUpdate == nil ? AppTheme.mutedInk : AppTheme.workspaceTokens.warning")
+            && !settingsSource.contains("持续显示红点")
+            && !settingsSource.contains("设置入口显示红点"),
+        "设置中的普通更新提示必须使用 warning 和中性文案"
+    )
 }
 
 func checkSystemInputSourcePolicy() throws {

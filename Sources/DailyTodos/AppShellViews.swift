@@ -33,7 +33,7 @@ struct SkinPickerButton: View {
                 Text(currentSkin.shortTitle)
                     .font(.caption.weight(.semibold))
             }
-            .foregroundStyle(AppTheme.accent)
+            .foregroundStyle(AppTheme.workspaceTokens.selectedContent)
             .frame(width: 76, height: 30)
             .background(AppTheme.accentSoft, in: Capsule())
             .overlay(
@@ -111,13 +111,12 @@ struct UpdateDot: View {
 
     var body: some View {
         Circle()
-            .fill(TodoPriority.high.displayColor)
+            .fill(AppTheme.workspaceTokens.warning)
             .frame(width: size, height: size)
             .overlay(
                 Circle()
                     .stroke(AppTheme.adaptiveWhite(0.92), lineWidth: max(1, size * 0.18))
             )
-            .shadow(color: TodoPriority.high.displayColor.opacity(0.35), radius: 4, x: 0, y: 1)
             .accessibilityLabel("有可用更新")
     }
 }
@@ -134,7 +133,7 @@ struct SecondarySidebarCollapseButton: View {
         } label: {
             Image(systemName: isCollapsed ? "sidebar.leading" : "sidebar.left")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(isCollapsed ? AppTheme.accent : AppTheme.mutedInk)
+                .foregroundStyle(isCollapsed ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textMuted)
                 .frame(width: 28, height: 28)
                 .background(buttonBackground, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .overlay(

@@ -67,7 +67,7 @@ struct DailySuggestionCard: View {
                 .buttonStyle(.tactilePlain)
                 .tactilePlainControlAppearance(
                     isDisabled: isLoading,
-                    enabledForeground: AppTheme.workspaceTokens.accent,
+                    enabledForeground: AppTheme.workspaceTokens.selectedContent,
                     enabledBackground: AppTheme.workspaceTokens.accentSoft,
                     enabledBorder: AppTheme.workspaceTokens.accent.opacity(0.20),
                     shape: .capsule

@@ -325,7 +325,7 @@ struct GlobalSearchResultRow: View {
                         .lineLimit(1)
                     Text("\(result.subtitle) · \(result.detail)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.workspaceTokens.textMuted)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textMuted)
                         .lineLimit(1)
                 }
 

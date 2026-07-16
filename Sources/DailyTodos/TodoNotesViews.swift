@@ -85,7 +85,7 @@ struct NotesReadOnlyRow: View {
                     .buttonStyle(.tactilePlain)
                     .tactilePlainControlAppearance(
                         isDisabled: isSummarizing,
-                        enabledForeground: AppTheme.workspaceTokens.accent,
+                        enabledForeground: AppTheme.workspaceTokens.selectedContent,
                         enabledBackground: AppTheme.workspaceTokens.accentSoft,
                         enabledBorder: AppTheme.workspaceTokens.accent.opacity(0.18),
                         shape: .capsule

@@ -114,7 +114,7 @@ struct SettingsContextSidebar: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: section.icon)
                                         .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                        .foregroundStyle(selectedSection == section ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk)
                                         .frame(width: 16)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(section.title)
@@ -122,7 +122,7 @@ struct SettingsContextSidebar: View {
                                             .foregroundStyle(AppTheme.ink)
                                         Text(section.subtitle)
                                             .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(selectedSection == section ? AppTheme.accent : AppTheme.mutedInk)
+                                            .foregroundStyle(selectedSection == section ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk)
                                             .lineLimit(1)
                                     }
                                     Spacer(minLength: 0)
@@ -132,7 +132,7 @@ struct SettingsContextSidebar: View {
                                             .frame(width: 6, height: 6)
                                     } else if section == .updates, updateController.hasAvailableUpdate {
                                         Circle()
-                                            .fill(TodoPriority.high.displayColor)
+                                            .fill(AppTheme.workspaceTokens.warning)
                                             .frame(width: 6, height: 6)
                                     }
                                 }
@@ -476,7 +476,7 @@ private struct SettingsContentView: View {
             HStack(spacing: 10) {
                 Image(systemName: skin.icon)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk)
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -485,7 +485,7 @@ private struct SettingsContentView: View {
                         .foregroundStyle(AppTheme.ink)
                     Text(skin.shortTitle)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk)
                 }
 
                 Spacer()
@@ -493,7 +493,7 @@ private struct SettingsContentView: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.workspaceTokens.selectedContent)
                 }
             }
             .padding(.horizontal, 10)
@@ -560,7 +560,7 @@ private struct SettingsContentView: View {
             return "正在连接下载服务..."
         }
         if let update = updateController.availableUpdate {
-            return "可更新到 v\(update.version) (\(update.build))，设置入口会持续显示红点。"
+            return "可更新到 v\(update.version) (\(update.build))，设置入口会持续显示更新提示。"
         }
         return updateController.statusMessage ?? "每天自动检查一次，也可以手动检查。"
     }
@@ -621,10 +621,10 @@ private struct SettingsContentView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "bell.badge")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(updateController.availableUpdate == nil ? AppTheme.mutedInk : TodoPriority.high.displayColor)
+                .foregroundStyle(updateController.availableUpdate == nil ? AppTheme.mutedInk : AppTheme.workspaceTokens.warning)
                 .frame(width: 16)
 
-            Text("提醒机制：启动和回到前台会自动检查；应用长期打开时每小时轮询一次，最多每天检查一次远端版本。发现新版本后，设置入口显示红点；自动弹窗按版本与时间节流，手动检查始终反馈结果。")
+            Text("提醒机制：启动和回到前台会自动检查；应用长期打开时每小时轮询一次，最多每天检查一次远端版本。发现新版本后，设置入口显示更新提示；自动弹窗按版本与时间节流，手动检查始终反馈结果。")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AppTheme.mutedInk)
                 .lineSpacing(2)
