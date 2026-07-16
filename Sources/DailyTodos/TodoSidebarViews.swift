@@ -28,8 +28,8 @@ struct TodoSidebarView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .background(AppTheme.sidebar)
-        .foregroundStyle(AppTheme.ink)
+        .background(AppTheme.workspaceTokens.contextSidebar)
+        .foregroundStyle(AppTheme.workspaceTokens.textPrimary)
         .onAppear {
             if let selectedDate {
                 calendarMonth = selectedDate
@@ -182,24 +182,20 @@ struct DateButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(isSelected ? AppTheme.accentWarm : Color.clear)
-                    .frame(width: 3, height: 30)
-
                 Image(systemName: systemImage)
                     .symbolRenderingMode(.hierarchical)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textSecondary)
                     .frame(width: 20, height: 20)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.ink)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textPrimary)
                         .lineLimit(1)
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
                         .lineLimit(1)
                 }
 
@@ -207,22 +203,17 @@ struct DateButton: View {
 
                 if count > 0 || alertCount > 0 {
                     Text(countText)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(isSelected ? .white : countColor)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(countForeground)
                         .frame(minWidth: 24, minHeight: 20)
-                        .background(isSelected ? countColor : countColor.opacity(0.11), in: Capsule())
+                        .background(countBackground, in: Capsule())
                         .help(countHelp)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 9)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
             .contentShape(Rectangle())
-            .background(navBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(isHovered ? 0.36 : 0.0))
-            )
+            .background(navBackground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.tactilePlain)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -235,10 +226,10 @@ struct DateButton: View {
 
     private var navBackground: Color {
         if isSelected {
-            return AppTheme.sidebarSelected
+            return AppTheme.workspaceTokens.accentSoft
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(0.46)
+            return AppTheme.workspaceTokens.listRowHover
         }
         return Color.clear
     }
@@ -250,8 +241,20 @@ struct DateButton: View {
         return "\(count)"
     }
 
-    private var countColor: Color {
-        alertCount > 0 ? TodoPriority.high.displayColor : AppTheme.accent
+    private var countForeground: Color {
+        if isSelected {
+            return AppTheme.workspaceTokens.accent
+        }
+        return alertCount > 0
+            ? AppTheme.workspaceTokens.danger
+            : AppTheme.workspaceTokens.textSecondary
+    }
+
+    private var countBackground: Color {
+        if isSelected {
+            return AppTheme.workspaceTokens.accent.opacity(0.10)
+        }
+        return countForeground.opacity(0.10)
     }
 
     private var countHelp: String {

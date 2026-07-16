@@ -24,6 +24,7 @@ struct DailyTodosChecks {
                 try checkStoreArchitectureGuardrails()
                 try checkDeadCodeGuardrails()
                 try checkWorkspaceVisualClarityTheme()
+                try checkTodoSidebarVisualClarity()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
@@ -1146,6 +1147,33 @@ func checkWorkspaceVisualClarityTheme() throws {
         railButtonSource.contains("cornerRadius: 6")
             && railButtonSource.contains("AppTheme.workspaceTokens.listRowHover"),
         "模块导航应使用 6px 圆角和统一 hover 表面"
+    )
+}
+
+func checkTodoSidebarVisualClarity() throws {
+    let source = try sourceFile("Sources/DailyTodos/TodoSidebarViews.swift")
+    guard let buttonStart = source.range(of: "struct DateButton")
+    else {
+        throw CheckFailure.failed("无法定位 DateButton")
+    }
+    let buttonSource = String(source[buttonStart.lowerBound..<source.endIndex])
+
+    try expect(
+        source.contains(".background(AppTheme.workspaceTokens.contextSidebar)"),
+        "待办上下文侧栏应使用独立 contextSidebar 表面"
+    )
+    try expect(
+        !buttonSource.contains("AppTheme.accentWarm")
+            && !buttonSource.contains("cornerRadius: 12")
+            && !buttonSource.contains("RoundedRectangle(cornerRadius: 2"),
+        "待办分类不能保留橙色竖线或 12px 卡片式选中态"
+    )
+    try expect(
+        buttonSource.contains("cornerRadius: 6")
+            && buttonSource.contains("private var countForeground: Color")
+            && buttonSource.contains("private var countBackground: Color")
+            && buttonSource.contains("AppTheme.workspaceTokens.listRowHover"),
+        "待办分类应使用统一圆角、hover 表面和数量颜色规则"
     )
 }
 
