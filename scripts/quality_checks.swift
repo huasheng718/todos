@@ -1297,13 +1297,32 @@ func checkTodoDenseNaturalListPresentation() throws {
     let badgesSource = try sourceFile("Sources/DailyTodos/TodoBadges.swift")
     let captureSource = try sourceFile("Sources/DailyTodos/TodoCaptureViews.swift")
     let sidebarSource = try sourceFile("Sources/DailyTodos/TodoSidebarViews.swift")
+    guard let flowRowStart = rowSource.range(of: "struct TodoFlowRow: View"),
+          let statusMarkerStart = rowSource.range(of: "struct TodoIssueStatusMarker"),
+          let boardEditStart = rowSource.range(of: "struct TodoBoardEditCard"),
+          let emptyHintStart = rowSource.range(of: "struct EmptyTodoHint")
+    else {
+        throw CheckFailure.failed("无法定位 TodoFlowRow/TodoBoardEditCard 边界")
+    }
+    let flowRowSource = String(rowSource[flowRowStart.lowerBound..<statusMarkerStart.lowerBound])
+    let boardEditSource = String(rowSource[boardEditStart.lowerBound..<emptyHintStart.lowerBound])
+    guard let nonEditingStart = flowRowSource.range(of: "} else {")?.upperBound,
+          let startEditingStart = flowRowSource.range(of: "private func startEditing()")?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 TodoFlowRow 非编辑态")
+    }
+    let nonEditingSource = String(flowRowSource[nonEditingStart..<startEditingStart])
+
+    try expect(
+        !boardEditSource.contains(".shadow("),
+        "TodoBoardEditCard 不能直接添加 shadow，即使 rowShadow 当前为 clear"
+    )
     guard
-        let rowBackgroundStart = rowSource.range(of: "private var rowBackground: Color"),
-        let startEditingStart = rowSource.range(of: "private func startEditing()")
+        let rowBackgroundStart = nonEditingSource.range(of: "private var rowBackground: Color")
     else {
         throw CheckFailure.failed("待办行应保留 rowBackground 视觉分层入口")
     }
-    let rowBackgroundSource = String(rowSource[rowBackgroundStart.lowerBound..<startEditingStart.lowerBound])
+    let rowBackgroundSource = String(nonEditingSource[rowBackgroundStart.lowerBound..<nonEditingSource.endIndex])
 
     try expect(
         rowSource.contains("TodoIssueSignalIcon(todo: todo)")
@@ -1347,11 +1366,14 @@ func checkTodoDenseNaturalListPresentation() throws {
         "逾期普通行不应再使用红色背景底色"
     )
     try expect(
-        !rowSource.contains(".opacity(rowOpacity)")
-            && !rowSource.contains("private var rowOpacity: Double")
-            && rowSource.contains("AppTheme.workspaceTokens.accentForeground")
-            && !rowSource.contains(".foregroundStyle(.white)"),
-        "已完成普通行不能通过容器透明度降低文字对比度"
+        nonEditingSource.contains(".foregroundStyle(todo.isDone ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textPrimary)")
+            && nonEditingSource.contains("Text(todo.trimmedNotes)")
+            && nonEditingSource.contains(".foregroundStyle(AppTheme.workspaceTokens.textSecondary)")
+            && nonEditingSource.contains(".strikethrough(todo.isDone, color: AppTheme.workspaceTokens.textSecondary)")
+            && !nonEditingSource.contains(".opacity(rowOpacity)")
+            && !nonEditingSource.contains("private var rowOpacity: Double")
+            && !nonEditingSource.contains(".opacity(todo.isDone"),
+        "已完成普通行的标题和备注应使用 textSecondary，且不能通过行/容器透明度降低对比度"
     )
 
     guard let signalStart = rowSource.range(of: "private var signal: (systemName: String, color: Color, label: String)?"),

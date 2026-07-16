@@ -400,7 +400,6 @@ struct TodoBoardEditCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(AppTheme.accent.opacity(0.24))
         )
-        .shadow(color: AppTheme.rowShadow, radius: 8, x: 0, y: 4)
     }
 
     private var canSubmit: Bool {
