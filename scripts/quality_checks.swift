@@ -41,6 +41,7 @@ struct DailyTodosChecks {
                 try checkHandbookDragTargetsClearFolder()
                 try checkTodoIssueListUsesContextMenu()
                 try checkTodoDenseNaturalListPresentation()
+                try checkTodoControlsVisualClarity()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
                 try checkHandbookImagePasteMenuValidation()
@@ -1307,6 +1308,51 @@ func checkTodoDenseNaturalListPresentation() throws {
             && sidebarSource.contains(".font(.system(size: 14, weight: .semibold))")
             && sidebarSource.contains(".frame(width: 20, height: 20)"),
         "待办侧栏图标应统一使用 hierarchical 渲染和 20x20 稳定尺寸"
+    )
+}
+
+func checkTodoControlsVisualClarity() throws {
+    let shellSource = try sourceFile("Sources/DailyTodos/WorkspaceShellViews.swift")
+    let captureSource = try sourceFile("Sources/DailyTodos/TodoCaptureViews.swift")
+
+    guard let searchStart = shellSource.range(of: "struct WorkspaceSearchField"),
+          let rowSurfaceStart = shellSource.range(of: "struct WorkspaceListRowSurface")
+    else {
+        throw CheckFailure.failed("无法定位工作台搜索和分段控件")
+    }
+    let controlsSource = String(shellSource[searchStart.lowerBound..<rowSurfaceStart.lowerBound])
+
+    try expect(
+        controlsSource.contains("AppTheme.workspaceTokens.contentSurface")
+            && controlsSource.contains("lineWidth: focusBinding.wrappedValue ? 1.5 : 1")
+            && controlsSource.contains("AppTheme.workspaceTokens.accentSoft")
+            && controlsSource.contains("AppTheme.workspaceTokens.accent"),
+        "搜索与分段控件应使用明确表面、1.5px 焦点环和轻量选中态"
+    )
+    try expect(
+        !controlsSource.contains("selection == option ? .white")
+            && !controlsSource.contains(".fill(AppTheme.workspaceTokens.accent)"),
+        "分段控件不应继续使用整块强调色填充"
+    )
+
+    guard let captureStart = captureSource.range(of: "struct QuickCaptureBar"),
+          let previewStart = captureSource.range(of: "struct QuickCapturePreview")
+    else {
+        throw CheckFailure.failed("无法定位 QuickCaptureBar")
+    }
+    let captureBarSource = String(captureSource[captureStart.lowerBound..<previewStart.lowerBound])
+    try expect(
+        !captureBarSource.contains("LinearGradient")
+            && !captureBarSource.contains("AppTheme.accentWarm")
+            && !captureBarSource.contains(".shadow(")
+            && !captureBarSource.contains("cornerRadius: 16"),
+        "快速记录应去除渐变、第二强调色、投影和 16px 卡片圆角"
+    )
+    try expect(
+        captureBarSource.contains("cornerRadius: 8")
+            && captureBarSource.contains("lineWidth: isFocused ? 1.5 : 1")
+            && captureBarSource.contains("AppTheme.workspaceTokens.contentSurface"),
+        "快速记录应使用 8px 平面表面和明确焦点边框"
     )
 }
 

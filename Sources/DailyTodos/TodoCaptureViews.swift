@@ -28,27 +28,17 @@ struct QuickCaptureBar: View {
         VStack(alignment: .leading, spacing: isExpanded ? 9 : 5) {
             HStack(alignment: .center, spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.accent.opacity(isFocused ? 0.22 : 0.16),
-                                    AppTheme.accentWarm.opacity(isFocused ? 0.18 : 0.13)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AppTheme.workspaceTokens.accentSoft)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(AppTheme.accent.opacity(0.16), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(AppTheme.workspaceTokens.accent.opacity(0.18))
                         )
                     Image(systemName: "command")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.workspaceTokens.accent)
                 }
                 .frame(width: 28, height: 28)
-                .scaleEffect(isFocused ? 1.04 : 1)
 
                 TextField("快速记录：要推进什么？", text: $title)
                     .textFieldStyle(.plain)
@@ -88,14 +78,25 @@ struct QuickCaptureBar: View {
                         .frame(width: 70, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(canCreate && !isCreating ? AppTheme.accentWarm : AppTheme.adaptiveBlack(0.28), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(canCreate && !isCreating ? AppTheme.adaptiveWhite(0.52) : AppTheme.adaptiveBlack(0.05))
+                .foregroundStyle(
+                    canCreate && !isCreating
+                        ? Color.white
+                        : AppTheme.workspaceTokens.textSecondary
                 )
-                .shadow(color: canCreate && !isCreating ? AppTheme.accentWarm.opacity(0.20) : .clear, radius: 10, x: 0, y: 6)
-                .scaleEffect(canCreate && isFocused ? 1.02 : 1)
+                .background(
+                    canCreate && !isCreating
+                        ? AppTheme.workspaceTokens.accent
+                        : AppTheme.workspaceTokens.contentAltSurface,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(
+                            canCreate && !isCreating
+                                ? AppTheme.workspaceTokens.accent
+                                : AppTheme.workspaceTokens.hairline
+                        )
+                )
                 .interactionHitArea()
                 .disabled(!canCreate || isCreating)
                 .help("记录新的待办")
@@ -140,7 +141,11 @@ struct QuickCaptureBar: View {
                             .controlSize(.mini)
                     }
                 }
-                .foregroundStyle(aiStatusMessage.contains("失败") ? TodoPriority.high.displayColor : AppTheme.accent)
+                .foregroundStyle(
+                    aiStatusMessage.contains("失败")
+                        ? AppTheme.workspaceTokens.danger
+                        : AppTheme.workspaceTokens.accent
+                )
                 .padding(.leading, 32)
                 .transition(AppMotion.inlineTransition)
             } else if isAIEnabled && hasDraft {
@@ -150,7 +155,7 @@ struct QuickCaptureBar: View {
                     Text("提交时使用 AI 解析")
                         .font(.system(size: 11, weight: .semibold))
                 }
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.workspaceTokens.accent)
                 .padding(.leading, 32)
                 .transition(AppMotion.inlineTransition)
             }
@@ -165,7 +170,7 @@ struct QuickCaptureBar: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .lineLimit(1)
                         }
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.workspaceTokens.accent)
                     }
                     AITraceCompactView(trace: aiTrace)
                 }
@@ -211,27 +216,14 @@ struct QuickCaptureBar: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.panel)
-                .overlay(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(canCreate ? AppTheme.accentWarm : AppTheme.accent)
-                        .frame(width: 3)
-                        .opacity(canCreate || isExpanded ? 0.95 : 0.34)
-                        .padding(.vertical, 10)
-                }
+            AppTheme.workspaceTokens.contentSurface,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(captureStrokeColor, lineWidth: isFocused ? 1.35 : 1)
-        )
-        .shadow(
-            color: AppTheme.rowShadow,
-            radius: hasDraft || isHovered || isFocused ? 15 : 8,
-            x: 0,
-            y: hasDraft || isHovered || isFocused ? 7 : 4
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(captureStrokeColor, lineWidth: isFocused ? 1.5 : 1)
         )
         .onHover { hovered in
             withAnimation(AppMotion.hover) {
@@ -261,12 +253,12 @@ struct QuickCaptureBar: View {
 
     private var captureStrokeColor: Color {
         if isFocused {
-            return AppTheme.accent.opacity(0.36)
+            return AppTheme.workspaceTokens.focusRing
         }
         if isExpanded || isHovered {
-            return AppTheme.accent.opacity(0.24)
+            return AppTheme.workspaceTokens.textMuted
         }
-        return AppTheme.border.opacity(0.86)
+        return AppTheme.workspaceTokens.hairline
     }
 
     private var parsedPreview: ParsedTodoInput {
