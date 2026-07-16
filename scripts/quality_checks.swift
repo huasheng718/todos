@@ -23,6 +23,7 @@ struct DailyTodosChecks {
                 try checkRemainingPerformanceGuardrails()
                 try checkStoreArchitectureGuardrails()
                 try checkDeadCodeGuardrails()
+                try checkDisabledTactilePlainConsumers()
                 try checkWorkspaceVisualClarityTheme()
                 try checkTodoSidebarVisualClarity()
                 try checkQuickInputParser()
@@ -100,10 +101,82 @@ func workspaceThemeCheckContrastRatio(
     return (lighter + 0.05) / (darker + 0.05)
 }
 
+func workspaceThemeCheckComposite(
+    _ foreground: WorkspaceThemeCheckRGB,
+    opacity: Double,
+    over background: WorkspaceThemeCheckRGB
+) -> WorkspaceThemeCheckRGB {
+    WorkspaceThemeCheckRGB(
+        red: foreground.red * opacity + background.red * (1 - opacity),
+        green: foreground.green * opacity + background.green * (1 - opacity),
+        blue: foreground.blue * opacity + background.blue * (1 - opacity)
+    )
+}
+
 func sourceFile(_ relativePath: String) throws -> String {
     let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent(relativePath)
     return try String(contentsOf: url, encoding: .utf8)
+}
+
+func tactilePlainDisabledConsumerBlocks(in source: String) -> [String] {
+    let styleToken = ".buttonStyle(.tactilePlain)"
+    var blocks: [String] = []
+    var searchStart = source.startIndex
+
+    while let styleRange = source.range(of: styleToken, range: searchStart..<source.endIndex) {
+        let tail = source[styleRange.upperBound...]
+        guard let disabledRange = tail.range(of: ".disabled(") else {
+            break
+        }
+        if let nextButtonRange = tail.range(of: "Button"),
+           nextButtonRange.lowerBound < disabledRange.lowerBound {
+            searchStart = styleRange.upperBound
+            continue
+        }
+
+        let blockEnd = source[disabledRange.lowerBound...].firstIndex(of: "\n") ?? source.endIndex
+        blocks.append(String(source[styleRange.lowerBound..<blockEnd]))
+        searchStart = blockEnd
+    }
+
+    return blocks
+}
+
+func checkDisabledTactilePlainConsumers() throws {
+    let themeSource = try sourceFile("Sources/DailyTodos/AppTheme.swift")
+    for requiredToken in [
+        "struct TactilePlainControlAppearance",
+        "AppTheme.workspaceTokens.textSecondary",
+        "AppTheme.workspaceTokens.contentAltSurface",
+        "AppTheme.workspaceTokens.hairline"
+    ] {
+        try expect(themeSource.contains(requiredToken), "禁用 tactile-plain 外观缺少语义实现：\(requiredToken)")
+    }
+
+    let sourceRoot = "Sources/DailyTodos"
+    let sourceRootURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent(sourceRoot, isDirectory: true)
+    let reviewedFiles = try FileManager.default.contentsOfDirectory(
+        at: sourceRootURL,
+        includingPropertiesForKeys: nil
+    )
+    .filter { $0.pathExtension == "swift" }
+    .map { "\(sourceRoot)/\($0.lastPathComponent)" }
+    .sorted()
+    var consumerCount = 0
+    for relativePath in reviewedFiles {
+        let source = try sourceFile(relativePath)
+        let blocks = tactilePlainDisabledConsumerBlocks(in: source)
+        consumerCount += blocks.count
+        for block in blocks {
+            try expect(
+                block.contains(".tactilePlainControlAppearance("),
+                "\(relativePath) 的禁用 tactile-plain 控件缺少显式前景、背景和边框状态"
+            )
+        }
+    }
+    try expect(consumerCount == 17, "禁用 tactile-plain 控件清单发生变化，应逐项审查；当前 \(consumerCount) 项")
 }
 
 func checkSystemInputSourcePolicy() throws {
@@ -1013,6 +1086,10 @@ func checkHandbookDragTargetsClearFolder() throws {
 func checkWorkspaceVisualClarityTheme() throws {
     let themeSource = try sourceFile("Sources/DailyTodos/AppTheme.swift")
     let shellSource = try sourceFile("Sources/DailyTodos/WorkspaceShellViews.swift")
+    let sidebarViewSource = try sourceFile("Sources/DailyTodos/TodoSidebarViews.swift")
+    let quickDateSource = try sourceFile("Sources/DailyTodos/SidebarSharedViews.swift")
+    let calendarSource = try sourceFile("Sources/DailyTodos/TodoMiniCalendarViews.swift")
+    let globalSearchSource = try sourceFile("Sources/DailyTodos/GlobalCommandSearch.swift")
 
     guard let buttonStyleStart = themeSource.range(of: "struct TactilePlainButtonStyle"),
           let buttonStyleEnd = themeSource.range(of: "extension ButtonStyle where Self == TactilePlainButtonStyle")
@@ -1042,12 +1119,14 @@ func checkWorkspaceVisualClarityTheme() throws {
         "textPrimary: workspacePrimaryText",
         "textSecondary: workspaceSecondaryText",
         "textMuted: workspaceMutedText",
+        "selectedContent: workspaceSelectedContent",
         "action: accent",
         "accentForeground: workspaceAccentForeground",
         "actionSoft: accentSoft",
         "warning: workspaceWarning",
         "danger: workspaceDanger",
-        "shadow: .clear"
+        "shadow: .clear",
+        "overlayShadow: workspaceOverlayShadow"
     ] {
         try expect(tokensSource.contains(requiredMapping), "工作台主题缺少清晰度映射：\(requiredMapping)")
     }
@@ -1066,7 +1145,9 @@ func checkWorkspaceVisualClarityTheme() throws {
         "static var workspacePrimaryText: Color",
         "static var workspaceSecondaryText: Color",
         "static var workspaceMutedText: Color",
+        "static var workspaceSelectedContent: Color",
         "static var workspaceAccentForeground: Color",
+        "static var workspaceOverlayShadow: Color",
         "static var workspaceDanger: Color",
         "static var workspaceWarning: Color"
     ] {
@@ -1178,6 +1259,49 @@ func checkWorkspaceVisualClarityTheme() throws {
         try expect(lightRatio >= 4.5, "light accentForeground 与 \(skinName) accent 对比度必须 >= 4.5:1，实际为 \(lightRatio)")
         try expect(darkRatio >= 4.5, "dark accentForeground 与 \(skinName) accent 对比度必须 >= 4.5:1，实际为 \(darkRatio)")
     }
+
+    let selectedContent = (
+        light: WorkspaceThemeCheckRGB(red: 0.125, green: 0.141, blue: 0.165),
+        dark: WorkspaceThemeCheckRGB(red: 0.949, green: 0.957, blue: 0.969)
+    )
+    let selectedSurfaces: [(String, WorkspaceThemeCheckRGB, WorkspaceThemeCheckRGB)] = [
+        ("module rail", .init(red: 0.933, green: 0.941, blue: 0.953), .init(red: 0.098, green: 0.110, blue: 0.129)),
+        ("context sidebar", .init(red: 0.969, green: 0.973, blue: 0.980), .init(red: 0.114, green: 0.125, blue: 0.149)),
+        ("content", .init(red: 1.0, green: 1.0, blue: 1.0), .init(red: 0.129, green: 0.145, blue: 0.169)),
+        ("alternate content", .init(red: 0.973, green: 0.976, blue: 0.984), .init(red: 0.149, green: 0.169, blue: 0.196))
+    ]
+    let accentSoftOpacities: [(String, Double, Double)] = [
+        ("ocean", 0.10, 0.18),
+        ("aurora", 0.12, 0.20),
+        ("board", 0.08, 0.18),
+        ("leafcutter", 0.11, 0.20),
+        ("workspace", 0.10, 0.18)
+    ]
+    for ((skinName, lightAccent, darkAccent), (_, lightOpacity, darkOpacity)) in zip(accentSurfaces, accentSoftOpacities) {
+        for (surfaceName, lightSurface, darkSurface) in selectedSurfaces {
+            let lightComposite = workspaceThemeCheckComposite(lightAccent, opacity: lightOpacity, over: lightSurface)
+            let darkComposite = workspaceThemeCheckComposite(darkAccent, opacity: darkOpacity, over: darkSurface)
+            let lightRatio = workspaceThemeCheckContrastRatio(selectedContent.light, lightComposite)
+            let darkRatio = workspaceThemeCheckContrastRatio(selectedContent.dark, darkComposite)
+            try expect(lightRatio >= 4.5, "light selectedContent 与 \(skinName) \(surfaceName) accentSoft 对比度必须 >= 4.5:1，实际为 \(lightRatio)")
+            try expect(darkRatio >= 4.5, "dark selectedContent 与 \(skinName) \(surfaceName) accentSoft 对比度必须 >= 4.5:1，实际为 \(darkRatio)")
+        }
+    }
+    guard let accentSoftStart = themeSource.range(of: "static var accentSoft: Color"),
+          let shellStrokeStart = themeSource.range(of: "static var shellStroke: Color")
+    else {
+        throw CheckFailure.failed("无法定位 accentSoft")
+    }
+    let accentSoftSource = String(themeSource[accentSoftStart.lowerBound..<shellStrokeStart.lowerBound])
+    for requiredOpacity in [
+        "case .ocean: accent.opacity(isDark ? 0.18 : 0.10)",
+        "case .aurora: accent.opacity(isDark ? 0.20 : 0.12)",
+        "case .board: accent.opacity(isDark ? 0.18 : 0.08)",
+        "case .leafcutter: accent.opacity(isDark ? 0.20 : 0.11)",
+        "case .workspace: accent.opacity(isDark ? 0.18 : 0.10)"
+    ] {
+        try expect(accentSoftSource.contains(requiredOpacity), "accentSoft 对比度矩阵与实现透明度不一致：\(requiredOpacity)")
+    }
     guard let accentForegroundStart = themeSource.range(of: "static var workspaceAccentForeground: Color"),
           let dangerStart = themeSource.range(of: "static var workspaceDanger: Color")
     else {
@@ -1189,11 +1313,48 @@ func checkWorkspaceVisualClarityTheme() throws {
             && !accentForegroundSource.contains("AppSkin.current"),
         "accentForeground 应按明暗模式提供可访问前景，不能按皮肤分支"
     )
+    try expect(
+        accentForegroundSource.contains("static var workspaceSelectedContent: Color")
+            && accentForegroundSource.contains("workspacePrimaryText")
+            && !accentForegroundSource.contains("AppSkin.current"),
+        "selectedContent 必须使用皮肤无关的可访问文本令牌"
+    )
+
+    for (name, source) in [
+        ("module rail and segmented controls", shellSource),
+        ("todo sidebar", sidebarViewSource),
+        ("quick dates", quickDateSource),
+        ("mini calendar", calendarSource),
+        ("global search", globalSearchSource)
+    ] {
+        try expect(
+            source.contains("AppTheme.workspaceTokens.selectedContent"),
+            "\(name) 的选中内容必须使用 selectedContent"
+        )
+    }
 
     try expect(
         shellSource.contains("AppLogoImage(size: 26, shadowRadius: 0)"),
         "模块导航 logo 不应显示投影"
     )
+    try expect(
+        globalSearchSource.contains(".shadow(color: AppTheme.workspaceTokens.overlayShadow")
+            && !globalSearchSource.contains("workspaceTokens.shadow.opacity")
+            && globalSearchSource.contains("isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.accent"),
+        "全局搜索浮层必须使用独立中性 overlayShadow，不能复用清空的共享 shadow"
+    )
+    for forbiddenShadowFile in [
+        "Sources/DailyTodos/SidebarSharedViews.swift",
+        "Sources/DailyTodos/TodoCaptureViews.swift",
+        "Sources/DailyTodos/TodoFlowRow.swift",
+        "Sources/DailyTodos/TodoListViews.swift",
+        "Sources/DailyTodos/TodoMiniCalendarViews.swift",
+        "Sources/DailyTodos/TodoSectionViews.swift",
+        "Sources/DailyTodos/TodoSidebarViews.swift"
+    ] {
+        let source = try sourceFile(forbiddenShadowFile)
+        try expect(!source.contains(".shadow("), "\(forbiddenShadowFile) 不得添加页面、行、侧栏、日历或卡片投影")
+    }
 
     guard let sharedVisualStart = themeSource.range(of: "static var canvasGradient: [Color]"),
           let accentStart = themeSource.range(of: "static var accent: Color"),
@@ -1238,7 +1399,8 @@ func checkWorkspaceVisualClarityTheme() throws {
     let railButtonSource = String(shellSource[railButtonStart.lowerBound..<chromeMetricsStart.lowerBound])
     try expect(
         railButtonSource.contains("cornerRadius: 6")
-            && railButtonSource.contains("AppTheme.workspaceTokens.listRowHover"),
+            && railButtonSource.contains("AppTheme.workspaceTokens.listRowHover")
+            && railButtonSource.contains("isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textSecondary"),
         "模块导航应使用 6px 圆角和统一 hover 表面"
     )
 }
@@ -1265,7 +1427,9 @@ func checkTodoSidebarVisualClarity() throws {
         buttonSource.contains("cornerRadius: 6")
             && buttonSource.contains("private var countForeground: Color")
             && buttonSource.contains("private var countBackground: Color")
-            && buttonSource.contains("AppTheme.workspaceTokens.listRowHover"),
+            && buttonSource.contains("AppTheme.workspaceTokens.listRowHover")
+            && buttonSource.contains("isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textSecondary")
+            && buttonSource.contains("return AppTheme.workspaceTokens.selectedContent"),
         "待办分类应使用统一圆角、hover 表面和数量颜色规则"
     )
 }
@@ -1424,11 +1588,12 @@ func checkTodoDenseNaturalListPresentation() throws {
         signalSource.contains("if isOverdue")
             && signalSource.contains("case .inProgress:")
             && signalSource.contains("case .waiting:")
-            && signalSource.contains("case .done:")
+            && signalSource.contains("case .done:\n            return nil")
             && signalSource.contains("case .pending:\n            if todo.priority == .high")
             && signalSource.contains("AppTheme.workspaceTokens.textSecondary, \"高优先级\"")
+            && !signalSource.contains("\"已完成\"")
             && !signalSource.contains("AppTheme.workspaceTokens.danger, \"高优先级\""),
-        "issue 信号应按逾期、进度、高优先级 pending 的顺序解析，且高优先级旗标保持中性"
+        "issue 信号应按逾期、进度、高优先级 pending 的顺序解析，完成态不得重复显示信号"
     )
 
     guard let boardStart = listSource.range(of: "struct TodoBoardCard"),
@@ -1437,6 +1602,11 @@ func checkTodoDenseNaturalListPresentation() throws {
         throw CheckFailure.failed("无法定位 TodoBoardCard")
     }
     let boardSource = String(listSource[boardStart.lowerBound..<boardEnd.lowerBound])
+    try expect(
+        boardSource.contains("TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)\n\n                    TodoIssueSignalIcon(todo: todo)")
+            && !boardSource.contains("HStack(alignment: .center, spacing: 6) {\n                    TodoIssueSignalIcon(todo: todo)"),
+        "TodoBoardCard 必须把信号放在完成标记旁，普通任务不能保留空信号标题行"
+    )
     try expect(
         !boardSource.contains("priorityRailColor")
             && !boardSource.contains("todo.priority.displayColor")
@@ -1553,7 +1723,8 @@ func checkTodoControlsVisualClarity() throws {
         controlsSource.contains("AppTheme.workspaceTokens.contentSurface")
             && controlsSource.contains("lineWidth: focusBinding.wrappedValue ? 1.5 : 1")
             && controlsSource.contains("AppTheme.workspaceTokens.accentSoft")
-            && controlsSource.contains("AppTheme.workspaceTokens.accent"),
+            && controlsSource.contains("AppTheme.workspaceTokens.accent")
+            && controlsSource.contains("? AppTheme.workspaceTokens.selectedContent"),
         "搜索与分段控件应使用明确表面、1.5px 焦点环和轻量选中态"
     )
     try expect(
@@ -1594,15 +1765,14 @@ func checkSettingsUpdateActionsVisualClarity() throws {
     }
     let updateActionsSource = String(settingsSource[updateActionsStart.lowerBound..<updateStatusTextStart.lowerBound])
     let accentForegroundCount = updateActionsSource.components(separatedBy: "AppTheme.workspaceTokens.accentForeground").count - 1
-    let disabledForegroundCount = updateActionsSource.components(separatedBy: "AppTheme.workspaceTokens.textSecondary").count - 1
-    let disabledSurfaceCount = updateActionsSource.components(separatedBy: "AppTheme.workspaceTokens.contentAltSurface").count - 1
+    let explicitAppearanceCount = updateActionsSource.components(separatedBy: ".tactilePlainControlAppearance(").count - 1
 
     try expect(
         accentForegroundCount == 2
-            && disabledForegroundCount == 2
-            && disabledSurfaceCount == 2
+            && explicitAppearanceCount == 2
             && updateActionsSource.contains("AppTheme.workspaceTokens.accent")
-            && updateActionsSource.contains("AppTheme.workspaceTokens.hairline"),
+            && updateActionsSource.contains("isDisabled: updateController.isDownloading")
+            && updateActionsSource.contains("isDisabled: updateController.isChecking || updateController.isDownloading"),
         "下载和检查更新操作都必须使用可访问强调色前景，并提供可读禁用态"
     )
     try expect(
@@ -1620,10 +1790,11 @@ func checkTodoCalendarVisualClarity() throws {
     try expect(
         quickDateSource.contains("AppTheme.workspaceTokens.accentSoft")
             && quickDateSource.contains("AppTheme.workspaceTokens.listRowHover")
-            && quickDateSource.contains("if isSelected || calendar.isDateInToday(date)")
+            && quickDateSource.contains("if isSelected { return AppTheme.workspaceTokens.selectedContent }")
+            && quickDateSource.contains("if calendar.isDateInToday(date) { return AppTheme.workspaceTokens.accent }")
             && !quickDateSource.contains("AppTheme.adaptiveWhite(0.74)")
             && !quickDateSource.contains("cornerRadius: 10"),
-        "快速日期应使用轻量选中/hover 状态，且今天在未选中时使用 accent 前景"
+        "快速日期应使用可访问选中内容、轻量背景和独立的今天强调色"
     )
     try expect(
         calendarSource.contains("private var calendarNavigation: some View")
@@ -1652,9 +1823,11 @@ func checkTodoCalendarVisualClarity() throws {
             && dayCellSource.contains(".onHover { isHovered = $0 }")
             && dayCellSource.contains("if isSelected { return AppTheme.workspaceTokens.accentSoft }")
             && dayCellSource.contains("if isHovered { return AppTheme.workspaceTokens.listRowHover }")
+            && dayCellSource.contains("if isSelected { return AppTheme.workspaceTokens.selectedContent }")
             && dayCellSource.contains("if isToday { return AppTheme.workspaceTokens.accent }")
-            && dayCellSource.contains("if isToday { return AppTheme.workspaceTokens.hairline }"),
-        "小日历日期应提供稳定 hover，保留选中优先级，并让今天使用 accent 前景或 hairline"
+            && dayCellSource.contains("if isToday { return AppTheme.workspaceTokens.hairline }")
+            && dayCellSource.contains(".tactilePlainControlAppearance("),
+        "小日历日期应提供稳定 hover、可访问选中内容和显式禁用态"
     )
 }
 

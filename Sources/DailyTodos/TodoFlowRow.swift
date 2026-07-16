@@ -267,7 +267,7 @@ struct TodoIssueSignalIcon: View {
         case .waiting:
             return ("hourglass", AppTheme.workspaceTokens.textSecondary, "等待他人")
         case .done:
-            return ("checkmark.circle", AppTheme.workspaceTokens.success, "已完成")
+            return nil
         }
     }
 
@@ -379,20 +379,12 @@ struct TodoBoardEditCard: View {
                         .frame(width: 72, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(
-                    canSubmit
-                        ? AppTheme.workspaceTokens.accentForeground
-                        : AppTheme.workspaceTokens.textSecondary
-                )
-                .background(
-                    canSubmit
-                        ? AppTheme.workspaceTokens.accent
-                        : AppTheme.workspaceTokens.contentAltSurface,
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(canSubmit ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.hairline)
+                .tactilePlainControlAppearance(
+                    isDisabled: !canSubmit,
+                    enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                    enabledBackground: AppTheme.workspaceTokens.accent,
+                    enabledBorder: AppTheme.workspaceTokens.accent,
+                    shape: .capsule
                 )
                 .interactionHitArea()
                 .disabled(!canSubmit)

@@ -449,12 +449,17 @@ struct CredentialInitializeView: View {
             Button(action: onInitialize) {
                 Text("创建并解锁")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.tactilePlain)
+            .tactilePlainControlAppearance(
+                isDisabled: requiresMasterPassword && (masterPassword.isEmpty || repeatedPassword.isEmpty),
+                enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                enabledBackground: AppTheme.workspaceTokens.accent,
+                enabledBorder: AppTheme.workspaceTokens.accent,
+                shape: .roundedRectangle(10)
+            )
             .disabled(requiresMasterPassword && (masterPassword.isEmpty || repeatedPassword.isEmpty))
         }
     }
@@ -485,12 +490,17 @@ struct CredentialUnlockView: View {
             Button(action: onUnlock) {
                 Text("解锁")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.tactilePlain)
+            .tactilePlainControlAppearance(
+                isDisabled: password.isEmpty,
+                enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                enabledBackground: AppTheme.workspaceTokens.accent,
+                enabledBorder: AppTheme.workspaceTokens.accent,
+                shape: .roundedRectangle(10)
+            )
             .disabled(password.isEmpty)
 
             Button(role: .destructive, action: onReset) {
@@ -816,6 +826,7 @@ struct CredentialDetailPane: View {
                     Label(isOpeningEditor ? "读取中" : "编辑", systemImage: "pencil")
                 }
                 .buttonStyle(.tactilePlain)
+                .tactilePlainControlAppearance(isDisabled: isOpeningEditor)
                 .disabled(isOpeningEditor)
 
                 Button(role: .destructive) {
@@ -980,12 +991,14 @@ struct CredentialSecretSection: View {
                         Label(isRevealing ? "读取中" : "查看", systemImage: "eye")
                     }
                     .buttonStyle(.tactilePlain)
+                    .tactilePlainControlAppearance(isDisabled: isRevealing)
                     .disabled(isRevealing)
                 } else {
                     Button(action: onCheckRisk) {
                         Label(isCheckingBreachRisk ? "检查中" : "检查风险", systemImage: "shield.lefthalf.filled")
                     }
                     .buttonStyle(.tactilePlain)
+                    .tactilePlainControlAppearance(isDisabled: isCheckingBreachRisk)
                     .disabled(isCheckingBreachRisk)
                     Button(action: onHide) {
                         Label("隐藏", systemImage: "eye.slash")
@@ -1506,6 +1519,9 @@ struct CredentialInlineEditor: View {
                     Label("填入表单", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.tactilePlain)
+                .tactilePlainControlAppearance(
+                    isDisabled: pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
                 .disabled(pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 

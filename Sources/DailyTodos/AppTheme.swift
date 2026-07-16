@@ -110,6 +110,7 @@ struct WorkspaceThemeTokens {
     let textPrimary: Color
     let textSecondary: Color
     let textMuted: Color
+    let selectedContent: Color
     let accent: Color
     let accentForeground: Color
     let accentSoft: Color
@@ -120,6 +121,7 @@ struct WorkspaceThemeTokens {
     let danger: Color
     let focusRing: Color
     let shadow: Color
+    let overlayShadow: Color
 }
 
 struct TactilePlainButtonStyle: ButtonStyle {
@@ -160,7 +162,60 @@ extension ButtonStyle where Self == TactilePlainButtonStyle {
     static var tactilePlain: TactilePlainButtonStyle { TactilePlainButtonStyle() }
 }
 
+enum TactilePlainControlShape {
+    case roundedRectangle(CGFloat)
+    case capsule
+}
+
+struct TactilePlainControlAppearance: ViewModifier {
+    let isDisabled: Bool
+    let enabledForeground: Color
+    let enabledBackground: Color
+    let enabledBorder: Color
+    let shape: TactilePlainControlShape
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch shape {
+        case .roundedRectangle(let cornerRadius):
+            styled(content, shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        case .capsule:
+            styled(content, shape: Capsule())
+        }
+    }
+
+    private func styled<S: InsettableShape>(_ content: Content, shape: S) -> some View {
+        content
+            .foregroundStyle(isDisabled ? AppTheme.workspaceTokens.textSecondary : enabledForeground)
+            .background(
+                isDisabled ? AppTheme.workspaceTokens.contentAltSurface : enabledBackground,
+                in: shape
+            )
+            .overlay(
+                shape.stroke(isDisabled ? AppTheme.workspaceTokens.hairline : enabledBorder)
+            )
+    }
+}
+
 extension View {
+    func tactilePlainControlAppearance(
+        isDisabled: Bool,
+        enabledForeground: Color = AppTheme.workspaceTokens.textPrimary,
+        enabledBackground: Color = .clear,
+        enabledBorder: Color = .clear,
+        shape: TactilePlainControlShape = .roundedRectangle(8)
+    ) -> some View {
+        modifier(
+            TactilePlainControlAppearance(
+                isDisabled: isDisabled,
+                enabledForeground: enabledForeground,
+                enabledBackground: enabledBackground,
+                enabledBorder: enabledBorder,
+                shape: shape
+            )
+        )
+    }
+
     func interactionHitArea(_ minSize: CGFloat = compactHitTargetSize) -> some View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
@@ -247,6 +302,7 @@ enum AppTheme {
             textPrimary: workspacePrimaryText,
             textSecondary: workspaceSecondaryText,
             textMuted: workspaceMutedText,
+            selectedContent: workspaceSelectedContent,
             accent: accent,
             accentForeground: workspaceAccentForeground,
             accentSoft: accentSoft,
@@ -256,7 +312,8 @@ enum AppTheme {
             warning: workspaceWarning,
             danger: workspaceDanger,
             focusRing: accent,
-            shadow: .clear
+            shadow: .clear,
+            overlayShadow: workspaceOverlayShadow
         )
     }
 
@@ -417,10 +474,18 @@ enum AppTheme {
         isDark ? workspaceCanvas : Color.white
     }
 
+    static var workspaceSelectedContent: Color {
+        workspacePrimaryText
+    }
+
     static var workspaceHairline: Color {
         isDark
             ? Color(red: 0.204, green: 0.227, blue: 0.263)
             : Color(red: 0.851, green: 0.871, blue: 0.906)
+    }
+
+    static var workspaceOverlayShadow: Color {
+        Color.black.opacity(isDark ? 0.56 : 0.18)
     }
 
     static var workspaceDanger: Color {

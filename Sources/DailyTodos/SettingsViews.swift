@@ -520,24 +520,11 @@ private struct SettingsContentView: View {
                         .frame(width: 78, height: 32)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(
-                    updateController.isDownloading
-                        ? AppTheme.workspaceTokens.textSecondary
-                        : AppTheme.workspaceTokens.accentForeground
-                )
-                .background(
-                    updateController.isDownloading
-                        ? AppTheme.workspaceTokens.contentAltSurface
-                        : AppTheme.workspaceTokens.accent,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(
-                            updateController.isDownloading
-                                ? AppTheme.workspaceTokens.hairline
-                                : AppTheme.workspaceTokens.accent
-                        )
+                .tactilePlainControlAppearance(
+                    isDisabled: updateController.isDownloading,
+                    enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                    enabledBackground: AppTheme.workspaceTokens.accent,
+                    enabledBorder: AppTheme.workspaceTokens.accent
                 )
                 .disabled(updateController.isDownloading)
                 .help("下载当前发现的新版本")
@@ -551,24 +538,11 @@ private struct SettingsContentView: View {
                     .frame(width: 104, height: 32)
             }
             .buttonStyle(.tactilePlain)
-            .foregroundStyle(
-                updateController.isChecking || updateController.isDownloading
-                    ? AppTheme.workspaceTokens.textSecondary
-                    : AppTheme.workspaceTokens.accentForeground
-            )
-            .background(
-                updateController.isChecking || updateController.isDownloading
-                    ? AppTheme.workspaceTokens.contentAltSurface
-                    : AppTheme.workspaceTokens.accent,
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(
-                        updateController.isChecking || updateController.isDownloading
-                            ? AppTheme.workspaceTokens.hairline
-                            : AppTheme.workspaceTokens.accent
-                    )
+            .tactilePlainControlAppearance(
+                isDisabled: updateController.isChecking || updateController.isDownloading,
+                enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                enabledBackground: AppTheme.workspaceTokens.accent,
+                enabledBorder: AppTheme.workspaceTokens.accent
             )
             .disabled(updateController.isChecking || updateController.isDownloading)
             .help("检查更新")
@@ -848,8 +822,13 @@ struct AISettingsContentView: View {
                     .frame(maxWidth: .infinity, minHeight: 32)
             }
             .buttonStyle(.tactilePlain)
-            .foregroundStyle(.white)
-            .background(aiSettings.configuration.hasEndpoint && aiSettings.hasAPIKey ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .tactilePlainControlAppearance(
+                isDisabled: aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint || !aiSettings.hasAPIKey,
+                enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                enabledBackground: AppTheme.workspaceTokens.accent,
+                enabledBorder: AppTheme.workspaceTokens.accent,
+                shape: .roundedRectangle(10)
+            )
             .interactionHitArea()
             .disabled(aiSettings.isTestingConnection || !aiSettings.configuration.hasEndpoint || !aiSettings.hasAPIKey)
 

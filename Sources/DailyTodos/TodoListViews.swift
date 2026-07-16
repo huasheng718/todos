@@ -571,14 +571,10 @@ struct TodoBoardCard: View {
             .transition(AppMotion.inlineTransition)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center, spacing: 6) {
-                    TodoIssueSignalIcon(todo: todo)
-
-                    Spacer(minLength: 6)
-                }
-
                 HStack(alignment: .top, spacing: 9) {
                     TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)
+
+                    TodoIssueSignalIcon(todo: todo)
 
                     VStack(alignment: .leading, spacing: hasNotes ? 7 : 0) {
                         Text(titleText)
@@ -617,7 +613,7 @@ struct TodoBoardCard: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, 41)
+                .padding(.leading, 72)
             }
             .padding(.vertical, 9)
             .padding(.leading, 12)

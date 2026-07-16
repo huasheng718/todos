@@ -185,13 +185,13 @@ struct DateButton: View {
                 Image(systemName: systemImage)
                     .symbolRenderingMode(.hierarchical)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textSecondary)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textSecondary)
                     .frame(width: 20, height: 20)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textPrimary)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textPrimary)
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 11, weight: .regular))
@@ -243,7 +243,7 @@ struct DateButton: View {
 
     private var countForeground: Color {
         if isSelected {
-            return AppTheme.workspaceTokens.accent
+            return AppTheme.workspaceTokens.selectedContent
         }
         return alertCount > 0
             ? AppTheme.workspaceTokens.danger
@@ -252,7 +252,7 @@ struct DateButton: View {
 
     private var countBackground: Color {
         if isSelected {
-            return AppTheme.workspaceTokens.accent.opacity(0.10)
+            return AppTheme.workspaceTokens.selectedContent.opacity(0.08)
         }
         return countForeground.opacity(0.10)
     }

@@ -65,11 +65,12 @@ struct DailySuggestionCard: View {
                         .frame(width: 94, height: 28)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.accent)
-                .background(AppTheme.accentSoft, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(AppTheme.accent.opacity(0.20))
+                .tactilePlainControlAppearance(
+                    isDisabled: isLoading,
+                    enabledForeground: AppTheme.workspaceTokens.accent,
+                    enabledBackground: AppTheme.workspaceTokens.accentSoft,
+                    enabledBorder: AppTheme.workspaceTokens.accent.opacity(0.20),
+                    shape: .capsule
                 )
                 .interactionHitArea()
                 .disabled(isLoading)
@@ -129,7 +130,6 @@ struct DailySuggestionCard: View {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .stroke(AppTheme.accent.opacity(0.18))
         )
-        .shadow(color: AppTheme.rowShadow, radius: 8, x: 0, y: 4)
         .animation(AppMotion.reveal, value: suggestion)
         .animation(AppMotion.reveal, value: error)
         .animation(AppMotion.reveal, value: isLoading)

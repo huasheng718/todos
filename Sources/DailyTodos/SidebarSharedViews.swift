@@ -85,9 +85,8 @@ struct QuickDateCell: View {
     }
 
     private var foreground: Color {
-        if isSelected || calendar.isDateInToday(date) {
-            return AppTheme.workspaceTokens.accent
-        }
+        if isSelected { return AppTheme.workspaceTokens.selectedContent }
+        if calendar.isDateInToday(date) { return AppTheme.workspaceTokens.accent }
         return AppTheme.workspaceTokens.textPrimary
     }
 

@@ -259,12 +259,15 @@ struct MiniCalendarDayCell: View {
                         .monospacedDigit()
                     markerStrip
                 }
-                .foregroundStyle(foreground)
             }
             .frame(maxWidth: .infinity, minHeight: 32)
             .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
+        .tactilePlainControlAppearance(
+            isDisabled: !isInCurrentMonth,
+            enabledForeground: foreground
+        )
         .disabled(!isInCurrentMonth)
         .help("\(date.formatted(.dateTime.year().month().day()))：\(totalCount) 项，\(pendingCount) 未完成")
         .onHover { isHovered = $0 }
@@ -301,8 +304,7 @@ struct MiniCalendarDayCell: View {
     }
 
     private var foreground: Color {
-        if isSelected { return AppTheme.workspaceTokens.accent }
-        if !isInCurrentMonth { return AppTheme.workspaceTokens.textMuted }
+        if isSelected { return AppTheme.workspaceTokens.selectedContent }
         if isToday { return AppTheme.workspaceTokens.accent }
         return AppTheme.workspaceTokens.textPrimary
     }

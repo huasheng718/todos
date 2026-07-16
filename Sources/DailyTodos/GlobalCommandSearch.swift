@@ -249,7 +249,7 @@ struct GlobalCommandSearchPanel: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AppTheme.workspaceTokens.hairline)
         )
-        .shadow(color: AppTheme.workspaceTokens.shadow.opacity(0.95), radius: 18, x: 0, y: 10)
+        .shadow(color: AppTheme.workspaceTokens.overlayShadow, radius: 18, x: 0, y: 10)
     }
 
     private var totalCount: Int {
@@ -315,7 +315,7 @@ struct GlobalSearchResultRow: View {
             HStack(spacing: 10) {
                 Image(systemName: result.module.icon)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.workspaceTokens.accent)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.accent)
                     .frame(width: 22)
 
                 VStack(alignment: .leading, spacing: 2) {

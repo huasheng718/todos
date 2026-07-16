@@ -68,7 +68,10 @@ struct QuickCaptureBar: View {
                         .interactionHitArea()
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(AppTheme.mutedInk)
+                .tactilePlainControlAppearance(
+                    isDisabled: isCreating,
+                    enabledForeground: AppTheme.workspaceTokens.textMuted
+                )
                 .help(isExpanded ? "收起记录字段" : "展开记录字段")
                 .disabled(isCreating)
 
@@ -78,24 +81,12 @@ struct QuickCaptureBar: View {
                         .frame(width: 70, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(
-                    canCreate && !isCreating
-                        ? AppTheme.workspaceTokens.accentForeground
-                        : AppTheme.workspaceTokens.textSecondary
-                )
-                .background(
-                    canCreate && !isCreating
-                        ? AppTheme.workspaceTokens.accent
-                        : AppTheme.workspaceTokens.contentAltSurface,
-                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(
-                            canCreate && !isCreating
-                                ? AppTheme.workspaceTokens.accent
-                                : AppTheme.workspaceTokens.hairline
-                        )
+                .tactilePlainControlAppearance(
+                    isDisabled: !canCreate || isCreating,
+                    enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                    enabledBackground: AppTheme.workspaceTokens.accent,
+                    enabledBorder: AppTheme.workspaceTokens.accent,
+                    shape: .roundedRectangle(6)
                 )
                 .interactionHitArea()
                 .disabled(!canCreate || isCreating)
@@ -107,7 +98,10 @@ struct QuickCaptureBar: View {
                             .interactionHitArea()
                     }
                     .buttonStyle(.tactilePlain)
-                    .foregroundStyle(AppTheme.mutedInk)
+                    .tactilePlainControlAppearance(
+                        isDisabled: isCreating,
+                        enabledForeground: AppTheme.workspaceTokens.textMuted
+                    )
                     .help("清空记录")
                     .disabled(isCreating)
                 }

@@ -194,7 +194,7 @@ struct GlobalTopBar: View {
             Button(action: onOpenAccount) {
                 Circle()
                     .fill(AppTheme.accentSoft)
-                    .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
+                    .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.workspaceTokens.selectedContent))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -328,7 +328,7 @@ struct ModuleRailButton: View {
 
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textSecondary)
+            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textSecondary)
             .padding(.horizontal, 9)
             .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             .contentShape(Rectangle())
@@ -564,7 +564,7 @@ struct WorkspaceSegmentedControl<Option: WorkspaceSegmentedOption>: View {
                     }
                     .foregroundStyle(
                         selection == option
-                            ? AppTheme.workspaceTokens.accent
+                            ? AppTheme.workspaceTokens.selectedContent
                             : AppTheme.workspaceTokens.textSecondary
                     )
                     .frame(height: 28)
