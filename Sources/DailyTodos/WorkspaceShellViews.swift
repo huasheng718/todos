@@ -332,7 +332,7 @@ struct ModuleRailButton: View {
             .padding(.horizontal, 9)
             .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             .contentShape(Rectangle())
-            .background(rowFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(rowFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(module.description)
@@ -346,7 +346,7 @@ struct ModuleRailButton: View {
             return AppTheme.workspaceTokens.accentSoft
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(0.50)
+            return AppTheme.workspaceTokens.listRowHover
         }
         return Color.clear
     }

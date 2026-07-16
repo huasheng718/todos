@@ -23,6 +23,7 @@ struct DailyTodosChecks {
                 try checkRemainingPerformanceGuardrails()
                 try checkStoreArchitectureGuardrails()
                 try checkDeadCodeGuardrails()
+                try checkWorkspaceVisualClarityTheme()
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
@@ -973,6 +974,67 @@ func checkHandbookDragTargetsClearFolder() throws {
     try expect(
         moduleSource.contains("onUpdate(item, category ?? item.category, folder ?? \"\", item.title, item.body, item.attachments)"),
         "拖拽更新应区分清空目录和保留分类，folder nil 不应写回旧目录"
+    )
+}
+
+func checkWorkspaceVisualClarityTheme() throws {
+    let themeSource = try sourceFile("Sources/DailyTodos/AppTheme.swift")
+    let shellSource = try sourceFile("Sources/DailyTodos/WorkspaceShellViews.swift")
+
+    guard let tokensStart = themeSource.range(of: "static var workspaceTokens: WorkspaceThemeTokens"),
+          let tokensEnd = themeSource.range(of: "static var isDark: Bool")
+    else {
+        throw CheckFailure.failed("无法定位 AppTheme.workspaceTokens")
+    }
+    let tokensSource = String(themeSource[tokensStart.lowerBound..<tokensEnd.lowerBound])
+
+    for requiredMapping in [
+        "moduleRail: workspaceModuleRail",
+        "contextSidebar: workspaceContextSidebar",
+        "contentAltSurface: workspaceAltSurface",
+        "listRowHover: workspaceListRowHover",
+        "textPrimary: workspacePrimaryText",
+        "textSecondary: workspaceSecondaryText",
+        "textMuted: workspaceMutedText",
+        "action: accent",
+        "actionSoft: accentSoft",
+        "warning: workspaceWarning",
+        "danger: workspaceDanger",
+        "shadow: .clear"
+    ] {
+        try expect(tokensSource.contains(requiredMapping), "工作台主题缺少清晰度映射：\(requiredMapping)")
+    }
+    try expect(
+        !tokensSource.contains("moduleRail: sidebar")
+            && !tokensSource.contains("contextSidebar: sidebar")
+            && !tokensSource.contains("action: accentWarm"),
+        "工作台结构表面与主要操作不能继续复用旧皮肤表面或第二强调色"
+    )
+
+    for requiredToken in [
+        "static var workspaceModuleRail: Color",
+        "static var workspaceContextSidebar: Color",
+        "static var workspaceAltSurface: Color",
+        "static var workspaceListRowHover: Color",
+        "static var workspacePrimaryText: Color",
+        "static var workspaceSecondaryText: Color",
+        "static var workspaceMutedText: Color",
+        "static var workspaceDanger: Color",
+        "static var workspaceWarning: Color"
+    ] {
+        try expect(themeSource.contains(requiredToken), "AppTheme 缺少视觉令牌：\(requiredToken)")
+    }
+
+    guard let railButtonStart = shellSource.range(of: "struct ModuleRailButton"),
+          let chromeMetricsStart = shellSource.range(of: "enum WorkspaceChromeMetrics")
+    else {
+        throw CheckFailure.failed("无法定位 ModuleRailButton")
+    }
+    let railButtonSource = String(shellSource[railButtonStart.lowerBound..<chromeMetricsStart.lowerBound])
+    try expect(
+        railButtonSource.contains("cornerRadius: 6")
+            && railButtonSource.contains("AppTheme.workspaceTokens.listRowHover"),
+        "模块导航应使用 6px 圆角和统一 hover 表面"
     )
 }
 
