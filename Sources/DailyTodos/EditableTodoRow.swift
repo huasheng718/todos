@@ -179,7 +179,6 @@ struct EditableTodoRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.border)
         )
-        .shadow(color: AppTheme.rowShadow, radius: 9, x: 0, y: 5)
         .onChange(of: todo) { _, newTodo in
             if !isEditing {
                 withAnimation(AppMotion.smooth) {

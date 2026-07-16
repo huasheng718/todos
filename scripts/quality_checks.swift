@@ -1417,6 +1417,7 @@ func checkWorkspaceVisualClarityTheme() throws {
         "全局搜索浮层必须使用独立中性 overlayShadow，不能复用清空的共享 shadow"
     )
     for forbiddenShadowFile in [
+        "Sources/DailyTodos/EditableTodoRow.swift",
         "Sources/DailyTodos/SidebarSharedViews.swift",
         "Sources/DailyTodos/TodoCaptureViews.swift",
         "Sources/DailyTodos/TodoFlowRow.swift",
