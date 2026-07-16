@@ -111,6 +111,7 @@ struct WorkspaceThemeTokens {
     let textSecondary: Color
     let textMuted: Color
     let accent: Color
+    let accentForeground: Color
     let accentSoft: Color
     let action: Color
     let actionSoft: Color
@@ -247,6 +248,7 @@ enum AppTheme {
             textSecondary: workspaceSecondaryText,
             textMuted: workspaceMutedText,
             accent: accent,
+            accentForeground: workspaceAccentForeground,
             accentSoft: accentSoft,
             action: accent,
             actionSoft: accentSoft,
@@ -320,9 +322,9 @@ enum AppTheme {
             }
         } else {
             switch AppSkin.current {
-            case .ocean: Color(red: 0.184, green: 0.420, blue: 1.000)
+            case .ocean: Color(red: 0.170, green: 0.400, blue: 0.950)
             case .aurora: Color(red: 0.435, green: 0.357, blue: 0.827)
-            case .board: Color(red: 0.757, green: 0.302, blue: 0.541)
+            case .board: Color(red: 0.720, green: 0.280, blue: 0.510)
             case .leafcutter: Color(red: 0.184, green: 0.490, blue: 0.361)
             case .workspace: Color(red: 0.239, green: 0.388, blue: 0.867)
             }
@@ -408,7 +410,11 @@ enum AppTheme {
     static var workspaceMutedText: Color {
         isDark
             ? Color(red: 0.604, green: 0.639, blue: 0.690)
-            : Color(red: 0.416, green: 0.451, blue: 0.502)
+            : Color(red: 0.395, green: 0.430, blue: 0.480)
+    }
+
+    static var workspaceAccentForeground: Color {
+        isDark ? workspaceCanvas : Color.white
     }
 
     static var workspaceHairline: Color {

@@ -64,7 +64,7 @@ struct QuickDateCell: View {
                     .fill(count > 0 ? AppTheme.workspaceTokens.accent : Color.clear)
                     .frame(width: 4, height: 4)
             }
-            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textPrimary)
+            .foregroundStyle(foreground)
             .frame(maxWidth: .infinity, minHeight: 46)
             .background(background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
@@ -82,6 +82,13 @@ struct QuickDateCell: View {
             return AppTheme.workspaceTokens.listRowHover
         }
         return Color.clear
+    }
+
+    private var foreground: Color {
+        if isSelected || calendar.isDateInToday(date) {
+            return AppTheme.workspaceTokens.accent
+        }
+        return AppTheme.workspaceTokens.textPrimary
     }
 
     private var label: String {

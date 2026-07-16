@@ -17,7 +17,7 @@ struct PriorityBadge: View {
     }
 
     private var priorityColor: Color {
-        priority.displayColor
+        priority.taskDisplayColor
     }
 }
 
@@ -57,7 +57,7 @@ struct PriorityOutlineTag: View {
     }
 
     private var priorityColor: Color {
-        priority.displayColor
+        priority.taskDisplayColor
     }
 }
 
@@ -126,51 +126,11 @@ extension TodoProgress {
     }
 
     var displayColor: Color {
-        if AppTheme.isDark {
-            switch self {
-            case .pending: return Color(red: 0.660, green: 0.730, blue: 0.800)
-            case .inProgress: return AppTheme.accent
-            case .waiting: return Color(red: 0.760, green: 0.660, blue: 1.000)
-            case .done: return AppTheme.success
-            }
-        }
-
-        switch AppSkin.current {
-        case .ocean:
-            switch self {
-            case .pending: return Color(red: 0.38, green: 0.45, blue: 0.56)
-            case .inProgress: return AppTheme.accent
-            case .waiting: return Color(red: 0.48, green: 0.44, blue: 0.96)
-            case .done: return Color(red: 0.12, green: 0.62, blue: 0.42)
-            }
-        case .aurora:
-            switch self {
-            case .pending: return Color(red: 0.47, green: 0.43, blue: 0.56)
-            case .inProgress: return Color(red: 0.35, green: 0.34, blue: 0.92)
-            case .waiting: return Color(red: 0.93, green: 0.36, blue: 0.73)
-            case .done: return Color(red: 0.18, green: 0.64, blue: 0.52)
-            }
-        case .board:
-            switch self {
-            case .pending: return Color(red: 0.25, green: 0.25, blue: 0.28)
-            case .inProgress: return Color(red: 0.24, green: 0.42, blue: 0.78)
-            case .waiting: return Color(red: 0.82, green: 0.34, blue: 0.72)
-            case .done: return Color(red: 0.14, green: 0.58, blue: 0.34)
-            }
-        case .leafcutter:
-            switch self {
-            case .pending: return Color(red: 0.48, green: 0.36, blue: 0.24)
-            case .inProgress: return AppTheme.accent
-            case .waiting: return Color(red: 0.86, green: 0.44, blue: 0.16)
-            case .done: return Color(red: 0.28, green: 0.62, blue: 0.24)
-            }
-        case .workspace:
-            switch self {
-            case .pending: return Color(red: 0.25, green: 0.25, blue: 0.28)
-            case .inProgress: return AppTheme.accent
-            case .waiting: return Color(red: 0.24, green: 0.42, blue: 0.78)
-            case .done: return Color(red: 0.14, green: 0.58, blue: 0.34)
-            }
+        switch self {
+        case .pending: return AppTheme.workspaceTokens.textSecondary
+        case .inProgress: return AppTheme.workspaceTokens.accent
+        case .waiting: return AppTheme.workspaceTokens.warning
+        case .done: return AppTheme.workspaceTokens.success
         }
     }
 }
@@ -185,45 +145,18 @@ extension TodoPriority {
     }
 
     var displayColor: Color {
-        if AppTheme.isDark {
-            switch self {
-            case .low: return Color(red: 0.420, green: 0.840, blue: 0.590)
-            case .medium: return AppTheme.accent
-            case .high: return Color(red: 1.000, green: 0.390, blue: 0.430)
-            }
+        switch self {
+        case .low: return AppTheme.workspaceTokens.success
+        case .medium: return AppTheme.workspaceTokens.accent
+        case .high: return AppTheme.workspaceTokens.danger
         }
+    }
 
-        switch AppSkin.current {
-        case .ocean:
-            switch self {
-            case .low: return Color(red: 0.13, green: 0.67, blue: 0.52)
-            case .medium: return AppTheme.accent
-            case .high: return Color(red: 0.93, green: 0.18, blue: 0.24)
-            }
-        case .aurora:
-            switch self {
-            case .low: return Color(red: 0.16, green: 0.68, blue: 0.55)
-            case .medium: return Color(red: 0.37, green: 0.34, blue: 0.92)
-            case .high: return Color(red: 0.95, green: 0.30, blue: 0.55)
-            }
-        case .board:
-            switch self {
-            case .low: return Color(red: 0.15, green: 0.60, blue: 0.34)
-            case .medium: return Color(red: 0.24, green: 0.42, blue: 0.78)
-            case .high: return Color(red: 0.88, green: 0.28, blue: 0.30)
-            }
-        case .leafcutter:
-            switch self {
-            case .low: return Color(red: 0.32, green: 0.64, blue: 0.22)
-            case .medium: return Color(red: 0.78, green: 0.42, blue: 0.16)
-            case .high: return Color(red: 0.86, green: 0.16, blue: 0.10)
-            }
-        case .workspace:
-            switch self {
-            case .low: return Color(red: 0.15, green: 0.60, blue: 0.34)
-            case .medium: return AppTheme.accent
-            case .high: return Color(red: 0.88, green: 0.28, blue: 0.30)
-            }
+    var taskDisplayColor: Color {
+        switch self {
+        case .low: return AppTheme.workspaceTokens.textSecondary
+        case .medium: return AppTheme.workspaceTokens.accent
+        case .high: return AppTheme.workspaceTokens.warning
         }
     }
 }

@@ -1029,6 +1029,7 @@ func checkWorkspaceVisualClarityTheme() throws {
         "textSecondary: workspaceSecondaryText",
         "textMuted: workspaceMutedText",
         "action: accent",
+        "accentForeground: workspaceAccentForeground",
         "actionSoft: accentSoft",
         "warning: workspaceWarning",
         "danger: workspaceDanger",
@@ -1051,27 +1052,59 @@ func checkWorkspaceVisualClarityTheme() throws {
         "static var workspacePrimaryText: Color",
         "static var workspaceSecondaryText: Color",
         "static var workspaceMutedText: Color",
+        "static var workspaceAccentForeground: Color",
         "static var workspaceDanger: Color",
         "static var workspaceWarning: Color"
     ] {
         try expect(themeSource.contains(requiredToken), "AppTheme 缺少视觉令牌：\(requiredToken)")
     }
 
-    guard let mutedStart = themeSource.range(of: "static var workspaceMutedText: Color"),
+    guard let primaryStart = themeSource.range(of: "static var workspacePrimaryText: Color"),
+          let secondaryStart = themeSource.range(of: "static var workspaceSecondaryText: Color"),
+          let mutedStart = themeSource.range(of: "static var workspaceMutedText: Color"),
           let hairlineStart = themeSource.range(of: "static var workspaceHairline: Color"),
+          let canvasStart = themeSource.range(of: "static var workspaceCanvas: Color"),
+          let moduleStart = themeSource.range(of: "static var workspaceModuleRail: Color"),
           let sidebarStart = themeSource.range(of: "static var workspaceContextSidebar: Color"),
           let surfaceStart = themeSource.range(of: "static var workspaceSurface: Color"),
-          let altSurfaceStart = themeSource.range(of: "static var workspaceAltSurface: Color")
+          let altSurfaceStart = themeSource.range(of: "static var workspaceAltSurface: Color"),
+          let hoverStart = themeSource.range(of: "static var workspaceListRowHover: Color")
     else {
         throw CheckFailure.failed("无法定位工作台文本和表面令牌")
     }
+    let primarySource = String(themeSource[primaryStart.lowerBound..<secondaryStart.lowerBound])
+    let secondarySource = String(themeSource[secondaryStart.lowerBound..<mutedStart.lowerBound])
     let mutedSource = String(themeSource[mutedStart.lowerBound..<hairlineStart.lowerBound])
+    let canvasSource = String(themeSource[canvasStart.lowerBound..<moduleStart.lowerBound])
+    let moduleSource = String(themeSource[moduleStart.lowerBound..<sidebarStart.lowerBound])
     let sidebarSource = String(themeSource[sidebarStart.lowerBound..<surfaceStart.lowerBound])
     let surfaceSource = String(themeSource[surfaceStart.lowerBound..<altSurfaceStart.lowerBound])
+    let altSurfaceSource = String(themeSource[altSurfaceStart.lowerBound..<hoverStart.lowerBound])
+    let hoverSource = String(themeSource[hoverStart.lowerBound..<primaryStart.lowerBound])
+    try expect(
+        primarySource.contains("Color(red: 0.949, green: 0.957, blue: 0.969)")
+            && primarySource.contains("Color(red: 0.125, green: 0.141, blue: 0.165)"),
+        "workspacePrimaryText 必须使用已验证的明暗中性文本值"
+    )
+    try expect(
+        secondarySource.contains("Color(red: 0.722, green: 0.753, blue: 0.800)")
+            && secondarySource.contains("Color(red: 0.349, green: 0.384, blue: 0.439)"),
+        "workspaceSecondaryText 必须使用已验证的明暗中性文本值"
+    )
     try expect(
         mutedSource.contains("Color(red: 0.604, green: 0.639, blue: 0.690)")
-            && mutedSource.contains("Color(red: 0.416, green: 0.451, blue: 0.502)"),
+            && mutedSource.contains("Color(red: 0.395, green: 0.430, blue: 0.480)"),
         "workspaceMutedText 必须使用已验证的明暗中性文本值"
+    )
+    try expect(
+        canvasSource.contains("Color(red: 0.082, green: 0.090, blue: 0.106)")
+            && canvasSource.contains("Color(red: 0.957, green: 0.961, blue: 0.969)"),
+        "对比度校验的画布表面必须与工作台令牌保持一致"
+    )
+    try expect(
+        moduleSource.contains("Color(red: 0.098, green: 0.110, blue: 0.129)")
+            && moduleSource.contains("Color(red: 0.933, green: 0.941, blue: 0.953)"),
+        "对比度校验的模块栏表面必须与工作台令牌保持一致"
     )
     try expect(
         sidebarSource.contains("Color(red: 0.114, green: 0.125, blue: 0.149)")
@@ -1083,21 +1116,65 @@ func checkWorkspaceVisualClarityTheme() throws {
             && surfaceSource.contains("Color.white"),
         "对比度校验的内容表面必须与工作台令牌保持一致"
     )
+    try expect(
+        altSurfaceSource.contains("Color(red: 0.149, green: 0.169, blue: 0.196)")
+            && altSurfaceSource.contains("Color(red: 0.973, green: 0.976, blue: 0.984)"),
+        "对比度校验的次级内容表面必须与工作台令牌保持一致"
+    )
+    try expect(
+        hoverSource.contains("Color(red: 0.169, green: 0.188, blue: 0.220)")
+            && hoverSource.contains("Color(red: 0.957, green: 0.965, blue: 0.973)"),
+        "对比度校验的 hover 表面必须与工作台令牌保持一致"
+    )
 
-    let lightMuted = WorkspaceThemeCheckRGB(red: 0.416, green: 0.451, blue: 0.502)
-    let darkMuted = WorkspaceThemeCheckRGB(red: 0.604, green: 0.639, blue: 0.690)
-    let lightContent = WorkspaceThemeCheckRGB(red: 1.0, green: 1.0, blue: 1.0)
-    let lightSidebar = WorkspaceThemeCheckRGB(red: 0.969, green: 0.973, blue: 0.980)
-    let darkContent = WorkspaceThemeCheckRGB(red: 0.129, green: 0.145, blue: 0.169)
-    let darkSidebar = WorkspaceThemeCheckRGB(red: 0.114, green: 0.125, blue: 0.149)
-    for (surfaceName, ratio) in [
-        ("light content", workspaceThemeCheckContrastRatio(lightMuted, lightContent)),
-        ("light sidebar", workspaceThemeCheckContrastRatio(lightMuted, lightSidebar)),
-        ("dark content", workspaceThemeCheckContrastRatio(darkMuted, darkContent)),
-        ("dark sidebar", workspaceThemeCheckContrastRatio(darkMuted, darkSidebar))
-    ] {
-        try expect(ratio >= 4.5, "workspaceMutedText 与\(surfaceName)的对比度必须 >= 4.5:1，实际为 \(ratio)")
+    let textTokens: [(String, WorkspaceThemeCheckRGB, WorkspaceThemeCheckRGB)] = [
+        ("primary", .init(red: 0.125, green: 0.141, blue: 0.165), .init(red: 0.949, green: 0.957, blue: 0.969)),
+        ("secondary", .init(red: 0.349, green: 0.384, blue: 0.439), .init(red: 0.722, green: 0.753, blue: 0.800)),
+        ("muted", .init(red: 0.395, green: 0.430, blue: 0.480), .init(red: 0.604, green: 0.639, blue: 0.690))
+    ]
+    let surfaces: [(String, WorkspaceThemeCheckRGB, WorkspaceThemeCheckRGB)] = [
+        ("canvas", .init(red: 0.957, green: 0.961, blue: 0.969), .init(red: 0.082, green: 0.090, blue: 0.106)),
+        ("module rail", .init(red: 0.933, green: 0.941, blue: 0.953), .init(red: 0.098, green: 0.110, blue: 0.129)),
+        ("context sidebar", .init(red: 0.969, green: 0.973, blue: 0.980), .init(red: 0.114, green: 0.125, blue: 0.149)),
+        ("content", .init(red: 1.0, green: 1.0, blue: 1.0), .init(red: 0.129, green: 0.145, blue: 0.169)),
+        ("alternate content", .init(red: 0.973, green: 0.976, blue: 0.984), .init(red: 0.149, green: 0.169, blue: 0.196)),
+        ("row hover", .init(red: 0.957, green: 0.965, blue: 0.973), .init(red: 0.169, green: 0.188, blue: 0.220))
+    ]
+    for (textName, lightText, darkText) in textTokens {
+        for (surfaceName, lightSurface, darkSurface) in surfaces {
+            let lightRatio = workspaceThemeCheckContrastRatio(lightText, lightSurface)
+            let darkRatio = workspaceThemeCheckContrastRatio(darkText, darkSurface)
+            try expect(lightRatio >= 4.5, "light \(textName) 与 \(surfaceName) 对比度必须 >= 4.5:1，实际为 \(lightRatio)")
+            try expect(darkRatio >= 4.5, "dark \(textName) 与 \(surfaceName) 对比度必须 >= 4.5:1，实际为 \(darkRatio)")
+        }
     }
+
+    let lightAccentForeground = WorkspaceThemeCheckRGB(red: 1.0, green: 1.0, blue: 1.0)
+    let darkAccentForeground = WorkspaceThemeCheckRGB(red: 0.082, green: 0.090, blue: 0.106)
+    let accentSurfaces: [(String, WorkspaceThemeCheckRGB, WorkspaceThemeCheckRGB)] = [
+        ("ocean", .init(red: 0.170, green: 0.400, blue: 0.950), .init(red: 0.365, green: 0.596, blue: 1.000)),
+        ("aurora", .init(red: 0.435, green: 0.357, blue: 0.827), .init(red: 0.620, green: 0.536, blue: 0.930)),
+        ("board", .init(red: 0.720, green: 0.280, blue: 0.510), .init(red: 0.890, green: 0.430, blue: 0.650)),
+        ("leafcutter", .init(red: 0.184, green: 0.490, blue: 0.361), .init(red: 0.360, green: 0.720, blue: 0.540)),
+        ("workspace", .init(red: 0.239, green: 0.388, blue: 0.867), .init(red: 0.400, green: 0.560, blue: 1.000))
+    ]
+    for (skinName, lightAccent, darkAccent) in accentSurfaces {
+        let lightRatio = workspaceThemeCheckContrastRatio(lightAccentForeground, lightAccent)
+        let darkRatio = workspaceThemeCheckContrastRatio(darkAccentForeground, darkAccent)
+        try expect(lightRatio >= 4.5, "light accentForeground 与 \(skinName) accent 对比度必须 >= 4.5:1，实际为 \(lightRatio)")
+        try expect(darkRatio >= 4.5, "dark accentForeground 与 \(skinName) accent 对比度必须 >= 4.5:1，实际为 \(darkRatio)")
+    }
+    guard let accentForegroundStart = themeSource.range(of: "static var workspaceAccentForeground: Color"),
+          let dangerStart = themeSource.range(of: "static var workspaceDanger: Color")
+    else {
+        throw CheckFailure.failed("无法定位 accentForeground/danger 令牌")
+    }
+    let accentForegroundSource = String(themeSource[accentForegroundStart.lowerBound..<dangerStart.lowerBound])
+    try expect(
+        accentForegroundSource.contains("isDark ? workspaceCanvas : Color.white")
+            && !accentForegroundSource.contains("AppSkin.current"),
+        "accentForeground 应按明暗模式提供可访问前景，不能按皮肤分支"
+    )
 
     try expect(
         shellSource.contains("AppLogoImage(size: 26, shadowRadius: 0)"),
@@ -1217,14 +1294,16 @@ func checkTodoIssueListUsesContextMenu() throws {
 func checkTodoDenseNaturalListPresentation() throws {
     let rowSource = try sourceFile("Sources/DailyTodos/TodoFlowRow.swift")
     let listSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
+    let badgesSource = try sourceFile("Sources/DailyTodos/TodoBadges.swift")
+    let captureSource = try sourceFile("Sources/DailyTodos/TodoCaptureViews.swift")
     let sidebarSource = try sourceFile("Sources/DailyTodos/TodoSidebarViews.swift")
     guard
         let rowBackgroundStart = rowSource.range(of: "private var rowBackground: Color"),
-        let rowOpacityStart = rowSource.range(of: "private var rowOpacity: Double")
+        let startEditingStart = rowSource.range(of: "private func startEditing()")
     else {
         throw CheckFailure.failed("待办行应保留 rowBackground 视觉分层入口")
     }
-    let rowBackgroundSource = String(rowSource[rowBackgroundStart.lowerBound..<rowOpacityStart.lowerBound])
+    let rowBackgroundSource = String(rowSource[rowBackgroundStart.lowerBound..<startEditingStart.lowerBound])
 
     try expect(
         rowSource.contains("TodoIssueSignalIcon(todo: todo)")
@@ -1266,6 +1345,93 @@ func checkTodoDenseNaturalListPresentation() throws {
         !rowBackgroundSource.contains("isOverdue")
             && !rowBackgroundSource.contains("TodoPriority.high.displayColor"),
         "逾期普通行不应再使用红色背景底色"
+    )
+    try expect(
+        !rowSource.contains(".opacity(rowOpacity)")
+            && !rowSource.contains("private var rowOpacity: Double")
+            && rowSource.contains("AppTheme.workspaceTokens.accentForeground")
+            && !rowSource.contains(".foregroundStyle(.white)"),
+        "已完成普通行不能通过容器透明度降低文字对比度"
+    )
+
+    guard let signalStart = rowSource.range(of: "private var signal: (systemName: String, color: Color, label: String)?"),
+          let overdueStart = rowSource.range(of: "private var isOverdue: Bool", range: signalStart.upperBound..<rowSource.endIndex)
+    else {
+        throw CheckFailure.failed("无法定位 TodoIssueSignalIcon.signal")
+    }
+    let signalSource = String(rowSource[signalStart.lowerBound..<overdueStart.lowerBound])
+    try expect(
+        signalSource.contains("if isOverdue")
+            && signalSource.contains("case .inProgress:")
+            && signalSource.contains("case .waiting:")
+            && signalSource.contains("case .done:")
+            && signalSource.contains("case .pending:\n            if todo.priority == .high")
+            && signalSource.contains("AppTheme.workspaceTokens.textSecondary, \"高优先级\"")
+            && !signalSource.contains("AppTheme.workspaceTokens.danger, \"高优先级\""),
+        "issue 信号应按逾期、进度、高优先级 pending 的顺序解析，且高优先级旗标保持中性"
+    )
+
+    guard let boardStart = listSource.range(of: "struct TodoBoardCard"),
+          let boardEnd = listSource.range(of: "enum WorkSectionKind")
+    else {
+        throw CheckFailure.failed("无法定位 TodoBoardCard")
+    }
+    let boardSource = String(listSource[boardStart.lowerBound..<boardEnd.lowerBound])
+    try expect(
+        !boardSource.contains("priorityRailColor")
+            && !boardSource.contains("todo.priority.displayColor")
+            && !boardSource.contains(".shadow(")
+            && !boardSource.contains("cardOpacity")
+            && !boardSource.contains(".opacity(cardOpacity)")
+            && !boardSource.contains("cornerRadius: 15"),
+        "看板卡片不能保留优先级竖线/边框、直接投影、完成态容器透明度或超过 8px 圆角"
+    )
+    for requiredToken in [
+        "AppTheme.workspaceTokens.contentSurface",
+        "AppTheme.workspaceTokens.listRowHover",
+        "AppTheme.workspaceTokens.listRowSelected",
+        "AppTheme.workspaceTokens.hairline",
+        "AppTheme.workspaceTokens.accent",
+        "AppTheme.workspaceTokens.danger",
+        "AppTheme.workspaceTokens.textPrimary",
+        "AppTheme.workspaceTokens.textSecondary"
+    ] {
+        try expect(boardSource.contains(requiredToken), "TodoBoardCard 缺少工作台令牌：\(requiredToken)")
+    }
+    try expect(
+        boardSource.contains("RoundedRectangle(cornerRadius: 8")
+            && boardSource.contains("todo.isDone ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textPrimary")
+            && !boardSource.contains("AppTheme.workspaceTokens.textSecondary.opacity"),
+        "看板完成态应保留完整容器不透明度，并使用可访问文本令牌与删除线"
+    )
+
+    guard let progressColorStart = badgesSource.range(of: "var displayColor: Color"),
+          let priorityExtensionStart = badgesSource.range(of: "extension TodoPriority")
+    else {
+        throw CheckFailure.failed("无法定位 TodoProgress.displayColor")
+    }
+    let progressColorSource = String(badgesSource[progressColorStart.lowerBound..<priorityExtensionStart.lowerBound])
+    let priorityColorSource = String(badgesSource[priorityExtensionStart.lowerBound..<badgesSource.endIndex])
+    try expect(
+        !progressColorSource.contains("AppSkin.current")
+            && !priorityColorSource.contains("AppSkin.current"),
+        "TodoProgress/TodoPriority displayColor 不能按皮肤分支"
+    )
+    try expect(
+        progressColorSource.contains("AppTheme.workspaceTokens.textSecondary")
+            && progressColorSource.contains("AppTheme.workspaceTokens.accent")
+            && progressColorSource.contains("AppTheme.workspaceTokens.warning")
+            && progressColorSource.contains("AppTheme.workspaceTokens.success"),
+        "待办进度颜色应只使用共享语义/工作台令牌"
+    )
+    try expect(
+        priorityColorSource.contains("var taskDisplayColor: Color")
+            && priorityColorSource.contains("case .high: return AppTheme.workspaceTokens.warning")
+            && priorityColorSource.contains("case .high: return AppTheme.workspaceTokens.danger")
+            && badgesSource.contains("priority.taskDisplayColor")
+            && captureSource.contains("color: priority.taskDisplayColor")
+            && listSource.contains("case .urgentImportant: TodoPriority.high.taskDisplayColor"),
+        "任务优先级必须使用 warning/neutral 颜色，同时保留 danger 供通用风险与错误调用"
     )
     try expect(
         listSource.contains("LazyVStack(spacing: 3)")
@@ -1352,8 +1518,10 @@ func checkTodoControlsVisualClarity() throws {
     try expect(
         captureBarSource.contains("cornerRadius: 8")
             && captureBarSource.contains("lineWidth: isFocused ? 1.5 : 1")
-            && captureBarSource.contains("AppTheme.workspaceTokens.contentSurface"),
-        "快速记录应使用 8px 平面表面和明确焦点边框"
+            && captureBarSource.contains("AppTheme.workspaceTokens.contentSurface")
+            && captureBarSource.contains("AppTheme.workspaceTokens.accentForeground")
+            && !captureBarSource.contains("? Color.white"),
+        "快速记录应使用 8px 平面表面、明确焦点边框和可访问强调色前景"
     )
 }
 
@@ -1364,9 +1532,10 @@ func checkTodoCalendarVisualClarity() throws {
     try expect(
         quickDateSource.contains("AppTheme.workspaceTokens.accentSoft")
             && quickDateSource.contains("AppTheme.workspaceTokens.listRowHover")
+            && quickDateSource.contains("if isSelected || calendar.isDateInToday(date)")
             && !quickDateSource.contains("AppTheme.adaptiveWhite(0.74)")
             && !quickDateSource.contains("cornerRadius: 10"),
-        "快速日期应使用轻量选中/hover 状态，不能保留独立白色卡片"
+        "快速日期应使用轻量选中/hover 状态，且今天在未选中时使用 accent 前景"
     )
     try expect(
         calendarSource.contains("private var calendarNavigation: some View")
@@ -1385,6 +1554,19 @@ func checkTodoCalendarVisualClarity() throws {
         !calendarBodySource.contains("AppTheme.adaptiveWhite")
             && !calendarBodySource.contains("cornerRadius: 13"),
         "月历主体不能继续使用半透明卡片容器"
+    )
+    guard let dayCellStart = calendarSource.range(of: "struct MiniCalendarDayCell") else {
+        throw CheckFailure.failed("无法定位 MiniCalendarDayCell")
+    }
+    let dayCellSource = String(calendarSource[dayCellStart.lowerBound..<calendarSource.endIndex])
+    try expect(
+        dayCellSource.contains("@State private var isHovered = false")
+            && dayCellSource.contains(".onHover { isHovered = $0 }")
+            && dayCellSource.contains("if isSelected { return AppTheme.workspaceTokens.accentSoft }")
+            && dayCellSource.contains("if isHovered { return AppTheme.workspaceTokens.listRowHover }")
+            && dayCellSource.contains("if isToday { return AppTheme.workspaceTokens.accent }")
+            && dayCellSource.contains("if isToday { return AppTheme.workspaceTokens.hairline }"),
+        "小日历日期应提供稳定 hover，保留选中优先级，并让今天使用 accent 前景或 hairline"
     )
 }
 

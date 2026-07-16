@@ -238,6 +238,8 @@ struct MiniCalendarDayCell: View {
     let pendingCount: Int
     let action: () -> Void
 
+    @State private var isHovered = false
+
     private let calendar = Calendar.current
 
     var body: some View {
@@ -265,7 +267,9 @@ struct MiniCalendarDayCell: View {
         .buttonStyle(.tactilePlain)
         .disabled(!isInCurrentMonth)
         .help("\(date.formatted(.dateTime.year().month().day()))：\(totalCount) 项，\(pendingCount) 未完成")
+        .onHover { isHovered = $0 }
         .animation(AppMotion.smooth, value: isSelected)
+        .animation(AppMotion.hover, value: isHovered)
         .animation(AppMotion.smooth, value: totalCount)
         .animation(AppMotion.smooth, value: pendingCount)
     }
@@ -305,7 +309,7 @@ struct MiniCalendarDayCell: View {
 
     private var background: Color {
         if isSelected { return AppTheme.workspaceTokens.accentSoft }
-        if isToday { return AppTheme.workspaceTokens.listRowHover }
+        if isHovered { return AppTheme.workspaceTokens.listRowHover }
         return Color.clear
     }
 

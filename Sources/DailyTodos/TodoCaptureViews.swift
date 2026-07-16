@@ -80,7 +80,7 @@ struct QuickCaptureBar: View {
                 .buttonStyle(.tactilePlain)
                 .foregroundStyle(
                     canCreate && !isCreating
-                        ? Color.white
+                        ? AppTheme.workspaceTokens.accentForeground
                         : AppTheme.workspaceTokens.textSecondary
                 )
                 .background(
@@ -295,7 +295,7 @@ struct QuickCapturePreview: View {
                 .frame(minWidth: 150, maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 5) {
-                PreviewChip(text: priority.label, color: priority.displayColor, systemImage: "flag.fill")
+                PreviewChip(text: priority.label, color: priority.taskDisplayColor, systemImage: "flag.fill")
                 PreviewChip(text: progress.shortLabel, color: progress.displayColor, systemImage: progress.previewIcon)
                 PreviewChip(text: previewDateText, color: dateColor, systemImage: "calendar")
                 if isWeekly {
@@ -325,8 +325,8 @@ struct QuickCapturePreview: View {
 
     private var dateColor: Color {
         Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
-            ? TodoPriority.high.displayColor
-            : AppTheme.mutedInk
+            ? AppTheme.workspaceTokens.danger
+            : AppTheme.workspaceTokens.textMuted
     }
 }
 

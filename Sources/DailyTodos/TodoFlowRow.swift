@@ -106,7 +106,6 @@ struct TodoFlowRow: View, @MainActor Equatable {
                     .fill(AppTheme.workspaceTokens.hairline.opacity(0.72))
                     .frame(height: 1)
             }
-            .opacity(rowOpacity)
             .contentShape(Rectangle())
             .contextMenu {
                 TodoContextMenuContent(
@@ -176,13 +175,6 @@ struct TodoFlowRow: View, @MainActor Equatable {
             return AppTheme.workspaceTokens.listRowHover
         }
         return Color.clear
-    }
-
-    private var rowOpacity: Double {
-        if !todo.isDone {
-            return 1
-        }
-        return isHighlighted ? 0.88 : 0.72
     }
 
     private func startEditing() {
@@ -258,11 +250,11 @@ struct TodoIssueSignalIcon: View {
         if isOverdue {
             return ("exclamationmark.circle.fill", AppTheme.workspaceTokens.danger, "已逾期")
         }
-        if todo.priority == .high {
-            return ("flag.fill", AppTheme.workspaceTokens.danger, "高优先级")
-        }
         switch todo.progress {
         case .pending:
+            if todo.priority == .high {
+                return ("flag.fill", AppTheme.workspaceTokens.textSecondary, "高优先级")
+            }
             return nil
         case .inProgress:
             return ("bolt", AppTheme.workspaceTokens.textSecondary, "推进中")
@@ -381,11 +373,20 @@ struct TodoBoardEditCard: View {
                         .frame(width: 72, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(canSubmit ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: Capsule())
+                .foregroundStyle(
+                    canSubmit
+                        ? AppTheme.workspaceTokens.accentForeground
+                        : AppTheme.workspaceTokens.textSecondary
+                )
+                .background(
+                    canSubmit
+                        ? AppTheme.workspaceTokens.accent
+                        : AppTheme.workspaceTokens.contentAltSurface,
+                    in: Capsule()
+                )
                 .overlay(
                     Capsule()
-                        .stroke(canSubmit ? AppTheme.adaptiveWhite(0.34) : AppTheme.adaptiveBlack(0.05))
+                        .stroke(canSubmit ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.hairline)
                 )
                 .interactionHitArea()
                 .disabled(!canSubmit)
