@@ -277,7 +277,7 @@ struct ModuleRail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 9) {
-                AppLogoImage(size: 26, shadowRadius: 2)
+                AppLogoImage(size: 26, shadowRadius: 0)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("蚁序")

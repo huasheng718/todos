@@ -67,6 +67,35 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     }
 }
 
+struct WorkspaceThemeCheckRGB {
+    let red: Double
+    let green: Double
+    let blue: Double
+}
+
+func workspaceThemeCheckRelativeLuminance(_ color: WorkspaceThemeCheckRGB) -> Double {
+    func linearChannel(_ channel: Double) -> Double {
+        channel <= 0.04045
+            ? channel / 12.92
+            : pow((channel + 0.055) / 1.055, 2.4)
+    }
+
+    return 0.2126 * linearChannel(color.red)
+        + 0.7152 * linearChannel(color.green)
+        + 0.0722 * linearChannel(color.blue)
+}
+
+func workspaceThemeCheckContrastRatio(
+    _ foreground: WorkspaceThemeCheckRGB,
+    _ background: WorkspaceThemeCheckRGB
+) -> Double {
+    let foregroundLuminance = workspaceThemeCheckRelativeLuminance(foreground)
+    let backgroundLuminance = workspaceThemeCheckRelativeLuminance(background)
+    let lighter = max(foregroundLuminance, backgroundLuminance)
+    let darker = min(foregroundLuminance, backgroundLuminance)
+    return (lighter + 0.05) / (darker + 0.05)
+}
+
 func sourceFile(_ relativePath: String) throws -> String {
     let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent(relativePath)
@@ -1024,6 +1053,53 @@ func checkWorkspaceVisualClarityTheme() throws {
     ] {
         try expect(themeSource.contains(requiredToken), "AppTheme 缺少视觉令牌：\(requiredToken)")
     }
+
+    guard let mutedStart = themeSource.range(of: "static var workspaceMutedText: Color"),
+          let hairlineStart = themeSource.range(of: "static var workspaceHairline: Color"),
+          let sidebarStart = themeSource.range(of: "static var workspaceContextSidebar: Color"),
+          let surfaceStart = themeSource.range(of: "static var workspaceSurface: Color"),
+          let altSurfaceStart = themeSource.range(of: "static var workspaceAltSurface: Color")
+    else {
+        throw CheckFailure.failed("无法定位工作台文本和表面令牌")
+    }
+    let mutedSource = String(themeSource[mutedStart.lowerBound..<hairlineStart.lowerBound])
+    let sidebarSource = String(themeSource[sidebarStart.lowerBound..<surfaceStart.lowerBound])
+    let surfaceSource = String(themeSource[surfaceStart.lowerBound..<altSurfaceStart.lowerBound])
+    try expect(
+        mutedSource.contains("Color(red: 0.604, green: 0.639, blue: 0.690)")
+            && mutedSource.contains("Color(red: 0.416, green: 0.451, blue: 0.502)"),
+        "workspaceMutedText 必须使用已验证的明暗中性文本值"
+    )
+    try expect(
+        sidebarSource.contains("Color(red: 0.114, green: 0.125, blue: 0.149)")
+            && sidebarSource.contains("Color(red: 0.969, green: 0.973, blue: 0.980)"),
+        "对比度校验的侧栏表面必须与工作台令牌保持一致"
+    )
+    try expect(
+        surfaceSource.contains("Color(red: 0.129, green: 0.145, blue: 0.169)")
+            && surfaceSource.contains("Color.white"),
+        "对比度校验的内容表面必须与工作台令牌保持一致"
+    )
+
+    let lightMuted = WorkspaceThemeCheckRGB(red: 0.416, green: 0.451, blue: 0.502)
+    let darkMuted = WorkspaceThemeCheckRGB(red: 0.604, green: 0.639, blue: 0.690)
+    let lightContent = WorkspaceThemeCheckRGB(red: 1.0, green: 1.0, blue: 1.0)
+    let lightSidebar = WorkspaceThemeCheckRGB(red: 0.969, green: 0.973, blue: 0.980)
+    let darkContent = WorkspaceThemeCheckRGB(red: 0.129, green: 0.145, blue: 0.169)
+    let darkSidebar = WorkspaceThemeCheckRGB(red: 0.114, green: 0.125, blue: 0.149)
+    for (surfaceName, ratio) in [
+        ("light content", workspaceThemeCheckContrastRatio(lightMuted, lightContent)),
+        ("light sidebar", workspaceThemeCheckContrastRatio(lightMuted, lightSidebar)),
+        ("dark content", workspaceThemeCheckContrastRatio(darkMuted, darkContent)),
+        ("dark sidebar", workspaceThemeCheckContrastRatio(darkMuted, darkSidebar))
+    ] {
+        try expect(ratio >= 4.5, "workspaceMutedText 与\(surfaceName)的对比度必须 >= 4.5:1，实际为 \(ratio)")
+    }
+
+    try expect(
+        shellSource.contains("AppLogoImage(size: 26, shadowRadius: 0)"),
+        "模块导航 logo 不应显示投影"
+    )
 
     guard let sharedVisualStart = themeSource.range(of: "static var canvasGradient: [Color]"),
           let accentStart = themeSource.range(of: "static var accent: Color"),

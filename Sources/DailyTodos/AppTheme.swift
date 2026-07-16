@@ -407,8 +407,8 @@ enum AppTheme {
 
     static var workspaceMutedText: Color {
         isDark
-            ? Color(red: 0.557, green: 0.592, blue: 0.647)
-            : Color(red: 0.478, green: 0.518, blue: 0.573)
+            ? Color(red: 0.604, green: 0.639, blue: 0.690)
+            : Color(red: 0.416, green: 0.451, blue: 0.502)
     }
 
     static var workspaceHairline: Color {
