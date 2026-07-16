@@ -54,7 +54,7 @@ struct TodoFlowRow: View, @MainActor Equatable {
             }
         } else {
             HStack(alignment: hasNotes ? .top : .center, spacing: 7) {
-                TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted)
+                TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)
                     .padding(.top, hasNotes ? 1 : 0)
 
                 TodoIssueSignalIcon(todo: todo)
@@ -187,25 +187,31 @@ struct TodoFlowRow: View, @MainActor Equatable {
 struct TodoIssueStatusMarker: View {
     let todo: TodoItem
     let isHighlighted: Bool
+    let onToggle: () -> Void
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(fillColor)
-                .overlay(
-                    Circle()
-                        .stroke(strokeColor, lineWidth: 1.4)
-                )
-                .frame(width: 21, height: 21)
+        Button(action: onToggle) {
+            ZStack {
+                Circle()
+                    .fill(fillColor)
+                    .overlay(
+                        Circle()
+                            .stroke(strokeColor, lineWidth: 1.4)
+                    )
+                    .frame(width: 21, height: 21)
 
-            if todo.isDone {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(TodoProgress.done.displayColor)
+                if todo.isDone {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(TodoProgress.done.displayColor)
+                }
             }
+            .frame(width: 22, height: 24)
         }
-        .frame(width: 22, height: 24)
+        .buttonStyle(.plain)
+        .interactionHitArea(38)
         .accessibilityLabel(todo.isDone ? "已完成" : "未完成")
+        .help(todo.isDone ? "标记为未完成" : "标记为已完成")
     }
 
     private var fillColor: Color {
@@ -395,9 +401,9 @@ struct TodoBoardEditCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.rowTint(priority: priority, isOverdue: isOverdue), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(AppTheme.rowTint(priority: priority, isOverdue: isOverdue), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(AppTheme.accent.opacity(0.24))
         )
     }

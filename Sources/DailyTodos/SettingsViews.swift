@@ -520,11 +520,24 @@ private struct SettingsContentView: View {
                         .frame(width: 78, height: 32)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(updateController.isDownloading ? AppTheme.mutedInk : AppTheme.accentWarm, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .foregroundStyle(
+                    updateController.isDownloading
+                        ? AppTheme.workspaceTokens.textSecondary
+                        : AppTheme.workspaceTokens.accentForeground
+                )
+                .background(
+                    updateController.isDownloading
+                        ? AppTheme.workspaceTokens.contentAltSurface
+                        : AppTheme.workspaceTokens.accent,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(AppTheme.adaptiveWhite(0.28))
+                        .stroke(
+                            updateController.isDownloading
+                                ? AppTheme.workspaceTokens.hairline
+                                : AppTheme.workspaceTokens.accent
+                        )
                 )
                 .disabled(updateController.isDownloading)
                 .help("下载当前发现的新版本")
@@ -538,11 +551,24 @@ private struct SettingsContentView: View {
                     .frame(width: 104, height: 32)
             }
             .buttonStyle(.tactilePlain)
-            .foregroundStyle(updateController.isChecking ? AppTheme.accent : .white)
-            .background(updateController.isChecking ? AppTheme.accentSoft : AppTheme.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .foregroundStyle(
+                updateController.isChecking || updateController.isDownloading
+                    ? AppTheme.workspaceTokens.textSecondary
+                    : AppTheme.workspaceTokens.accentForeground
+            )
+            .background(
+                updateController.isChecking || updateController.isDownloading
+                    ? AppTheme.workspaceTokens.contentAltSurface
+                    : AppTheme.workspaceTokens.accent,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(updateController.isChecking ? AppTheme.accent.opacity(0.24) : AppTheme.adaptiveWhite(0.26))
+                    .stroke(
+                        updateController.isChecking || updateController.isDownloading
+                            ? AppTheme.workspaceTokens.hairline
+                            : AppTheme.workspaceTokens.accent
+                    )
             )
             .disabled(updateController.isChecking || updateController.isDownloading)
             .help("检查更新")

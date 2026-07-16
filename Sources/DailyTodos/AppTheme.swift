@@ -134,7 +134,7 @@ struct TactilePlainButtonStyle: ButtonStyle {
                     .fill(buttonFill(isPressed: configuration.isPressed))
             }
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.78 : 1) : 0.46)
+            .opacity(configuration.isPressed ? 0.78 : 1)
             .animation(AppMotion.press, value: configuration.isPressed)
             .animation(AppMotion.hover, value: isHovered)
             .onHover { hovered in

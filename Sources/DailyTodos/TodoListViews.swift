@@ -578,7 +578,7 @@ struct TodoBoardCard: View {
                 }
 
                 HStack(alignment: .top, spacing: 9) {
-                    TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted)
+                    TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)
 
                     VStack(alignment: .leading, spacing: hasNotes ? 7 : 0) {
                         Text(titleText)

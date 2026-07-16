@@ -42,6 +42,7 @@ struct DailyTodosChecks {
                 try checkTodoIssueListUsesContextMenu()
                 try checkTodoDenseNaturalListPresentation()
                 try checkTodoControlsVisualClarity()
+                try checkSettingsUpdateActionsVisualClarity()
                 try checkTodoCalendarVisualClarity()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
@@ -1013,6 +1014,19 @@ func checkWorkspaceVisualClarityTheme() throws {
     let themeSource = try sourceFile("Sources/DailyTodos/AppTheme.swift")
     let shellSource = try sourceFile("Sources/DailyTodos/WorkspaceShellViews.swift")
 
+    guard let buttonStyleStart = themeSource.range(of: "struct TactilePlainButtonStyle"),
+          let buttonStyleEnd = themeSource.range(of: "extension ButtonStyle where Self == TactilePlainButtonStyle")
+    else {
+        throw CheckFailure.failed("无法定位 TactilePlainButtonStyle")
+    }
+    let buttonStyleSource = String(themeSource[buttonStyleStart.lowerBound..<buttonStyleEnd.lowerBound])
+    try expect(
+        buttonStyleSource.contains(".opacity(configuration.isPressed ? 0.78 : 1)")
+            && !buttonStyleSource.contains("0.46")
+            && !buttonStyleSource.contains(".opacity(isEnabled ?"),
+        "全局按钮样式只能降低按下态透明度，禁用态必须由组件提供可读颜色"
+    )
+
     guard let tokensStart = themeSource.range(of: "static var workspaceTokens: WorkspaceThemeTokens"),
           let tokensEnd = themeSource.range(of: "static var isDark: Bool")
     else {
@@ -1261,6 +1275,25 @@ func checkTodoIssueListUsesContextMenu() throws {
     let listSource = try sourceFile("Sources/DailyTodos/TodoListViews.swift")
     let menuSource = try sourceFile("Sources/DailyTodos/TodoContextMenuViews.swift")
 
+    guard let statusMarkerStart = rowSource.range(of: "struct TodoIssueStatusMarker"),
+          let signalIconStart = rowSource.range(of: "struct TodoIssueSignalIcon")
+    else {
+        throw CheckFailure.failed("无法定位 TodoIssueStatusMarker")
+    }
+    let statusMarkerSource = String(rowSource[statusMarkerStart.lowerBound..<signalIconStart.lowerBound])
+    try expect(
+        statusMarkerSource.contains("let onToggle: () -> Void")
+            && statusMarkerSource.contains("Button(action: onToggle)")
+            && statusMarkerSource.contains(".buttonStyle(.plain)")
+            && statusMarkerSource.contains(".interactionHitArea(38)"),
+        "完成标记必须是直接调用 onToggle 的 38px 可点击按钮"
+    )
+    try expect(
+        rowSource.contains("TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)")
+            && listSource.contains("TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)"),
+        "列表行和看板卡片必须把现有 onToggle 回调传给完成标记"
+    )
+
     try expect(
         rowSource.contains("TodoIssueStatusMarker")
             && rowSource.contains("TodoIssueSignalIcon(todo: todo)")
@@ -1316,6 +1349,11 @@ func checkTodoDenseNaturalListPresentation() throws {
     try expect(
         !boardEditSource.contains(".shadow("),
         "TodoBoardEditCard 不能直接添加 shadow，即使 rowShadow 当前为 clear"
+    )
+    let boardEditRadiusCount = boardEditSource.components(separatedBy: "RoundedRectangle(cornerRadius: 8").count - 1
+    try expect(
+        boardEditRadiusCount == 2 && !boardEditSource.contains("cornerRadius: 16"),
+        "TodoBoardEditCard 的背景和边框必须统一使用 8px 圆角"
     )
     guard
         let rowBackgroundStart = nonEditingSource.range(of: "private var rowBackground: Color")
@@ -1544,6 +1582,34 @@ func checkTodoControlsVisualClarity() throws {
             && captureBarSource.contains("AppTheme.workspaceTokens.accentForeground")
             && !captureBarSource.contains("? Color.white"),
         "快速记录应使用 8px 平面表面、明确焦点边框和可访问强调色前景"
+    )
+}
+
+func checkSettingsUpdateActionsVisualClarity() throws {
+    let settingsSource = try sourceFile("Sources/DailyTodos/SettingsViews.swift")
+    guard let updateActionsStart = settingsSource.range(of: "private var updateActions: some View"),
+          let updateStatusTextStart = settingsSource.range(of: "private var updateStatusText: String")
+    else {
+        throw CheckFailure.failed("无法定位 Settings updateActions")
+    }
+    let updateActionsSource = String(settingsSource[updateActionsStart.lowerBound..<updateStatusTextStart.lowerBound])
+    let accentForegroundCount = updateActionsSource.components(separatedBy: "AppTheme.workspaceTokens.accentForeground").count - 1
+    let disabledForegroundCount = updateActionsSource.components(separatedBy: "AppTheme.workspaceTokens.textSecondary").count - 1
+    let disabledSurfaceCount = updateActionsSource.components(separatedBy: "AppTheme.workspaceTokens.contentAltSurface").count - 1
+
+    try expect(
+        accentForegroundCount == 2
+            && disabledForegroundCount == 2
+            && disabledSurfaceCount == 2
+            && updateActionsSource.contains("AppTheme.workspaceTokens.accent")
+            && updateActionsSource.contains("AppTheme.workspaceTokens.hairline"),
+        "下载和检查更新操作都必须使用可访问强调色前景，并提供可读禁用态"
+    )
+    try expect(
+        !updateActionsSource.contains("AppTheme.accentWarm")
+            && !updateActionsSource.contains(".foregroundStyle(.white)")
+            && !updateActionsSource.contains("AppTheme.adaptiveWhite"),
+        "更新主操作不能使用警告色、固定白字或低对比装饰边框"
     )
 }
 
