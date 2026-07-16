@@ -46,6 +46,8 @@ struct QuickDateCell: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var isHovered = false
+
     private let calendar = Calendar.current
 
     var body: some View {
@@ -59,21 +61,27 @@ struct QuickDateCell: View {
                     .font(.system(size: 13, weight: .bold))
                     .monospacedDigit()
                 Circle()
-                    .fill(count > 0 ? (isSelected ? Color.white : AppTheme.accent) : Color.clear)
+                    .fill(count > 0 ? AppTheme.workspaceTokens.accent : Color.clear)
                     .frame(width: 4, height: 4)
             }
-            .foregroundStyle(isSelected ? .white : AppTheme.ink)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(isSelected ? AppTheme.accent : AppTheme.adaptiveWhite(0.74), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? AppTheme.accent.opacity(0.34) : AppTheme.hairline)
-            )
+            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.tactilePlain)
         .help("\(date.formatted(.dateTime.year().month().day()))：\(count) 个未完成")
+        .onHover { isHovered = $0 }
         .animation(AppMotion.smooth, value: isSelected)
+    }
+
+    private var background: Color {
+        if isSelected {
+            return AppTheme.workspaceTokens.accentSoft
+        }
+        if isHovered {
+            return AppTheme.workspaceTokens.listRowHover
+        }
+        return Color.clear
     }
 
     private var label: String {

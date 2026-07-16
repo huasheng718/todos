@@ -42,6 +42,7 @@ struct DailyTodosChecks {
                 try checkTodoIssueListUsesContextMenu()
                 try checkTodoDenseNaturalListPresentation()
                 try checkTodoControlsVisualClarity()
+                try checkTodoCalendarVisualClarity()
                 try checkHandbookDetailReconcilesSameItemUpdates()
                 try checkHandbookDetailHandlesImagePaste()
                 try checkHandbookImagePasteMenuValidation()
@@ -1353,6 +1354,37 @@ func checkTodoControlsVisualClarity() throws {
             && captureBarSource.contains("lineWidth: isFocused ? 1.5 : 1")
             && captureBarSource.contains("AppTheme.workspaceTokens.contentSurface"),
         "快速记录应使用 8px 平面表面和明确焦点边框"
+    )
+}
+
+func checkTodoCalendarVisualClarity() throws {
+    let quickDateSource = try sourceFile("Sources/DailyTodos/SidebarSharedViews.swift")
+    let calendarSource = try sourceFile("Sources/DailyTodos/TodoMiniCalendarViews.swift")
+
+    try expect(
+        quickDateSource.contains("AppTheme.workspaceTokens.accentSoft")
+            && quickDateSource.contains("AppTheme.workspaceTokens.listRowHover")
+            && !quickDateSource.contains("AppTheme.adaptiveWhite(0.74)")
+            && !quickDateSource.contains("cornerRadius: 10"),
+        "快速日期应使用轻量选中/hover 状态，不能保留独立白色卡片"
+    )
+    try expect(
+        calendarSource.contains("private var calendarNavigation: some View")
+            && !calendarSource.contains("private var yearStepper")
+            && !calendarSource.contains("private var monthStepper")
+            && !calendarSource.contains("AppTheme.accentWarm"),
+        "小日历应合并年月导航并移除第二强调色"
+    )
+    guard let bodyStart = calendarSource.range(of: "var body: some View"),
+          let navigationStart = calendarSource.range(of: "private var calendarNavigation: some View")
+    else {
+        throw CheckFailure.failed("无法定位 TodoMiniCalendar.body/calendarNavigation")
+    }
+    let calendarBodySource = String(calendarSource[bodyStart.lowerBound..<navigationStart.lowerBound])
+    try expect(
+        !calendarBodySource.contains("AppTheme.adaptiveWhite")
+            && !calendarBodySource.contains("cornerRadius: 13"),
+        "月历主体不能继续使用半透明卡片容器"
     )
 }
 
