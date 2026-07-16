@@ -1025,6 +1025,41 @@ func checkWorkspaceVisualClarityTheme() throws {
         try expect(themeSource.contains(requiredToken), "AppTheme 缺少视觉令牌：\(requiredToken)")
     }
 
+    guard let sharedVisualStart = themeSource.range(of: "static var canvasGradient: [Color]"),
+          let accentStart = themeSource.range(of: "static var accent: Color"),
+          let sharedVisualAfterAccentStart = themeSource.range(of: "static var shellStroke: Color"),
+          let darkOverlayStart = themeSource.range(of: "private static var darkOverlayBase: Color")
+    else {
+        throw CheckFailure.failed("无法定位 AppTheme 共享视觉令牌边界")
+    }
+    let sharedVisualBeforeAccent = String(themeSource[sharedVisualStart.lowerBound..<accentStart.lowerBound])
+    let sharedVisualAfterAccent = String(themeSource[sharedVisualAfterAccentStart.lowerBound..<darkOverlayStart.lowerBound])
+    try expect(
+        !sharedVisualBeforeAccent.contains("AppSkin.current")
+            && !sharedVisualBeforeAccent.contains("case .ocean"),
+        "canvasGradient 及 accent 之前的工作台视觉令牌不能按皮肤分支"
+    )
+    try expect(
+        !sharedVisualAfterAccent.contains("AppSkin.current")
+            && !sharedVisualAfterAccent.contains("case .ocean"),
+        "accent/accentSoft 之外的工作台视觉令牌不能按皮肤分支"
+    )
+
+    let darkOverlaySource = String(themeSource[darkOverlayStart.lowerBound..<themeSource.endIndex])
+    try expect(
+        !darkOverlaySource.contains("AppSkin.current")
+            && !darkOverlaySource.contains("case .ocean"),
+        "darkOverlayBase 不能按皮肤分支"
+    )
+    for requiredAlias in [
+        "static var accentCyan: Color { accent }",
+        "static var shellStroke: Color { workspaceHairline }",
+        "static var shadow: Color { .clear }",
+        "static var accentWarm: Color { workspaceWarning }"
+    ] {
+        try expect(themeSource.contains(requiredAlias), "旧视觉令牌应委托给共享令牌：\(requiredAlias)")
+    }
+
     guard let railButtonStart = shellSource.range(of: "struct ModuleRailButton"),
           let chromeMetricsStart = shellSource.range(of: "enum WorkspaceChromeMetrics")
     else {

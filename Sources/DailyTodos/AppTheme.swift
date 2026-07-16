@@ -278,62 +278,7 @@ enum AppTheme {
     }
 
     static var canvasGradient: [Color] {
-        if isDark {
-            switch AppSkin.current {
-            case .ocean:
-                return [
-                    Color(red: 0.050, green: 0.075, blue: 0.096),
-                    Color(red: 0.025, green: 0.110, blue: 0.120)
-                ]
-            case .aurora:
-                return [
-                    Color(red: 0.068, green: 0.054, blue: 0.098),
-                    Color(red: 0.098, green: 0.046, blue: 0.088)
-                ]
-            case .board:
-                return [
-                    Color(red: 0.070, green: 0.070, blue: 0.076),
-                    Color(red: 0.112, green: 0.096, blue: 0.090)
-                ]
-            case .leafcutter:
-                return [
-                    Color(red: 0.070, green: 0.078, blue: 0.052),
-                    Color(red: 0.126, green: 0.076, blue: 0.040)
-                ]
-            case .workspace:
-                return [
-                    Color(red: 0.070, green: 0.074, blue: 0.082),
-                    Color(red: 0.112, green: 0.096, blue: 0.090)
-                ]
-            }
-        }
-        switch AppSkin.current {
-        case .ocean:
-            return [
-                Color(red: 0.925, green: 0.960, blue: 1.0),
-                Color(red: 0.855, green: 0.915, blue: 0.990)
-            ]
-        case .aurora:
-            return [
-                Color(red: 0.965, green: 0.915, blue: 1.0),
-                Color(red: 0.900, green: 0.980, blue: 0.975)
-            ]
-        case .board:
-            return [
-                Color(red: 0.900, green: 0.900, blue: 0.905),
-                Color(red: 0.965, green: 0.930, blue: 0.960)
-            ]
-        case .leafcutter:
-            return [
-                Color(red: 0.938, green: 0.962, blue: 0.895),
-                Color(red: 0.984, green: 0.902, blue: 0.812)
-            ]
-        case .workspace:
-            return [
-                Color(red: 0.957, green: 0.961, blue: 0.969),
-                Color(red: 0.933, green: 0.941, blue: 0.953)
-            ]
-        }
+        [workspaceCanvas, workspaceAltSurface]
     }
 
     static var workSurface: Color {
@@ -384,25 +329,7 @@ enum AppTheme {
         }
     }
 
-    static var accentCyan: Color {
-        if isDark {
-            switch AppSkin.current {
-            case .ocean: Color(red: 0.360, green: 0.860, blue: 1.000)
-            case .aurora: Color(red: 1.000, green: 0.520, blue: 0.800)
-            case .board: Color(red: 0.620, green: 0.520, blue: 1.000)
-            case .leafcutter: Color(red: 0.540, green: 0.820, blue: 0.340)
-            case .workspace: Color(red: 0.620, green: 0.520, blue: 1.000)
-            }
-        } else {
-            switch AppSkin.current {
-            case .ocean: Color(red: 0.245, green: 0.790, blue: 0.925)
-            case .aurora: Color(red: 0.975, green: 0.390, blue: 0.740)
-            case .board: Color(red: 0.455, green: 0.330, blue: 0.930)
-            case .leafcutter: Color(red: 0.410, green: 0.720, blue: 0.230)
-            case .workspace: Color(red: 0.145, green: 0.388, blue: 0.922)
-            }
-        }
-    }
+    static var accentCyan: Color { accent }
 
     static var accentSoft: Color {
         switch AppSkin.current {
@@ -414,60 +341,13 @@ enum AppTheme {
         }
     }
 
-    static var shellStroke: Color {
-        if isDark {
-            switch AppSkin.current {
-            case .ocean: Color(red: 0.180, green: 0.260, blue: 0.320).opacity(0.92)
-            case .aurora: Color(red: 0.280, green: 0.220, blue: 0.420).opacity(0.90)
-            case .board: Color(red: 0.320, green: 0.310, blue: 0.300).opacity(0.88)
-            case .leafcutter: Color(red: 0.330, green: 0.250, blue: 0.140).opacity(0.88)
-            case .workspace: Color(red: 0.320, green: 0.310, blue: 0.300).opacity(0.88)
-            }
-        } else {
-            switch AppSkin.current {
-            case .ocean, .aurora: AppTheme.adaptiveWhite(0.95)
-            case .board: AppTheme.adaptiveWhite(0.82)
-            case .leafcutter: AppTheme.adaptiveWhite(0.86)
-            case .workspace: Color(red: 0.894, green: 0.906, blue: 0.925)
-            }
-        }
-    }
+    static var shellStroke: Color { workspaceHairline }
 
-    static var shadow: Color {
-        if isDark {
-            return Color.black.opacity(0.34)
-        }
-
-        switch AppSkin.current {
-        case .ocean: return Color(red: 0.160, green: 0.300, blue: 0.500).opacity(0.12)
-        case .aurora: return Color(red: 0.420, green: 0.300, blue: 0.620).opacity(0.12)
-        case .board: return AppTheme.adaptiveBlack(0.10)
-        case .leafcutter: return Color(red: 0.360, green: 0.220, blue: 0.110).opacity(0.13)
-        case .workspace: return AppTheme.adaptiveBlack(0.10)
-        }
-    }
+    static var shadow: Color { .clear }
 
     static var rowShadow: Color { .clear }
 
-    static var accentWarm: Color {
-        if isDark {
-            switch AppSkin.current {
-            case .ocean: Color(red: 1.000, green: 0.540, blue: 0.210)
-            case .aurora: Color(red: 1.000, green: 0.470, blue: 0.670)
-            case .board: Color(red: 1.000, green: 0.630, blue: 0.360)
-            case .leafcutter: Color(red: 1.000, green: 0.605, blue: 0.245)
-            case .workspace: Color(red: 1.000, green: 0.630, blue: 0.360)
-            }
-        } else {
-            switch AppSkin.current {
-            case .ocean: Color(red: 0.918, green: 0.345, blue: 0.047)
-            case .aurora: Color(red: 0.905, green: 0.300, blue: 0.520)
-            case .board: Color(red: 0.790, green: 0.310, blue: 0.130)
-            case .leafcutter: Color(red: 0.920, green: 0.395, blue: 0.085)
-            case .workspace: Color(red: 0.790, green: 0.310, blue: 0.130)
-            }
-        }
-    }
+    static var accentWarm: Color { workspaceWarning }
 
     static var success: Color {
         isDark ? Color(red: 0.360, green: 0.820, blue: 0.560) : Color(red: 0.140, green: 0.580, blue: 0.340)
@@ -553,17 +433,6 @@ enum AppTheme {
     static var workspaceSidebar: Color { workspaceContextSidebar }
 
     private static var darkOverlayBase: Color {
-        switch AppSkin.current {
-        case .ocean:
-            Color(red: 0.160, green: 0.210, blue: 0.250)
-        case .aurora:
-            Color(red: 0.180, green: 0.145, blue: 0.250)
-        case .board:
-            Color(red: 0.210, green: 0.205, blue: 0.200)
-        case .leafcutter:
-            Color(red: 0.205, green: 0.155, blue: 0.090)
-        case .workspace:
-            Color(red: 0.210, green: 0.205, blue: 0.200)
-        }
+        workspaceAltSurface
     }
 }
