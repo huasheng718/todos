@@ -401,7 +401,7 @@ enum TodoMatrixKind: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .urgentImportant: TodoPriority.high.displayColor
+        case .urgentImportant: TodoPriority.high.taskDisplayColor
         case .importantNotUrgent: AppTheme.accent
         case .urgentNotImportant: Color(red: 0.86, green: 0.44, blue: 0.16)
         case .notUrgentNotImportant: AppTheme.mutedInk
@@ -571,28 +571,16 @@ struct TodoBoardCard: View {
             .transition(AppMotion.inlineTransition)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center, spacing: 6) {
-                    TodoIssuePriorityIcon(priority: todo.priority)
-                    TodoIssueProgressIcon(progress: todo.progress)
-                    if isOverdue {
-                        Image(systemName: "clock")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(TodoPriority.high.displayColor)
-                            .frame(width: 16, height: 20)
-                            .help("逾期")
-                    }
-
-                    Spacer(minLength: 6)
-                }
-
                 HStack(alignment: .top, spacing: 9) {
-                    TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted)
+                    TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)
+
+                    TodoIssueSignalIcon(todo: todo)
 
                     VStack(alignment: .leading, spacing: hasNotes ? 7 : 0) {
                         Text(titleText)
                             .font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))
-                            .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
-                            .strikethrough(todo.isDone, color: AppTheme.mutedInk)
+                            .foregroundStyle(todo.isDone ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textPrimary)
+                            .strikethrough(todo.isDone, color: AppTheme.workspaceTokens.textSecondary)
                             .lineLimit(4)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -600,8 +588,8 @@ struct TodoBoardCard: View {
                         if hasNotes {
                             Text(todo.trimmedNotes)
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(todo.isDone ? AppTheme.mutedInk.opacity(0.82) : AppTheme.mutedInk)
-                                .strikethrough(todo.isDone, color: AppTheme.mutedInk)
+                                .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
+                                .strikethrough(todo.isDone, color: AppTheme.workspaceTokens.textSecondary)
                                 .lineLimit(5)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -620,36 +608,22 @@ struct TodoBoardCard: View {
                     if todo.isWeekly {
                         Label("固定", systemImage: "repeat")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.mutedInk)
+                            .foregroundStyle(AppTheme.workspaceTokens.textMuted)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, 41)
+                .padding(.leading, 72)
             }
             .padding(.vertical, 9)
             .padding(.leading, 12)
             .padding(.trailing, 10)
-            .background(cardBackgroundColor, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .fill(priorityRailColor)
-                    .frame(width: 3)
-                    .padding(.vertical, 13)
-                    .padding(.leading, 5)
-            }
+            .background(cardBackgroundColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .stroke(cardBorderColor, lineWidth: isHovered ? 1.25 : 1)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(cardBorderColor, lineWidth: 1)
             )
-            .shadow(
-                color: isHovered || isHighlighted ? AppTheme.rowShadow.opacity(0.95) : AppTheme.rowShadow.opacity(0.62),
-                radius: isHovered || isHighlighted ? 10 : 6,
-                x: 0,
-                y: isHovered || isHighlighted ? 5 : 3
-            )
-            .opacity(cardOpacity)
-            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contextMenu {
                 TodoContextMenuContent(
                     todo: todo,
@@ -697,38 +671,24 @@ struct TodoBoardCard: View {
     }
 
     private var boardDateColor: Color {
-        isOverdue ? TodoPriority.high.displayColor.opacity(AppTheme.isDark ? 0.78 : 0.68) : AppTheme.mutedInk
+        isOverdue ? AppTheme.workspaceTokens.danger : AppTheme.workspaceTokens.textSecondary
     }
 
     private var cardBackgroundColor: Color {
         if isHighlighted {
-            return AppTheme.accentSoft.opacity(0.96)
+            return AppTheme.workspaceTokens.listRowSelected
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.18 : 0.86)
+            return AppTheme.workspaceTokens.listRowHover
         }
-        return AppTheme.adaptiveWhite(AppTheme.isDark ? 0.14 : 0.78)
+        return AppTheme.workspaceTokens.contentSurface
     }
 
     private var cardBorderColor: Color {
         if isHighlighted {
-            return AppTheme.accent.opacity(0.36)
+            return AppTheme.workspaceTokens.accent
         }
-        return isHovered ? todo.priority.displayColor.opacity(0.36) : AppTheme.border
-    }
-
-    private var priorityRailColor: Color {
-        if todo.isDone {
-            return TodoProgress.done.displayColor.opacity(isHighlighted ? 0.70 : 0.48)
-        }
-        return todo.priority.displayColor.opacity(isOverdue ? 0.48 : 0.78)
-    }
-
-    private var cardOpacity: Double {
-        if !todo.isDone {
-            return 1
-        }
-        return isHighlighted ? 0.88 : 0.78
+        return AppTheme.workspaceTokens.hairline
     }
 
     private func startEditing() {

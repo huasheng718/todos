@@ -111,11 +111,12 @@ struct EditableTodoRow: View {
                                 .frame(width: 64, height: 30)
                         }
                         .buttonStyle(.tactilePlain)
-                        .foregroundStyle(.white)
-                        .background(canSubmit ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(canSubmit ? AppTheme.adaptiveWhite(0.34) : AppTheme.adaptiveBlack(0.05))
+                        .tactilePlainControlAppearance(
+                            isDisabled: !canSubmit,
+                            enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                            enabledBackground: AppTheme.workspaceTokens.accent,
+                            enabledBorder: AppTheme.workspaceTokens.accent,
+                            shape: .capsule
                         )
                         .interactionHitArea()
                         .disabled(!canSubmit)
@@ -178,7 +179,6 @@ struct EditableTodoRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppTheme.border)
         )
-        .shadow(color: AppTheme.rowShadow, radius: 9, x: 0, y: 5)
         .onChange(of: todo) { _, newTodo in
             if !isEditing {
                 withAnimation(AppMotion.smooth) {

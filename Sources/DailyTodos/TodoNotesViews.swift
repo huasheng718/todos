@@ -83,11 +83,12 @@ struct NotesReadOnlyRow: View {
                             .frame(width: 74, height: 28)
                     }
                     .buttonStyle(.tactilePlain)
-                    .foregroundStyle(AppTheme.accent)
-                    .background(AppTheme.accentSoft, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(AppTheme.accent.opacity(0.18))
+                    .tactilePlainControlAppearance(
+                        isDisabled: isSummarizing,
+                        enabledForeground: AppTheme.workspaceTokens.selectedContent,
+                        enabledBackground: AppTheme.workspaceTokens.accentSoft,
+                        enabledBorder: AppTheme.workspaceTokens.accent.opacity(0.18),
+                        shape: .capsule
                     )
                     .interactionHitArea()
                     .disabled(isSummarizing)

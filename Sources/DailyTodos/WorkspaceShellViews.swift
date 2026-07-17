@@ -194,7 +194,7 @@ struct GlobalTopBar: View {
             Button(action: onOpenAccount) {
                 Circle()
                     .fill(AppTheme.accentSoft)
-                    .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.accent))
+                    .overlay(Text("我").font(.system(size: 12, weight: .bold)).foregroundStyle(AppTheme.workspaceTokens.selectedContent))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -277,7 +277,7 @@ struct ModuleRail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 9) {
-                AppLogoImage(size: 26, shadowRadius: 2)
+                AppLogoImage(size: 26, shadowRadius: 0)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("蚁序")
@@ -328,11 +328,11 @@ struct ModuleRailButton: View {
 
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textSecondary)
+            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textSecondary)
             .padding(.horizontal, 9)
             .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             .contentShape(Rectangle())
-            .background(rowFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(rowFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(module.description)
@@ -346,7 +346,7 @@ struct ModuleRailButton: View {
             return AppTheme.workspaceTokens.accentSoft
         }
         if isHovered {
-            return AppTheme.adaptiveWhite(0.50)
+            return AppTheme.workspaceTokens.listRowHover
         }
         return Color.clear
     }
@@ -493,7 +493,11 @@ struct WorkspaceSearchField: View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(text.isEmpty ? AppTheme.workspaceTokens.textMuted : AppTheme.workspaceTokens.accent)
+                .foregroundStyle(
+                    text.isEmpty
+                        ? (isHovered ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textMuted)
+                        : AppTheme.workspaceTokens.accent
+                )
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
@@ -517,14 +521,19 @@ struct WorkspaceSearchField: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 30)
+        .frame(height: 32)
         .background(
-            AppTheme.adaptiveWhite(focusBinding.wrappedValue || isHovered ? 0.96 : 0.84),
+            AppTheme.workspaceTokens.contentSurface,
             in: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(focusBinding.wrappedValue ? AppTheme.workspaceTokens.focusRing.opacity(0.45) : AppTheme.workspaceTokens.hairline)
+                .stroke(
+                    focusBinding.wrappedValue
+                        ? AppTheme.workspaceTokens.focusRing
+                        : AppTheme.workspaceTokens.hairline,
+                    lineWidth: focusBinding.wrappedValue ? 1.5 : 1
+                )
         )
         .onHover { isHovered = $0 }
     }
@@ -553,7 +562,11 @@ struct WorkspaceSegmentedControl<Option: WorkspaceSegmentedOption>: View {
                         Text(option.label)
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(selection == option ? .white : AppTheme.workspaceTokens.textMuted)
+                    .foregroundStyle(
+                        selection == option
+                            ? AppTheme.workspaceTokens.selectedContent
+                            : AppTheme.workspaceTokens.textSecondary
+                    )
                     .frame(height: 28)
                     .frame(maxWidth: .infinity)
                     .background(selectionBackground(for: option))
@@ -562,19 +575,22 @@ struct WorkspaceSegmentedControl<Option: WorkspaceSegmentedOption>: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(3)
-        .background(AppTheme.adaptiveWhite(0.82), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(2)
+        .background(
+            AppTheme.workspaceTokens.contentAltSurface,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(AppTheme.workspaceTokens.hairline.opacity(0.82))
+                .stroke(AppTheme.workspaceTokens.hairline)
         )
     }
 
     @ViewBuilder
     private func selectionBackground(for option: Option) -> some View {
         if selection == option {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(AppTheme.workspaceTokens.accent)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(AppTheme.workspaceTokens.accentSoft)
                 .matchedGeometryEffect(id: "workspaceSegmentedSelection", in: selectionNamespace)
         }
     }

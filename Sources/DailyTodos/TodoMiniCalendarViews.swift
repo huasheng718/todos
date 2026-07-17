@@ -18,16 +18,15 @@ struct TodoMiniCalendar: View {
             HStack(spacing: 8) {
                 SidebarSectionLabel("有记录")
                 Spacer()
-                yearStepper
             }
 
-            monthStepper
+            calendarNavigation
 
             LazyVGrid(columns: columns, spacing: 5) {
                 ForEach(weekdayLabels, id: \.self) { label in
                     Text(label)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
                         .frame(maxWidth: .infinity)
                 }
 
@@ -48,95 +47,64 @@ struct TodoMiniCalendar: View {
                     }
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 8)
-            .background(AppTheme.adaptiveWhite(0.74), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(AppTheme.hairline)
-            )
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
         }
     }
 
-    private var yearStepper: some View {
-        HStack(spacing: 2) {
-            calendarStepButton(systemImage: "chevron.left.2", help: "上一年") {
-                shiftYear(-1)
-            }
-
-            Menu {
-                ForEach(yearOptions, id: \.self) { year in
-                    Button {
-                        setYear(year)
-                    } label: {
-                        HStack {
-                            Text("\(year) 年")
-                            if year == currentYear {
-                                Spacer()
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                dropdownLabel(title: yearTitle, font: .system(size: 11, weight: .bold))
-                    .frame(minWidth: 62, minHeight: 28)
-            }
-            .buttonStyle(.plain)
-            .help("选择年份")
-
-            calendarStepButton(systemImage: "chevron.right.2", help: "下一年") {
-                shiftYear(1)
-            }
-        }
-        .padding(.horizontal, 3)
-        .padding(.vertical, 2)
-        .background(AppTheme.adaptiveWhite(0.68), in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(AppTheme.hairline.opacity(0.78))
-        )
-    }
-
-    private var monthStepper: some View {
+    private var calendarNavigation: some View {
         HStack(spacing: 4) {
             calendarStepButton(systemImage: "chevron.left", help: "上个月") {
                 shiftMonth(-1)
             }
 
             Menu {
-                ForEach(monthOptions, id: \.self) { month in
-                    Button {
-                        setMonth(month)
-                    } label: {
-                        HStack {
-                            Text(monthName(for: month))
-                            if month == currentMonth {
-                                Spacer()
-                                Image(systemName: "checkmark")
+                Section("月份") {
+                    ForEach(monthOptions, id: \.self) { month in
+                        Button {
+                            setMonth(month)
+                        } label: {
+                            HStack {
+                                Text(monthName(for: month))
+                                if month == currentMonth {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("年份") {
+                    ForEach(yearOptions, id: \.self) { year in
+                        Button {
+                            setYear(year)
+                        } label: {
+                            HStack {
+                                Text("\(year) 年")
+                                if year == currentYear {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
                 }
             } label: {
-                dropdownLabel(title: monthTitle, font: .system(size: 12, weight: .semibold))
+                dropdownLabel(
+                    title: "\(yearTitle) \(monthTitle)",
+                    font: .system(size: 12, weight: .semibold)
+                )
                     .frame(maxWidth: .infinity, minHeight: 28)
             }
             .buttonStyle(.plain)
-            .help("选择月份")
+            .help("选择年月")
 
             calendarStepButton(systemImage: "chevron.right", help: "下个月") {
                 shiftMonth(1)
             }
         }
-        .foregroundStyle(AppTheme.mutedInk)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(AppTheme.adaptiveWhite(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(AppTheme.hairline.opacity(0.78))
-        )
+        .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
     }
 
     private func dropdownLabel(title: String, font: Font) -> some View {
@@ -190,14 +158,6 @@ struct TodoMiniCalendar: View {
         if let nextMonth = calendar.date(byAdding: .month, value: value, to: visibleMonth) {
             withAnimation(AppMotion.quick) {
                 visibleMonth = nextMonth
-            }
-        }
-    }
-
-    private func shiftYear(_ value: Int) {
-        if let nextYear = calendar.date(byAdding: .year, value: value, to: visibleMonth) {
-            withAnimation(AppMotion.quick) {
-                visibleMonth = nextYear
             }
         }
     }
@@ -278,15 +238,17 @@ struct MiniCalendarDayCell: View {
     let pendingCount: Int
     let action: () -> Void
 
+    @State private var isHovered = false
+
     private let calendar = Calendar.current
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(background)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .stroke(stroke)
                     )
                     .frame(width: 24, height: 30)
@@ -297,21 +259,28 @@ struct MiniCalendarDayCell: View {
                         .monospacedDigit()
                     markerStrip
                 }
-                .foregroundStyle(foreground)
             }
             .frame(maxWidth: .infinity, minHeight: 32)
             .contentShape(Rectangle())
         }
         .buttonStyle(.tactilePlain)
+        .tactilePlainControlAppearance(
+            isDisabled: !isInCurrentMonth,
+            enabledForeground: foreground
+        )
         .disabled(!isInCurrentMonth)
         .help("\(date.formatted(.dateTime.year().month().day()))：\(totalCount) 项，\(pendingCount) 未完成")
+        .onHover { isHovered = $0 }
         .animation(AppMotion.smooth, value: isSelected)
+        .animation(AppMotion.hover, value: isHovered)
         .animation(AppMotion.smooth, value: totalCount)
         .animation(AppMotion.smooth, value: pendingCount)
     }
 
     private var markerColor: Color {
-        pendingCount > 0 ? AppTheme.accent : TodoProgress.done.displayColor
+        pendingCount > 0
+            ? AppTheme.workspaceTokens.accent
+            : AppTheme.workspaceTokens.success
     }
 
     @ViewBuilder
@@ -319,11 +288,11 @@ struct MiniCalendarDayCell: View {
         if totalCount > 0 {
             HStack(spacing: 2) {
                 Circle()
-                    .fill(isSelected ? Color.white : markerColor)
+                    .fill(markerColor)
                     .frame(width: 4, height: 4)
                 if pendingCount > 0 && pendingCount != totalCount {
                     Circle()
-                        .fill(isSelected ? AppTheme.adaptiveWhite(0.72) : AppTheme.accentWarm.opacity(0.82))
+                        .fill(AppTheme.workspaceTokens.success)
                         .frame(width: 4, height: 4)
                 }
             }
@@ -335,21 +304,20 @@ struct MiniCalendarDayCell: View {
     }
 
     private var foreground: Color {
-        if isSelected { return .white }
-        if !isInCurrentMonth { return AppTheme.mutedInk.opacity(0.45) }
-        if isToday { return AppTheme.accent }
-        return AppTheme.ink
+        if isSelected { return AppTheme.workspaceTokens.selectedContent }
+        if isToday { return AppTheme.workspaceTokens.accent }
+        return AppTheme.workspaceTokens.textPrimary
     }
 
     private var background: Color {
-        if isSelected { return AppTheme.accent }
-        if isToday { return AppTheme.accentSoft.opacity(0.92) }
-        return AppTheme.adaptiveWhite(totalCount > 0 ? 0.60 : 0.0)
+        if isSelected { return AppTheme.workspaceTokens.accentSoft }
+        if isHovered { return AppTheme.workspaceTokens.listRowHover }
+        return Color.clear
     }
 
     private var stroke: Color {
-        if isSelected { return AppTheme.accent.opacity(0.36) }
-        if isToday { return AppTheme.accent.opacity(0.22) }
-        return totalCount > 0 ? AppTheme.hairline : Color.clear
+        if isSelected { return AppTheme.workspaceTokens.accent.opacity(0.32) }
+        if isToday { return AppTheme.workspaceTokens.hairline }
+        return Color.clear
     }
 }

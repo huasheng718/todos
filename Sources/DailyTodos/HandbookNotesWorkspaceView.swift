@@ -404,12 +404,12 @@ struct HandbookFolderSidebarRow: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? accentColor : AppTheme.secondaryText)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.secondaryText)
                     .frame(width: 18)
 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .bold : .semibold))
-                    .foregroundStyle(isSelected ? accentColor : AppTheme.ink)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.ink)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
@@ -464,9 +464,9 @@ struct HandbookFolderTagButton: View {
                 Text("\(count)")
                     .font(.system(size: 10.5, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.secondaryText)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.secondaryText)
             }
-            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.ink)
+            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.ink)
             .padding(.horizontal, 8)
             .frame(height: 26)
             .background(tagBackground, in: RoundedRectangle(cornerRadius: 7, style: .continuous))

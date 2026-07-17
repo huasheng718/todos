@@ -376,7 +376,7 @@ struct CredentialTypeButton: View {
             HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.workspaceTokens.textMuted)
                     .frame(width: 18)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -386,7 +386,7 @@ struct CredentialTypeButton: View {
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.accent : AppTheme.workspaceTokens.textMuted)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textMuted)
                         .lineLimit(1)
                 }
 
@@ -449,12 +449,17 @@ struct CredentialInitializeView: View {
             Button(action: onInitialize) {
                 Text("创建并解锁")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.tactilePlain)
+            .tactilePlainControlAppearance(
+                isDisabled: requiresMasterPassword && (masterPassword.isEmpty || repeatedPassword.isEmpty),
+                enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                enabledBackground: AppTheme.workspaceTokens.accent,
+                enabledBorder: AppTheme.workspaceTokens.accent,
+                shape: .roundedRectangle(10)
+            )
             .disabled(requiresMasterPassword && (masterPassword.isEmpty || repeatedPassword.isEmpty))
         }
     }
@@ -485,12 +490,17 @@ struct CredentialUnlockView: View {
             Button(action: onUnlock) {
                 Text("解锁")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.tactilePlain)
+            .tactilePlainControlAppearance(
+                isDisabled: password.isEmpty,
+                enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                enabledBackground: AppTheme.workspaceTokens.accent,
+                enabledBorder: AppTheme.workspaceTokens.accent,
+                shape: .roundedRectangle(10)
+            )
             .disabled(password.isEmpty)
 
             Button(role: .destructive, action: onReset) {
@@ -668,7 +678,7 @@ struct CredentialListRow: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: item.type.icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                    .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk)
                     .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -682,7 +692,7 @@ struct CredentialListRow: View {
 
                         Text(item.type.title)
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.mutedInk)
+                            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.selectedContent : AppTheme.mutedInk)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(typeBadgeFill, in: Capsule())
@@ -690,13 +700,13 @@ struct CredentialListRow: View {
 
                     Text(item.displayService)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.mutedInk)
+                        .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk)
                         .lineLimit(1)
 
                     if !item.tags.isEmpty {
                         Text(item.tags.prefix(3).joined(separator: " · "))
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppTheme.mutedInk.opacity(0.86))
+                            .foregroundStyle(isSelected ? AppTheme.workspaceTokens.textSecondary : AppTheme.mutedInk.opacity(0.86))
                             .lineLimit(1)
                     }
                 }
@@ -816,6 +826,7 @@ struct CredentialDetailPane: View {
                     Label(isOpeningEditor ? "读取中" : "编辑", systemImage: "pencil")
                 }
                 .buttonStyle(.tactilePlain)
+                .tactilePlainControlAppearance(isDisabled: isOpeningEditor)
                 .disabled(isOpeningEditor)
 
                 Button(role: .destructive) {
@@ -980,12 +991,14 @@ struct CredentialSecretSection: View {
                         Label(isRevealing ? "读取中" : "查看", systemImage: "eye")
                     }
                     .buttonStyle(.tactilePlain)
+                    .tactilePlainControlAppearance(isDisabled: isRevealing)
                     .disabled(isRevealing)
                 } else {
                     Button(action: onCheckRisk) {
                         Label(isCheckingBreachRisk ? "检查中" : "检查风险", systemImage: "shield.lefthalf.filled")
                     }
                     .buttonStyle(.tactilePlain)
+                    .tactilePlainControlAppearance(isDisabled: isCheckingBreachRisk)
                     .disabled(isCheckingBreachRisk)
                     Button(action: onHide) {
                         Label("隐藏", systemImage: "eye.slash")
@@ -1506,6 +1519,9 @@ struct CredentialInlineEditor: View {
                     Label("填入表单", systemImage: "wand.and.stars")
                 }
                 .buttonStyle(.tactilePlain)
+                .tactilePlainControlAppearance(
+                    isDisabled: pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
                 .disabled(pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 

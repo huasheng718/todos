@@ -54,28 +54,25 @@ struct TodoFlowRow: View, @MainActor Equatable {
             }
         } else {
             HStack(alignment: hasNotes ? .top : .center, spacing: 7) {
-                TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted)
+                TodoIssueStatusMarker(todo: todo, isHighlighted: isHovered || isHighlighted, onToggle: onToggle)
                     .padding(.top, hasNotes ? 1 : 0)
 
-                TodoIssuePriorityIcon(priority: todo.priority)
-                    .padding(.top, hasNotes ? 2 : 0)
-
-                TodoIssueProgressIcon(progress: todo.progress)
+                TodoIssueSignalIcon(todo: todo)
                     .padding(.top, hasNotes ? 2 : 0)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Text(naturalFollowUpText)
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(.system(size: 12, weight: .medium))
                             .monospacedDigit()
                             .foregroundStyle(dateColor)
                             .lineLimit(1)
                             .fixedSize()
 
                         Text(titleText)
-                            .font(.system(size: 13.2, weight: todo.isDone ? .regular : .semibold))
-                            .foregroundStyle(todo.isDone ? AppTheme.mutedInk : AppTheme.ink)
-                            .strikethrough(todo.isDone, color: AppTheme.mutedInk)
+                            .font(.system(size: 14, weight: todo.isDone ? .regular : .semibold))
+                            .foregroundStyle(todo.isDone ? AppTheme.workspaceTokens.textSecondary : AppTheme.workspaceTokens.textPrimary)
+                            .strikethrough(todo.isDone, color: AppTheme.workspaceTokens.textSecondary)
                             .lineLimit(1)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,10 +87,10 @@ struct TodoFlowRow: View, @MainActor Equatable {
 
                     if hasNotes {
                         Text(todo.trimmedNotes)
-                            .font(.system(size: 11.5, weight: .medium))
-                            .foregroundStyle(AppTheme.mutedInk)
-                            .strikethrough(todo.isDone, color: AppTheme.mutedInk)
-                            .lineLimit(1)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppTheme.workspaceTokens.textSecondary)
+                            .strikethrough(todo.isDone, color: AppTheme.workspaceTokens.textSecondary)
+                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -102,24 +99,14 @@ struct TodoFlowRow: View, @MainActor Equatable {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, hasNotes ? 5 : 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(rowBackground)
-                    .overlay(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(issueRailColor)
-                            .frame(width: 2)
-                            .opacity(sideRailOpacity)
-                            .padding(.vertical, 5)
-                    }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(rowStroke)
-            )
-            .opacity(rowOpacity)
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .frame(maxWidth: .infinity, minHeight: hasNotes ? 54 : 40, alignment: .leading)
+            .background(rowBackground)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(AppTheme.workspaceTokens.hairline.opacity(0.72))
+                    .frame(height: 1)
+            }
+            .contentShape(Rectangle())
             .contextMenu {
                 TodoContextMenuContent(
                     todo: todo,
@@ -175,57 +162,19 @@ struct TodoFlowRow: View, @MainActor Equatable {
     }
 
     private var dateColor: Color {
-        isOverdue ? TodoPriority.high.displayColor.opacity(AppTheme.isDark ? 0.78 : 0.68) : AppTheme.mutedInk
+        isOverdue
+            ? AppTheme.workspaceTokens.danger
+            : AppTheme.workspaceTokens.textSecondary
     }
 
     private var rowBackground: Color {
         if isHighlighted {
-            return AppTheme.accentSoft.opacity(0.96)
+            return AppTheme.workspaceTokens.listRowSelected
         }
         if isHovered {
-            return AppTheme.adaptiveBlack(AppTheme.isDark ? 0.22 : 0.045)
+            return AppTheme.workspaceTokens.listRowHover
         }
         return Color.clear
-    }
-
-    private var rowStroke: Color {
-        if isHighlighted {
-            return AppTheme.accent.opacity(0.30)
-        }
-        if isHovered {
-            return AppTheme.hairline.opacity(0.76)
-        }
-        return Color.clear
-    }
-
-    private var issueRailColor: Color {
-        if isOverdue {
-            return TodoPriority.high.displayColor.opacity(0.70)
-        }
-        return todo.priority.displayColor
-    }
-
-    private var sideRailOpacity: Double {
-        if todo.isDone {
-            return isHighlighted ? 0.42 : 0.18
-        }
-        if isHighlighted {
-            return 0.78
-        }
-        if isOverdue {
-            return 0.36
-        }
-        if isHovered {
-            return 0.46
-        }
-        return todo.priority == .high ? 0.32 : 0.0
-    }
-
-    private var rowOpacity: Double {
-        if !todo.isDone {
-            return 1
-        }
-        return isHighlighted ? 0.88 : 0.72
     }
 
     private func startEditing() {
@@ -238,25 +187,31 @@ struct TodoFlowRow: View, @MainActor Equatable {
 struct TodoIssueStatusMarker: View {
     let todo: TodoItem
     let isHighlighted: Bool
+    let onToggle: () -> Void
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(fillColor)
-                .overlay(
-                    Circle()
-                        .stroke(strokeColor, lineWidth: 1.4)
-                )
-                .frame(width: 21, height: 21)
+        Button(action: onToggle) {
+            ZStack {
+                Circle()
+                    .fill(fillColor)
+                    .overlay(
+                        Circle()
+                            .stroke(strokeColor, lineWidth: 1.4)
+                    )
+                    .frame(width: 21, height: 21)
 
-            if todo.isDone {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(TodoProgress.done.displayColor)
+                if todo.isDone {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(TodoProgress.done.displayColor)
+                }
             }
+            .frame(width: 22, height: 24)
         }
-        .frame(width: 22, height: 24)
+        .buttonStyle(.plain)
+        .interactionHitArea(38)
         .accessibilityLabel(todo.isDone ? "已完成" : "未完成")
+        .help(todo.isDone ? "标记为未完成" : "标记为已完成")
     }
 
     private var fillColor: Color {
@@ -277,31 +232,50 @@ struct TodoIssueStatusMarker: View {
     }
 }
 
-struct TodoIssuePriorityIcon: View {
-    let priority: TodoPriority
+struct TodoIssueSignalIcon: View {
+    let todo: TodoItem
 
     var body: some View {
-        Image(systemName: priority.issueIcon)
-            .font(.system(size: priority == .high ? 11.5 : 10.5, weight: .bold))
-            .foregroundStyle(priority.displayColor.opacity(priority == .low ? 0.70 : 0.92))
-            .frame(width: 16, height: 20)
-            .contentShape(Rectangle())
-            .help(priority.label + "优先级")
-            .accessibilityLabel(priority.label + "优先级")
+        Group {
+            if let signal {
+                Image(systemName: signal.systemName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(signal.color)
+                    .help(signal.label)
+                    .accessibilityLabel(signal.label)
+            } else {
+                Color.clear
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(width: 16, height: 20)
+        .contentShape(Rectangle())
     }
-}
 
-struct TodoIssueProgressIcon: View {
-    let progress: TodoProgress
+    private var signal: (systemName: String, color: Color, label: String)? {
+        if isOverdue {
+            return ("exclamationmark.circle.fill", AppTheme.workspaceTokens.danger, "已逾期")
+        }
+        switch todo.progress {
+        case .pending:
+            if todo.priority == .high {
+                return ("flag.fill", AppTheme.workspaceTokens.textSecondary, "高优先级")
+            }
+            return nil
+        case .inProgress:
+            return ("bolt", AppTheme.workspaceTokens.textSecondary, "推进中")
+        case .waiting:
+            return ("hourglass", AppTheme.workspaceTokens.textSecondary, "等待他人")
+        case .done:
+            return nil
+        }
+    }
 
-    var body: some View {
-        Image(systemName: progress.boardIcon)
-            .font(.system(size: progress == .pending ? 10.5 : 11.5, weight: .semibold))
-            .foregroundStyle(progress.displayColor.opacity(progress == .pending ? 0.72 : 0.94))
-            .frame(width: 16, height: 20)
-            .contentShape(Rectangle())
-            .help(progress.label)
-            .accessibilityLabel(progress.label)
+    private var isOverdue: Bool {
+        let calendar = Calendar.current
+        return todo.progress != .done
+            && todo.progress != .waiting
+            && calendar.startOfDay(for: todo.date) < calendar.startOfDay(for: Date())
     }
 }
 
@@ -405,11 +379,12 @@ struct TodoBoardEditCard: View {
                         .frame(width: 72, height: 30)
                 }
                 .buttonStyle(.tactilePlain)
-                .foregroundStyle(.white)
-                .background(canSubmit ? AppTheme.accent : AppTheme.adaptiveBlack(0.28), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(canSubmit ? AppTheme.adaptiveWhite(0.34) : AppTheme.adaptiveBlack(0.05))
+                .tactilePlainControlAppearance(
+                    isDisabled: !canSubmit,
+                    enabledForeground: AppTheme.workspaceTokens.accentForeground,
+                    enabledBackground: AppTheme.workspaceTokens.accent,
+                    enabledBorder: AppTheme.workspaceTokens.accent,
+                    shape: .capsule
                 )
                 .interactionHitArea()
                 .disabled(!canSubmit)
@@ -418,12 +393,11 @@ struct TodoBoardEditCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.rowTint(priority: priority, isOverdue: isOverdue), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(AppTheme.rowTint(priority: priority, isOverdue: isOverdue), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(AppTheme.accent.opacity(0.24))
         )
-        .shadow(color: AppTheme.rowShadow, radius: 8, x: 0, y: 4)
     }
 
     private var canSubmit: Bool {

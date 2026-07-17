@@ -1,6 +1,6 @@
 {
-  "version": "1.2.37",
-  "build": 66,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.37/AntOrder-1.2.37.pkg",
-  "releaseNotes": "修复启动崩溃：AppLogoImage 不再依赖 SwiftPM 生成的 Bundle.module（在打包后的 .app 中无法定位资源包会导致 fatalError），改为稳健的资源包查找，并将 InAppLogo.png 直接放入 Contents/Resources 作为兜底。"
+  "version": "1.2.38",
+  "build": 67,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.38/AntOrder-1.2.38.pkg",
+  "releaseNotes": "蚁序 1.2.38：重构待办工作台视觉层级，提升列表信息密度与选中、禁用状态的阅读对比度；完成标记支持直接点击，任务操作继续集中在右键菜单；优化看板、日历、更新提示与多皮肤一致性。"
 }
