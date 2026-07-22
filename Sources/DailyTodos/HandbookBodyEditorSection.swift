@@ -31,16 +31,16 @@ final class HandbookEditorBridge {
 ///
 /// 若把这些状态/任务直接放在详情面板的 `@State` 上，则每次击键“取消旧任务 + 建新任务”
 /// 的重新赋值都会触发父面板 `body` 重算——即便正文本身已下沉隔离，父层仍会逐字重建。
-/// `isDirty`/`bodyMetrics`/`outline` 同理：它们只在回调逻辑或子视图中使用，不驱动父层布局，
+/// `isDirty`/`bodyMetrics` 同理：它们只在回调逻辑或子视图中使用，不驱动父层布局，
 /// 若作为 `@State` 每击键重新赋值会同样触发整棵详情面板重算，严重时导致 `NSTextView` 被临时
 /// 从视图层级移除并 resignFirstResponder，表现为“光标突然失去焦点”。
 /// 用 class 承载后，父面板以 `@State` 持有它（只跟踪身份），改内部属性不会触发父层失效；
-/// 需要这些数据的子视图用 `@ObservedObject` 持有并读取属性，即可订阅更新。
+/// 需要这些数据的子视图用 `@ObservedObject` 持有并读取属性，即可订阅更新。文字目录的发布
+/// 由独立的 `HandbookOutlineState` 承担，避免目录更新进入正文输入路径。
 @MainActor
 final class HandbookEditorState: ObservableObject {
     @Published var isDirty = false
     @Published var bodyMetrics = HandbookBodyMetrics.empty
-    @Published var outline: [MarkdownOutlineEntry] = []
     var bodyMetricsTask: Task<Void, Never>?
     var autoSave: Task<Void, Never>?
 }
@@ -50,7 +50,7 @@ final class HandbookEditorState: ObservableObject {
 /// 自持 `@State text`，因此每次击键只会重建“本视图”这一片叶子，
 /// 而父面板的标题输入框、`HandbookDetailMetaBar`（含 `ViewThatFits` 双布局测量）、
 /// 大纲、工具栏都不会被卷入重算。正文变更通过 `onChange` 回调上报给父面板，
-/// 用于（防抖的）字数统计、大纲、脏标记与自动保存。
+/// 用于（防抖的）字数统计、脏标记与自动保存。
 ///
 /// 编辑器高度在“含图片附件且正文很短”时会收缩以露出图片预览，逻辑从
 /// `HandbookEditableCanvas` 平移至此，避免父层为计算该高度而读取逐字变化的正文。

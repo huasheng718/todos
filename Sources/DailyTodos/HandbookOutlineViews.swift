@@ -22,6 +22,12 @@ struct MarkdownOutlineEntry: Identifiable, Equatable {
     }
 }
 
+@MainActor
+final class HandbookOutlineState: ObservableObject {
+    @Published var entries: [MarkdownOutlineEntry] = []
+    var refreshTask: Task<Void, Never>?
+}
+
 struct HandbookOutlineStrip: View {
     let entries: [MarkdownOutlineEntry]
 

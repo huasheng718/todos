@@ -31,6 +31,7 @@ struct DailyTodosChecks {
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
+                try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
                 try checkHandbookActivationUsesScheduledLoading()
                 try checkHandbookNotesSnapshotInvalidation()
@@ -1920,6 +1921,60 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
     try expect(
         source.contains("if folder != item.folder { folder = item.folder }"),
         "详情草稿应吸收同 ID 外部目录变化，避免自动保存写回旧目录"
+    )
+}
+
+func checkHandbookOutlineRefreshIsolation() throws {
+    let outlineSource = try sourceFile("Sources/DailyTodos/HandbookOutlineViews.swift")
+    let editorSource = try sourceFile("Sources/DailyTodos/HandbookBodyEditorSection.swift")
+    let detailSource = try sourceFile("Sources/DailyTodos/HandbookDetailPanel.swift")
+
+    try expect(
+        outlineSource.contains("final class HandbookOutlineState: ObservableObject")
+            && outlineSource.contains("@Published var entries: [MarkdownOutlineEntry] = []")
+            && !editorSource.contains("@Published var outline:"),
+        "文字目录应使用独立 ObservableObject，不能继续通过 HandbookEditorState 发布"
+    )
+
+    guard let bodyEditorStart = editorSource.range(of: "struct HandbookBodyEditorSection")?.lowerBound else {
+        throw CheckFailure.failed("无法定位 HandbookBodyEditorSection")
+    }
+    let bodyEditorSource = String(editorSource[bodyEditorStart...])
+    try expect(
+        !bodyEditorSource.contains("HandbookOutlineState"),
+        "正文编辑器不能订阅文字目录状态，目录发布不得使 NSTextView 输入路径失效"
+    )
+
+    guard let metricsStart = detailSource.range(of: "private func scheduleBodyMetricsUpdate")?.lowerBound,
+          let outlineRefreshStart = detailSource.range(of: "private func refreshOutline", range: metricsStart..<detailSource.endIndex)?.lowerBound,
+          let dirtyStart = detailSource.range(of: "private func computeIsDirty", range: outlineRefreshStart..<detailSource.endIndex)?.lowerBound,
+          let submitStart = detailSource.range(of: "private func submitEdit")?.lowerBound,
+          let syncStart = detailSource.range(of: "private func syncDraft", range: submitStart..<detailSource.endIndex)?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位手记正文指标或保存同步函数")
+    }
+
+    let metricsSource = String(detailSource[metricsStart..<outlineRefreshStart])
+    let outlineRefreshSource = String(detailSource[outlineRefreshStart..<dirtyStart])
+    let submitSource = String(detailSource[submitStart..<syncStart])
+    try expect(
+        !metricsSource.contains("MarkdownOutlineEntry.extract")
+            && !metricsSource.contains("outlineState"),
+        "正文逐字指标更新不能解析或发布文字目录"
+    )
+    try expect(
+        submitSource.contains("let savedBody = bodyBridge.currentText")
+            && submitSource.contains("refreshOutline(for: savedBody, itemID: item.id)")
+            && detailSource.contains("refreshOutline(for: cleanedStoredBody, itemID: item.id)"),
+        "文字目录应只在保存完成或载入已存草稿后刷新"
+    )
+    try expect(
+        outlineRefreshSource.contains("guard !Task.isCancelled, self.item?.id == itemID else { return }"),
+        "异步目录结果发布前应确认任务未取消且手记仍被选中"
+    )
+    try expect(
+        detailSource.contains("HandbookOutlineContainer(outlineState: outlineState)"),
+        "文字目录容器应只观察独立的 outlineState"
     )
 }
 

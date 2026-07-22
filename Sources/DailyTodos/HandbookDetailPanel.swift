@@ -10,7 +10,7 @@ struct HandbookDetailPanel: View {
     @State private var folder = ""
     @State private var title = ""
     @State private var attachments: [HandbookAttachment] = []
-    @State private var outlineUpdateToken = UUID()
+    @State private var outlineState = HandbookOutlineState()
     @State private var isSyncingDraft = false
     @State private var bodyBridge = HandbookEditorBridge()
     @State private var seededBody = ""
@@ -117,7 +117,7 @@ struct HandbookDetailPanel: View {
                         .padding(.bottom, 10)
                 }
 
-                HandbookOutlineContainer(editorState: editorState)
+                HandbookOutlineContainer(outlineState: outlineState)
 
                 if !attachments.isEmpty {
                     HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
@@ -187,7 +187,9 @@ struct HandbookDetailPanel: View {
         editorState.autoSave?.cancel()
         guard canSubmit else { return }
         guard force || computeIsDirty(comparedTo: item) else { return }
-        onUpdate(item, category, folder, title, bodyBridge.currentText, attachments)
+        let savedBody = bodyBridge.currentText
+        onUpdate(item, category, folder, title, savedBody, attachments)
+        refreshOutline(for: savedBody, itemID: item.id)
         editorState.isDirty = false
     }
 
@@ -217,6 +219,9 @@ struct HandbookDetailPanel: View {
         if !preservesLocalTextEdits, seededBody != cleanedStoredBody {
             seededBody = cleanedStoredBody
             bodyEditorResetID = UUID()
+        }
+        if !preservesLocalTextEdits {
+            refreshOutline(for: cleanedStoredBody, itemID: item.id)
         }
         scheduleBodyMetricsUpdate(for: preservesLocalTextEdits ? bodyBridge.currentText : cleanedStoredBody)
         editorState.isDirty = preservesLocalTextEdits
@@ -282,24 +287,30 @@ struct HandbookDetailPanel: View {
                 }
             }.value
 
-            let newOutline: [MarkdownOutlineEntry]
+            guard !Task.isCancelled else { return }
+            if editorState.bodyMetrics != metrics {
+                editorState.bodyMetrics = metrics
+            }
+        }
+    }
+
+    private func refreshOutline(for text: String, itemID: UUID) {
+        outlineState.refreshTask?.cancel()
+        outlineState.refreshTask = Task {
+            let newEntries: [MarkdownOutlineEntry]
             if text.contains("#") {
-                newOutline = await Task.detached(priority: .userInitiated) {
+                newEntries = await Task.detached(priority: .userInitiated) {
                     PerformanceMonitor.measure("HandbookDetail.metrics.outline") {
                         MarkdownOutlineEntry.extract(from: text.trimmingCharacters(in: .whitespacesAndNewlines))
                     }
                 }.value
             } else {
-                newOutline = []
+                newEntries = []
             }
 
-            await MainActor.run {
-                if editorState.bodyMetrics != metrics {
-                    editorState.bodyMetrics = metrics
-                }
-                if editorState.outline != newOutline {
-                    editorState.outline = newOutline
-                }
+            guard !Task.isCancelled, self.item?.id == itemID else { return }
+            if outlineState.entries != newEntries {
+                outlineState.entries = newEntries
             }
         }
     }
@@ -314,11 +325,11 @@ struct HandbookDetailPanel: View {
 }
 
 struct HandbookOutlineContainer: View {
-    @ObservedObject var editorState: HandbookEditorState
+    @ObservedObject var outlineState: HandbookOutlineState
 
     var body: some View {
-        if !editorState.outline.isEmpty {
-            HandbookOutlineStrip(entries: editorState.outline)
+        if !outlineState.entries.isEmpty {
+            HandbookOutlineStrip(entries: outlineState.entries)
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
         }
