@@ -1,6 +1,6 @@
 {
-  "version": "1.2.38",
-  "build": 67,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.38/AntOrder-1.2.38.pkg",
-  "releaseNotes": "蚁序 1.2.38：重构待办工作台视觉层级，提升列表信息密度与选中、禁用状态的阅读对比度；完成标记支持直接点击，任务操作继续集中在右键菜单；优化看板、日历、更新提示与多皮肤一致性。"
+  "version": "1.2.39",
+  "build": 68,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.39/AntOrder-1.2.39.pkg",
+  "releaseNotes": "蚁序 1.2.39：修复手记正文编辑时文字目录刷新导致输入中断的问题；目录改为仅在自动保存或离开编辑器保存后更新，并在切换手记时隔离目录状态，避免显示上一条手记的目录。"
 }
