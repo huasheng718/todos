@@ -1973,8 +1973,19 @@ func checkHandbookOutlineRefreshIsolation() throws {
         "异步目录结果发布前应确认任务未取消且手记仍被选中"
     )
     try expect(
-        detailSource.contains("HandbookOutlineContainer(outlineState: outlineState)"),
+        detailSource.contains("HandbookOutlineContainer(outlineState: outlineState"),
         "文字目录容器应只观察独立的 outlineState"
+    )
+
+    guard let outlineContainerStart = detailSource.range(of: "struct HandbookOutlineContainer")?.lowerBound else {
+        throw CheckFailure.failed("无法定位 HandbookOutlineContainer")
+    }
+    let outlineContainerSource = String(detailSource[outlineContainerStart...])
+    try expect(
+        outlineSource.contains("@Published var itemID: UUID?")
+            && detailSource.contains("HandbookOutlineContainer(outlineState: outlineState, itemID: item.id)")
+            && outlineContainerSource.contains("outlineState.itemID == itemID"),
+        "切换手记时目录必须按选中项归属渲染，不能短暂显示上一条手记的目录"
     )
 }
 

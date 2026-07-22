@@ -6,25 +6,27 @@ struct MarkdownOutlineEntry: Identifiable, Equatable {
     let title: String
 
     static func extract(from text: String) -> [MarkdownOutlineEntry] {
-        text
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .compactMap { line -> MarkdownOutlineEntry? in
-                let rawLine = String(line).trimmingCharacters(in: .whitespaces)
-                guard rawLine.hasPrefix("#") else { return nil }
-                let level = rawLine.prefix(while: { $0 == "#" }).count
-                guard (1...3).contains(level) else { return nil }
-                let title = rawLine
-                    .dropFirst(level)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !title.isEmpty else { return nil }
-                return MarkdownOutlineEntry(level: level, title: title)
-            }
+        var entries: [MarkdownOutlineEntry] = []
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            guard !Task.isCancelled else { return [] }
+            let rawLine = String(line).trimmingCharacters(in: .whitespaces)
+            guard rawLine.hasPrefix("#") else { continue }
+            let level = rawLine.prefix(while: { $0 == "#" }).count
+            guard (1...3).contains(level) else { continue }
+            let title = rawLine
+                .dropFirst(level)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
+            entries.append(MarkdownOutlineEntry(level: level, title: title))
+        }
+        return entries
     }
 }
 
 @MainActor
 final class HandbookOutlineState: ObservableObject {
     @Published var entries: [MarkdownOutlineEntry] = []
+    @Published var itemID: UUID?
     var refreshTask: Task<Void, Never>?
 }
 

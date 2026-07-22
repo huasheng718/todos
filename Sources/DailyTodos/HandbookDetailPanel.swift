@@ -117,7 +117,7 @@ struct HandbookDetailPanel: View {
                         .padding(.bottom, 10)
                 }
 
-                HandbookOutlineContainer(outlineState: outlineState)
+                HandbookOutlineContainer(outlineState: outlineState, itemID: item.id)
 
                 if !attachments.isEmpty {
                     HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
@@ -299,11 +299,15 @@ struct HandbookDetailPanel: View {
         outlineState.refreshTask = Task {
             let newEntries: [MarkdownOutlineEntry]
             if text.contains("#") {
-                newEntries = await Task.detached(priority: .userInitiated) {
+                let extractionTask = Task.detached(priority: .userInitiated) {
                     PerformanceMonitor.measure("HandbookDetail.metrics.outline") {
                         MarkdownOutlineEntry.extract(from: text.trimmingCharacters(in: .whitespacesAndNewlines))
                     }
-                }.value
+                }
+                newEntries = await withTaskCancellationHandler(
+                    operation: { await extractionTask.value },
+                    onCancel: { extractionTask.cancel() }
+                )
             } else {
                 newEntries = []
             }
@@ -311,6 +315,9 @@ struct HandbookDetailPanel: View {
             guard !Task.isCancelled, self.item?.id == itemID else { return }
             if outlineState.entries != newEntries {
                 outlineState.entries = newEntries
+            }
+            if outlineState.itemID != itemID {
+                outlineState.itemID = itemID
             }
         }
     }
@@ -326,9 +333,10 @@ struct HandbookDetailPanel: View {
 
 struct HandbookOutlineContainer: View {
     @ObservedObject var outlineState: HandbookOutlineState
+    let itemID: UUID
 
     var body: some View {
-        if !outlineState.entries.isEmpty {
+        if outlineState.itemID == itemID, !outlineState.entries.isEmpty {
             HandbookOutlineStrip(entries: outlineState.entries)
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
