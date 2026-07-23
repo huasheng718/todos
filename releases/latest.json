@@ -1,6 +1,6 @@
 {
-  "version": "1.2.39",
-  "build": 68,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.39/AntOrder-1.2.39.pkg",
-  "releaseNotes": "蚁序 1.2.39：修复手记正文编辑时文字目录刷新导致输入中断的问题；目录改为仅在自动保存或离开编辑器保存后更新，并在切换手记时隔离目录状态，避免显示上一条手记的目录。"
+  "version": "1.2.40",
+  "build": 69,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.40/AntOrder-1.2.40.pkg",
+  "releaseNotes": "修复手记正文编辑期间刷新文字目录导致输入中断的问题；文字目录仅在离开正文编辑器后同步。"
 }
