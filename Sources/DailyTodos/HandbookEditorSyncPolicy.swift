@@ -1,5 +1,5 @@
 enum HandbookEditorSyncPolicy {
-    static func preservesLocalTextEditsForSameItemUpdate(isDirty: Bool, isEditorFocused: Bool) -> Bool {
-        isDirty || isEditorFocused
+    static func preservesLocalTextEditsForSameItemUpdate(isDirty: Bool, ownsActiveEditor: Bool) -> Bool {
+        isDirty || ownsActiveEditor
     }
 }

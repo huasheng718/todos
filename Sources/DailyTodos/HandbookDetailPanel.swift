@@ -45,7 +45,7 @@ struct HandbookDetailPanel: View {
                         with: newValue,
                         preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(
                             isDirty: editorState.isDirty,
-                            isEditorFocused: canvasFocus != nil
+                            ownsActiveEditor: editorSession.ownsActiveEditor(itemID: newValue.id)
                         )
                     )
                 } else {

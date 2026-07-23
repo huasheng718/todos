@@ -571,15 +571,15 @@ func checkHandbookEditorPlaceholderPolicy() throws {
 
 func checkHandbookEditorSyncPolicy() throws {
     try expect(
-        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: true, isEditorFocused: false),
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: true, ownsActiveEditor: false),
         "同一条手记仍有未保存编辑时，应保留本地标题和正文"
     )
     try expect(
-        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: true),
-        "同一条手记自动保存回写时，即使已清空 dirty 状态，也应保留当前编辑焦点"
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, ownsActiveEditor: true),
+        "同一条手记自动保存回写时，即使已清空 dirty 状态，也应保留活动编辑会话"
     )
     try expect(
-        !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
+        !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, ownsActiveEditor: false),
         "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
     )
 }
@@ -2098,6 +2098,11 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
     try expect(
         source.contains("preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate"),
         "同一手记回写时应通过同步策略保护本地输入和焦点"
+    )
+    try expect(
+        source.contains("ownsActiveEditor: editorSession.ownsActiveEditor(itemID: newValue.id)")
+            && !source.contains("isEditorFocused: canvasFocus != nil"),
+        "同一手记回写必须使用逻辑编辑会话所有权，不能把 SwiftUI 焦点当作所有权"
     )
     try expect(
         source.contains("if category != item.category { category = item.category }"),
