@@ -1962,11 +1962,37 @@ func checkHandbookOutlineRefreshIsolation() throws {
             && !metricsSource.contains("outlineState"),
         "正文逐字指标更新不能解析或发布文字目录"
     )
+    let refreshPolicyCall = "outlineRefreshPolicy: .refreshOutline"
     try expect(
-        submitSource.contains("let savedBody = bodyBridge.currentText")
-            && submitSource.contains("refreshOutline(for: savedBody, itemID: item.id)")
-            && detailSource.contains("refreshOutline(for: cleanedStoredBody, itemID: item.id)"),
-        "文字目录应只在保存完成或载入已存草稿后刷新"
+        submitSource.contains("outlineRefreshPolicy: HandbookOutlineRefreshPolicy = .preserveOutline")
+            && submitSource.contains("if outlineRefreshPolicy == .refreshOutline")
+            && submitSource.contains("refreshOutline(for: savedBody, itemID: item.id)"),
+        "保存接口应默认只持久化，并通过显式策略决定是否刷新文字目录"
+    )
+    try expect(
+        detailSource.contains("if oldValue == .body && newValue != .body")
+            && detailSource.contains("submitEdit(for: item, force: true, outlineRefreshPolicy: .refreshOutline)")
+            && detailSource.components(separatedBy: refreshPolicyCall).count == 2,
+        "只有正文编辑器失焦时才能显式请求刷新文字目录"
+    )
+
+    guard let autoSaveStart = detailSource.range(of: "private func scheduleAutoSave")?.lowerBound,
+          let metricsStartAfterAutoSave = detailSource.range(
+            of: "private func scheduleBodyMetricsUpdate",
+            range: autoSaveStart..<detailSource.endIndex
+          )?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位手记自动保存函数")
+    }
+    let autoSaveSource = String(detailSource[autoSaveStart..<metricsStartAfterAutoSave])
+    try expect(
+        autoSaveSource.contains("submitEdit(for: item)")
+            && !autoSaveSource.contains(refreshPolicyCall),
+        "650ms 自动保存只能持久化正文，不能刷新文字目录"
+    )
+    try expect(
+        detailSource.contains("refreshOutline(for: cleanedStoredBody, itemID: item.id)"),
+        "载入或切换手记时仍应从已存正文初始化文字目录"
     )
     try expect(
         outlineRefreshSource.contains("guard !Task.isCancelled, self.item?.id == itemID else { return }"),

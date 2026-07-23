@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+private enum HandbookOutlineRefreshPolicy {
+    case preserveOutline
+    case refreshOutline
+}
+
 struct HandbookDetailPanel: View {
     let item: HandbookItem?
     let onUpdate: (HandbookItem, HandbookCategory, String, String, String, [HandbookAttachment]) -> Void
@@ -142,8 +147,8 @@ struct HandbookDetailPanel: View {
             }
             .onChange(of: canvasFocus) { oldValue, newValue in
                 guard !isSyncingDraft else { return }
-                if oldValue != nil && newValue == nil {
-                    submitEdit(for: item, force: true)
+                if oldValue == .body && newValue != .body {
+                    submitEdit(for: item, force: true, outlineRefreshPolicy: .refreshOutline)
                 }
             }
             .onChange(of: title) { _, _ in
@@ -183,13 +188,19 @@ struct HandbookDetailPanel: View {
             || !attachments.isEmpty
     }
 
-    private func submitEdit(for item: HandbookItem, force: Bool = false) {
+    private func submitEdit(
+        for item: HandbookItem,
+        force: Bool = false,
+        outlineRefreshPolicy: HandbookOutlineRefreshPolicy = .preserveOutline
+    ) {
         editorState.autoSave?.cancel()
         guard canSubmit else { return }
         guard force || computeIsDirty(comparedTo: item) else { return }
         let savedBody = bodyBridge.currentText
         onUpdate(item, category, folder, title, savedBody, attachments)
-        refreshOutline(for: savedBody, itemID: item.id)
+        if outlineRefreshPolicy == .refreshOutline {
+            refreshOutline(for: savedBody, itemID: item.id)
+        }
         editorState.isDirty = false
     }
 
