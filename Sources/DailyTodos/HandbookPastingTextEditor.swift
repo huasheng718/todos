@@ -3,6 +3,8 @@ import SwiftUI
 
 struct HandbookPastingTextEditor: NSViewRepresentable {
     @Binding var text: String
+    let itemID: UUID
+    let editorSession: HandbookEditorSessionController
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
     let onPasteImage: (NSImage) -> Void
 
@@ -48,6 +50,7 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let textView = scrollView.documentView as? PasteInterceptingTextView else { return }
+        context.coordinator.observeWindow(textView.window)
 
         textView.onPasteImage = { image in
             onPasteImage(image)
@@ -66,6 +69,11 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
            textView.window?.firstResponder !== textView {
             textView.window?.makeFirstResponder(textView)
         }
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.observeWindow(nil)
+        (scrollView.documentView as? NSTextView)?.delegate = nil
     }
 
     private func configure(_ textView: NSTextView) {
@@ -102,15 +110,21 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
         }
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: HandbookPastingTextEditor
         weak var textView: NSTextView?
+        private var lastSelectionRanges: [NSValue] = []
+        private var observedWindow: NSWindow?
+        private var didBecomeKeyObserver: NSObjectProtocol?
 
         init(parent: HandbookPastingTextEditor) {
             self.parent = parent
         }
 
         func textDidBeginEditing(_ notification: Notification) {
+            observeWindow(textView?.window)
+            parent.editorSession.begin(itemID: parent.itemID, focus: .body)
             parent.focusedField.wrappedValue = .body
         }
 
@@ -122,10 +136,62 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
         }
 
         func textDidEndEditing(_ notification: Notification) {
-            if parent.focusedField.wrappedValue == .body {
-                parent.focusedField.wrappedValue = nil
+            if let textView = notification.object as? NSTextView {
+                lastSelectionRanges = textView.selectedRanges
+            }
+            let event = parent.editorSession.focusEventForCurrentTurn()
+            switch HandbookEditorFocusPolicy.decision(current: .body, event: event) {
+            case let .transfer(target):
+                parent.focusedField.wrappedValue = target
+            case .preserve:
+                restoreBodyFocus()
+            case .exit:
+                break
             }
         }
+
+        func observeWindow(_ window: NSWindow?) {
+            guard observedWindow !== window else { return }
+            if let didBecomeKeyObserver {
+                NotificationCenter.default.removeObserver(didBecomeKeyObserver)
+            }
+            observedWindow = window
+            guard let window else {
+                didBecomeKeyObserver = nil
+                return
+            }
+            didBecomeKeyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.restoreBodyFocus()
+                }
+            }
+        }
+
+        private func restoreBodyFocus() {
+            let itemID = parent.itemID
+            Task { @MainActor [weak self, weak textView] in
+                await Task.yield()
+                guard let self,
+                      self.parent.editorSession.shouldRestore(itemID: itemID, focus: .body),
+                      let textView,
+                      let window = textView.window
+                else { return }
+                self.parent.focusedField.wrappedValue = .body
+                window.makeFirstResponder(textView)
+                let ranges = self.parent.clampedSelectionRanges(
+                    self.lastSelectionRanges,
+                    textLength: (textView.string as NSString).length
+                )
+                if !ranges.isEmpty {
+                    textView.selectedRanges = ranges
+                }
+            }
+        }
+
     }
 }
 

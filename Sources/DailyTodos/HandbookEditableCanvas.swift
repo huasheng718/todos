@@ -9,6 +9,7 @@ struct HandbookEditableCanvas: View {
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
     @ObservedObject var editorState: HandbookEditorState
     let formattedDate: String
+    let editorSession: HandbookEditorSessionController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -19,6 +20,7 @@ struct HandbookEditableCanvas: View {
                 .lineLimit(1...3)
                 .focused(focusedField, equals: .title)
                 .padding(.top, 2)
+                .handbookEditorRegion(.title, session: editorSession)
 
             HandbookDetailMetaBar(
                 category: $category,
@@ -30,6 +32,7 @@ struct HandbookEditableCanvas: View {
             .padding(.bottom, 4)
 
             HandbookInlineImagePreviewList(attachments: $attachments, isEditing: true)
+                .handbookEditorRegion(.control, session: editorSession)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

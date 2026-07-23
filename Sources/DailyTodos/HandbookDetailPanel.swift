@@ -21,6 +21,7 @@ struct HandbookDetailPanel: View {
     @State private var seededBody = ""
     @State private var bodyEditorResetID = UUID()
     @State private var editorState = HandbookEditorState()
+    @State private var editorSession = HandbookEditorSessionController()
     @State private var pasteErrorMessage: String?
     @FocusState private var canvasFocus: HandbookCanvasFocus?
 
@@ -53,6 +54,7 @@ struct HandbookDetailPanel: View {
                 return
             }
             if let oldValue {
+                editorSession.finish(itemID: oldValue.id)
                 submitEdit(for: oldValue, force: true)
             }
             syncDraft(with: newValue)
@@ -63,6 +65,25 @@ struct HandbookDetailPanel: View {
         }
         .onAppear {
             syncDraft(with: item)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .handbookEditorDidRequestExit)) { notification in
+            guard let source = notification.object as? HandbookEditorSessionController,
+                  source === editorSession,
+                  let requestedItemID = notification.userInfo?["itemID"] as? UUID,
+                  requestedItemID == item?.id,
+                  let item
+            else { return }
+            endEditingSession(for: item)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            guard let item,
+                  let preferredFocus = editorSession.preferredFocus,
+                  editorSession.shouldRestore(itemID: item.id, focus: preferredFocus)
+            else { return }
+            canvasFocus = preferredFocus
+        }
+        .onDisappear {
+            editorSession.cancel()
         }
     }
 
@@ -76,6 +97,7 @@ struct HandbookDetailPanel: View {
                     attachments: $attachments,
                     focusedField: $canvasFocus
                 )
+                .handbookEditorRegion(.control, session: editorSession)
 
                 Spacer(minLength: 0)
             }
@@ -94,15 +116,18 @@ struct HandbookDetailPanel: View {
                     attachments: $attachments,
                     focusedField: $canvasFocus,
                     editorState: editorState,
-                    formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute())
+                    formattedDate: item.createdAt.formatted(.dateTime.year().month().day().hour().minute()),
+                    editorSession: editorSession
                 )
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
 
                 HandbookBodyEditorSection(
                     seed: seededBody,
+                    itemID: item.id,
                     hasImageAttachments: attachments.contains { $0.kind == .image },
                     focusedField: $canvasFocus,
+                    editorSession: editorSession,
                     bridge: bodyBridge,
                     editorState: editorState,
                     onPasteImage: { image in
@@ -126,6 +151,7 @@ struct HandbookDetailPanel: View {
 
                 if !attachments.isEmpty {
                     HandbookAttachmentStrip(attachments: $attachments, isEditing: true)
+                        .handbookEditorRegion(.control, session: editorSession)
                         .frame(maxWidth: 880, alignment: .leading)
                         .padding(.bottom, 16)
                 }
@@ -147,8 +173,17 @@ struct HandbookDetailPanel: View {
             }
             .onChange(of: canvasFocus) { oldValue, newValue in
                 guard !isSyncingDraft else { return }
-                if oldValue == .body && newValue != .body {
-                    submitEdit(for: item, force: true, outlineRefreshPolicy: .refreshOutline)
+                if let newValue {
+                    editorSession.begin(itemID: item.id, focus: newValue)
+                } else if let oldValue,
+                          editorSession.shouldRestore(itemID: item.id, focus: oldValue) {
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard self.item?.id == item.id,
+                              editorSession.shouldRestore(itemID: item.id, focus: oldValue)
+                        else { return }
+                        canvasFocus = oldValue
+                    }
                 }
             }
             .onChange(of: title) { _, _ in
@@ -186,6 +221,13 @@ struct HandbookDetailPanel: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !bodyBridge.currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachments.isEmpty
+    }
+
+    private func endEditingSession(for item: HandbookItem) {
+        guard editorSession.itemID == item.id, editorSession.isExitPending else { return }
+        submitEdit(for: item, force: true, outlineRefreshPolicy: .refreshOutline)
+        editorSession.finish(itemID: item.id)
+        canvasFocus = nil
     }
 
     private func submitEdit(
