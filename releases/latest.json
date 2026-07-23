@@ -1,6 +1,6 @@
 {
-  "version": "1.2.40",
-  "build": 69,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.40/AntOrder-1.2.40.pkg",
-  "releaseNotes": "修复手记正文编辑期间刷新文字目录导致输入中断的问题；文字目录仅在离开正文编辑器后同步。"
+  "version": "1.2.41",
+  "build": 70,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.41/AntOrder-1.2.41.pkg",
+  "releaseNotes": "修复手记自动保存和界面回写导致输入光标失焦的问题；仅在用户点击编辑区外时退出编辑并同步文字目录。"
 }
