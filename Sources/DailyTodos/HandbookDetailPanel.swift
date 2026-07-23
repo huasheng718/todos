@@ -354,8 +354,3 @@ struct HandbookOutlineContainer: View {
         }
     }
 }
-
-enum HandbookCanvasFocus: Hashable {
-    case title
-    case body
-}

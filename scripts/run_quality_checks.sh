@@ -22,6 +22,7 @@ swiftc -parse-as-library \
   Sources/DailyTodos/AppUpdateDownloadProgress.swift \
   Sources/DailyTodos/HandbookEditorPlaceholderPolicy.swift \
   Sources/DailyTodos/HandbookEditorSyncPolicy.swift \
+  Sources/DailyTodos/HandbookEditorFocusPolicy.swift \
   Sources/DailyTodos/HandbookAttachmentStorage.swift \
   Sources/DailyTodos/HandbookPasteboardImageReader.swift \
   Sources/DailyTodos/CredentialModels.swift \

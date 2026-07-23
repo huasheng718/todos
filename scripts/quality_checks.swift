@@ -31,6 +31,7 @@ struct DailyTodosChecks {
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
+                try checkHandbookEditorFocusPolicy()
                 try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
                 try checkHandbookActivationUsesScheduledLoading()
@@ -577,6 +578,29 @@ func checkHandbookEditorSyncPolicy() throws {
     try expect(
         !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
         "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
+    )
+}
+
+func checkHandbookEditorFocusPolicy() throws {
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .system) == .preserve(.body),
+        "系统性正文结束编辑必须保留正文焦点"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .editorControl) == .preserve(.body),
+        "工具栏或附件交互必须保留正文焦点"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .input(.title)) == .transfer(.title),
+        "正文点击标题时应转移输入目标但保留编辑会话"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .title, event: .input(.body)) == .transfer(.body),
+        "标题点击正文时应转移输入目标但保留编辑会话"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .outside) == .exit,
+        "只有编辑区外点击才能退出编辑会话"
     )
 }
 
