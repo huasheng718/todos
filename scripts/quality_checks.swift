@@ -712,6 +712,31 @@ func checkHandbookEditorFocusIntegration() throws {
     let bodySource = try sourceFile("Sources/DailyTodos/HandbookBodyEditorSection.swift")
     let canvasSource = try sourceFile("Sources/DailyTodos/HandbookEditableCanvas.swift")
 
+    guard let updateStart = editorSource.range(of: "func updateNSView")?.lowerBound,
+          let dismantleStart = editorSource.range(
+            of: "static func dismantleNSView",
+            range: updateStart..<editorSource.endIndex
+          )?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 HandbookPastingTextEditor.updateNSView")
+    }
+    let updateSource = String(editorSource[updateStart..<dismantleStart])
+
+    try expect(
+        updateSource.contains("HandbookEditorContentPolicy.decision")
+            && updateSource.contains("editorSession.ownsActiveEditor")
+            && updateSource.contains("HandbookNativeTextViewReconciler.reconcile")
+            && !updateSource.contains("textView.string =")
+            && !updateSource.contains("textStorage?.setAttributes")
+            && !updateSource.contains("applyEditorAttributes"),
+        "活动 updateNSView 必须通过所有权策略，不能直接改写正文、全文属性或选区"
+    )
+    try expect(
+        editorSource.contains("representedItemID")
+            && editorSource.contains("HandbookNativeTextViewReconciler.initialize"),
+        "原生编辑器必须记录其手记身份并只在创建时无条件初始化"
+    )
+
     try expect(
         sessionSource.contains("NSEvent.addLocalMonitorForEvents")
             && sessionSource.contains("NotificationCenter.default.post")
