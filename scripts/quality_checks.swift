@@ -33,6 +33,7 @@ struct DailyTodosChecks {
                 try checkHandbookEditorSyncPolicy()
                 try checkHandbookEditorFocusPolicy()
                 try checkHandbookEditorContentPolicy()
+                try checkHandbookNativeTextViewReconciler()
                 try checkHandbookEditorFocusIntegration()
                 try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
@@ -660,6 +661,48 @@ func checkHandbookEditorContentPolicy() throws {
         ) == .synchronizeExternalText,
         "切换手记时必须加载新手记正文"
     )
+}
+
+@MainActor
+func checkHandbookNativeTextViewReconciler() throws {
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 180))
+    textView.isRichText = false
+    textView.string = "已有"
+    textView.setSelectedRange(NSRange(location: 2, length: 0))
+    textView.setMarkedText(
+        NSAttributedString(string: "zhong"),
+        selectedRange: NSRange(location: 5, length: 0),
+        replacementRange: NSRange(location: 2, length: 0)
+    )
+
+    let originalIdentity = ObjectIdentifier(textView)
+    let originalString = textView.string
+    let originalMarkedRange = textView.markedRange()
+    let originalSelections = textView.selectedRanges.map(\.rangeValue)
+    let originalStorage = NSAttributedString(attributedString: textView.attributedString())
+
+    HandbookNativeTextViewReconciler.reconcile(
+        textView,
+        externalText: "服务端回写",
+        decision: .preserveEditor
+    )
+
+    try expect(ObjectIdentifier(textView) == originalIdentity, "模型回写不能替换活动 NSTextView 实例")
+    try expect(textView.string == originalString, "模型回写不能替换活动正文")
+    try expect(textView.markedRange() == originalMarkedRange, "模型回写不能改变输入法 marked range")
+    try expect(textView.selectedRanges.map(\.rangeValue) == originalSelections, "模型回写不能改变活动选区")
+    try expect(textView.attributedString().isEqual(to: originalStorage), "模型回写不能改写活动文本存储属性")
+
+    textView.unmarkText()
+    HandbookNativeTextViewReconciler.reconcile(
+        textView,
+        externalText: "离开后同步",
+        decision: .synchronizeExternalText
+    )
+
+    try expect(textView.string == "离开后同步", "退出编辑后应同步外部正文")
+    let font = textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+    try expect(font?.pointSize == 15.5, "外部正文同步后应恢复正文样式")
 }
 
 func checkHandbookEditorFocusIntegration() throws {
