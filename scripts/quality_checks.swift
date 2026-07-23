@@ -31,6 +31,8 @@ struct DailyTodosChecks {
                 try checkQuickInputParser()
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
+                try checkHandbookEditorFocusPolicy()
+                try checkHandbookEditorFocusIntegration()
                 try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
                 try checkHandbookActivationUsesScheduledLoading()
@@ -577,6 +579,64 @@ func checkHandbookEditorSyncPolicy() throws {
     try expect(
         !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
         "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
+    )
+}
+
+func checkHandbookEditorFocusPolicy() throws {
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .system) == .preserve(.body),
+        "系统性正文结束编辑必须保留正文焦点"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .editorControl) == .preserve(.body),
+        "工具栏或附件交互必须保留正文焦点"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .input(.title)) == .transfer(.title),
+        "正文点击标题时应转移输入目标但保留编辑会话"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .title, event: .input(.body)) == .transfer(.body),
+        "标题点击正文时应转移输入目标但保留编辑会话"
+    )
+    try expect(
+        HandbookEditorFocusPolicy.decision(current: .body, event: .outside) == .exit,
+        "只有编辑区外点击才能退出编辑会话"
+    )
+}
+
+func checkHandbookEditorFocusIntegration() throws {
+    let sessionSource = try sourceFile("Sources/DailyTodos/HandbookEditorSessionController.swift")
+    let detailSource = try sourceFile("Sources/DailyTodos/HandbookDetailPanel.swift")
+    let editorSource = try sourceFile("Sources/DailyTodos/HandbookPastingTextEditor.swift")
+    let bodySource = try sourceFile("Sources/DailyTodos/HandbookBodyEditorSection.swift")
+    let canvasSource = try sourceFile("Sources/DailyTodos/HandbookEditableCanvas.swift")
+
+    try expect(
+        sessionSource.contains("NSEvent.addLocalMonitorForEvents")
+            && sessionSource.contains("NotificationCenter.default.post")
+            && sessionSource.contains("focusEvent == .outside")
+            && sessionSource.contains("DispatchQueue.main.async"),
+        "编辑会话必须在当前事件轮次分类外部点击，并及时清除过期点击意图"
+    )
+    try expect(
+        !editorSource.contains("parent.focusedField.wrappedValue = nil")
+            && editorSource.contains("HandbookEditorFocusPolicy.decision")
+            && editorSource.contains("restoreBodyFocus"),
+        "NSTextView 结束编辑必须通过策略恢复焦点，不能无条件清空"
+    )
+    try expect(
+        detailSource.contains("handbookEditorDidRequestExit")
+            && detailSource.contains("endEditingSession(for: item)")
+            && detailSource.contains("editorSession.finish(itemID: item.id)")
+            && detailSource.contains("canvasFocus = nil"),
+        "外部点击必须由详情面板按保存、目录同步、会话结束和清焦点顺序处理"
+    )
+    try expect(
+        bodySource.contains("handbookEditorRegion(.body, session: editorSession)")
+            && canvasSource.contains("handbookEditorRegion(.title, session: editorSession)")
+            && detailSource.components(separatedBy: "handbookEditorRegion(.control, session: editorSession)").count >= 3,
+        "标题、正文、工具栏和附件区必须注册为编辑会话内部区域"
     )
 }
 
@@ -1970,10 +2030,11 @@ func checkHandbookOutlineRefreshIsolation() throws {
         "保存接口应默认只持久化，并通过显式策略决定是否刷新文字目录"
     )
     try expect(
-        detailSource.contains("if oldValue == .body && newValue != .body")
+        detailSource.contains("private func endEditingSession(for item: HandbookItem)")
             && detailSource.contains("submitEdit(for: item, force: true, outlineRefreshPolicy: .refreshOutline)")
+            && !detailSource.contains("if oldValue == .body && newValue != .body")
             && detailSource.components(separatedBy: refreshPolicyCall).count == 2,
-        "只有正文编辑器失焦时才能显式请求刷新文字目录"
+        "文字目录只能在显式编辑会话退出时同步"
     )
 
     guard let autoSaveStart = detailSource.range(of: "private func scheduleAutoSave")?.lowerBound,

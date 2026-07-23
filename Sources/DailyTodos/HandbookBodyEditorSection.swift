@@ -55,8 +55,10 @@ final class HandbookEditorState: ObservableObject {
 /// 编辑器高度在“含图片附件且正文很短”时会收缩以露出图片预览，逻辑从
 /// `HandbookEditableCanvas` 平移至此，避免父层为计算该高度而读取逐字变化的正文。
 struct HandbookBodyEditorSection: View {
+    let itemID: UUID
     let hasImageAttachments: Bool
     var focusedField: FocusState<HandbookCanvasFocus?>.Binding
+    let editorSession: HandbookEditorSessionController
     let bridge: HandbookEditorBridge
     @ObservedObject var editorState: HandbookEditorState
     let onPasteImage: (NSImage) -> Void
@@ -66,15 +68,19 @@ struct HandbookBodyEditorSection: View {
 
     init(
         seed: String,
+        itemID: UUID,
         hasImageAttachments: Bool,
         focusedField: FocusState<HandbookCanvasFocus?>.Binding,
+        editorSession: HandbookEditorSessionController,
         bridge: HandbookEditorBridge,
         editorState: HandbookEditorState,
         onPasteImage: @escaping (NSImage) -> Void,
         onChange: @escaping (String) -> Void
     ) {
+        self.itemID = itemID
         self.hasImageAttachments = hasImageAttachments
         self.focusedField = focusedField
+        self.editorSession = editorSession
         self.bridge = bridge
         self.editorState = editorState
         self.onPasteImage = onPasteImage
@@ -86,6 +92,8 @@ struct HandbookBodyEditorSection: View {
         ZStack(alignment: .topLeading) {
             HandbookPastingTextEditor(
                 text: $text,
+                itemID: itemID,
+                editorSession: editorSession,
                 focusedField: focusedField,
                 onPasteImage: onPasteImage
             )
@@ -99,6 +107,7 @@ struct HandbookBodyEditorSection: View {
                     .allowsHitTesting(false)
             }
         }
+        .handbookEditorRegion(.body, session: editorSession)
         .onAppear {
             bridge.textBinding = $text
         }
