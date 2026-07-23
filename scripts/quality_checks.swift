@@ -32,6 +32,7 @@ struct DailyTodosChecks {
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
                 try checkHandbookEditorFocusPolicy()
+                try checkHandbookEditorContentPolicy()
                 try checkHandbookEditorFocusIntegration()
                 try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
@@ -602,6 +603,62 @@ func checkHandbookEditorFocusPolicy() throws {
     try expect(
         HandbookEditorFocusPolicy.decision(current: .body, event: .outside) == .exit,
         "只有编辑区外点击才能退出编辑会话"
+    )
+}
+
+func checkHandbookEditorContentPolicy() throws {
+    let itemID = UUID()
+    let anotherItemID = UUID()
+
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: true,
+            isFirstResponder: false,
+            hasMarkedText: false
+        ) == .preserveEditor,
+        "同一手记编辑会话必须保留活动原生编辑器"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: false,
+            isFirstResponder: true,
+            hasMarkedText: false
+        ) == .preserveEditor,
+        "仍为 first responder 的正文不能接受模型回写"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: false,
+            isFirstResponder: false,
+            hasMarkedText: true
+        ) == .preserveEditor,
+        "输入法 marked text 存在时不能改写原生文本存储"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: false,
+            isFirstResponder: false,
+            hasMarkedText: false
+        ) == .synchronizeExternalText,
+        "同一手记退出编辑后应允许模型同步"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: anotherItemID,
+            isSessionOwner: true,
+            isFirstResponder: true,
+            hasMarkedText: true
+        ) == .synchronizeExternalText,
+        "切换手记时必须加载新手记正文"
     )
 }
 
