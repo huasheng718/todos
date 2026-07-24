@@ -32,6 +32,9 @@ struct DailyTodosChecks {
                 try checkHandbookEditorPlaceholderPolicy()
                 try checkHandbookEditorSyncPolicy()
                 try checkHandbookEditorFocusPolicy()
+                try checkHandbookEditorContentPolicy()
+                try checkHandbookNativeTextViewReconciler()
+                try checkHandbookEditorIdentityAcrossNoteSwitches()
                 try checkHandbookEditorFocusIntegration()
                 try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
@@ -569,15 +572,15 @@ func checkHandbookEditorPlaceholderPolicy() throws {
 
 func checkHandbookEditorSyncPolicy() throws {
     try expect(
-        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: true, isEditorFocused: false),
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: true, ownsActiveEditor: false),
         "同一条手记仍有未保存编辑时，应保留本地标题和正文"
     )
     try expect(
-        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: true),
-        "同一条手记自动保存回写时，即使已清空 dirty 状态，也应保留当前编辑焦点"
+        HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, ownsActiveEditor: true),
+        "同一条手记自动保存回写时，即使已清空 dirty 状态，也应保留活动编辑会话"
     )
     try expect(
-        !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, isEditorFocused: false),
+        !HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate(isDirty: false, ownsActiveEditor: false),
         "未聚焦且无本地编辑时，可以用存储层数据同步手记详情"
     )
 }
@@ -605,12 +608,185 @@ func checkHandbookEditorFocusPolicy() throws {
     )
 }
 
+func checkHandbookEditorContentPolicy() throws {
+    let itemID = UUID()
+    let anotherItemID = UUID()
+
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: true,
+            isFirstResponder: false,
+            hasMarkedText: false
+        ) == .preserveEditor,
+        "同一手记编辑会话必须保留活动原生编辑器"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: false,
+            isFirstResponder: true,
+            hasMarkedText: false
+        ) == .preserveEditor,
+        "仍为 first responder 的正文不能接受模型回写"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: false,
+            isFirstResponder: false,
+            hasMarkedText: true
+        ) == .preserveEditor,
+        "输入法 marked text 存在时不能改写原生文本存储"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: itemID,
+            isSessionOwner: false,
+            isFirstResponder: false,
+            hasMarkedText: false
+        ) == .synchronizeExternalText,
+        "同一手记退出编辑后应允许模型同步"
+    )
+    try expect(
+        HandbookEditorContentPolicy.decision(
+            representedItemID: itemID,
+            incomingItemID: anotherItemID,
+            isSessionOwner: true,
+            isFirstResponder: true,
+            hasMarkedText: true
+        ) == .synchronizeExternalText,
+        "切换手记时必须加载新手记正文"
+    )
+}
+
+@MainActor
+func checkHandbookNativeTextViewReconciler() throws {
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 180))
+    textView.isRichText = false
+    textView.string = "已有"
+    textView.setSelectedRange(NSRange(location: 2, length: 0))
+    textView.setMarkedText(
+        NSAttributedString(string: "zhong"),
+        selectedRange: NSRange(location: 5, length: 0),
+        replacementRange: NSRange(location: 2, length: 0)
+    )
+
+    let originalIdentity = ObjectIdentifier(textView)
+    let originalString = textView.string
+    let originalMarkedRange = textView.markedRange()
+    let originalSelections = textView.selectedRanges.map(\.rangeValue)
+    let originalStorage = NSAttributedString(attributedString: textView.attributedString())
+
+    HandbookNativeTextViewReconciler.reconcile(
+        textView,
+        externalText: "服务端回写",
+        decision: .preserveEditor
+    )
+
+    try expect(ObjectIdentifier(textView) == originalIdentity, "模型回写不能替换活动 NSTextView 实例")
+    try expect(textView.string == originalString, "模型回写不能替换活动正文")
+    try expect(textView.markedRange() == originalMarkedRange, "模型回写不能改变输入法 marked range")
+    try expect(textView.selectedRanges.map(\.rangeValue) == originalSelections, "模型回写不能改变活动选区")
+    try expect(textView.attributedString().isEqual(to: originalStorage), "模型回写不能改写活动文本存储属性")
+
+    textView.unmarkText()
+    HandbookNativeTextViewReconciler.reconcile(
+        textView,
+        externalText: "离开后同步",
+        decision: .synchronizeExternalText
+    )
+
+    try expect(textView.string == "离开后同步", "退出编辑后应同步外部正文")
+    let font = textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+    try expect(font?.pointSize == 15.5, "外部正文同步后应恢复正文样式")
+}
+
+@MainActor
+func checkHandbookEditorIdentityAcrossNoteSwitches() throws {
+    let detailSource = try sourceFile("Sources/DailyTodos/HandbookDetailPanel.swift")
+    try expect(
+        detailSource.contains(".id([item.id, bodyEditorResetID])"),
+        "正文编辑器身份必须同时包含手记 ID 和重置代次，不能只依赖正文内容变化"
+    )
+
+    let firstItemID = UUID()
+    let secondItemID = UUID()
+    let resetID = UUID()
+    let equalBody = "两条手记共享的正文"
+    let firstIdentity = [firstItemID, resetID]
+    let secondIdentity = [secondItemID, resetID]
+    let sameItemResetIdentity = [firstItemID, UUID()]
+
+    try expect(firstIdentity != secondIdentity, "相同正文的不同手记必须产生不同编辑器身份")
+    try expect(firstIdentity != sameItemResetIdentity, "同一手记显式退出后的重置仍必须产生新编辑器身份")
+
+    let oldEditor = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 180))
+    HandbookNativeTextViewReconciler.initialize(oldEditor, text: equalBody)
+    oldEditor.setSelectedRange(NSRange(location: 4, length: 0))
+    oldEditor.setMarkedText(
+        NSAttributedString(string: "zhong"),
+        selectedRange: NSRange(location: 5, length: 0),
+        replacementRange: NSRange(location: 4, length: 0)
+    )
+    try expect(oldEditor.markedRange().length > 0, "旧编辑器应具有可遗留的输入法 marked text")
+    oldEditor.unmarkText()
+    oldEditor.setSelectedRange(NSRange(location: 2, length: 1))
+    let oldSelection = oldEditor.selectedRange()
+    if let undoManager = oldEditor.undoManager {
+        undoManager.registerUndo(withTarget: NSObject()) { _ in }
+        try expect(undoManager.canUndo, "旧编辑器应具备可遗留的撤销状态")
+    }
+
+    let newEditor = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 180))
+    HandbookNativeTextViewReconciler.initialize(newEditor, text: equalBody)
+
+    try expect(ObjectIdentifier(oldEditor) != ObjectIdentifier(newEditor), "切换相同正文的手记必须创建新的 NSTextView")
+    try expect(newEditor.markedRange().length == 0, "新编辑器不能继承旧手记的输入法 marked text")
+    let newSelection = newEditor.selectedRange()
+    try expect(
+        newSelection != oldSelection
+            && newSelection == NSRange(location: (equalBody as NSString).length, length: 0),
+        "新编辑器选区必须恢复为新正文的初始插入点"
+    )
+    try expect(!(newEditor.undoManager?.canUndo ?? false), "新编辑器不能继承旧手记的撤销能力")
+}
+
 func checkHandbookEditorFocusIntegration() throws {
     let sessionSource = try sourceFile("Sources/DailyTodos/HandbookEditorSessionController.swift")
     let detailSource = try sourceFile("Sources/DailyTodos/HandbookDetailPanel.swift")
     let editorSource = try sourceFile("Sources/DailyTodos/HandbookPastingTextEditor.swift")
     let bodySource = try sourceFile("Sources/DailyTodos/HandbookBodyEditorSection.swift")
     let canvasSource = try sourceFile("Sources/DailyTodos/HandbookEditableCanvas.swift")
+
+    guard let updateStart = editorSource.range(of: "func updateNSView")?.lowerBound,
+          let dismantleStart = editorSource.range(
+            of: "static func dismantleNSView",
+            range: updateStart..<editorSource.endIndex
+          )?.lowerBound
+    else {
+        throw CheckFailure.failed("无法定位 HandbookPastingTextEditor.updateNSView")
+    }
+    let updateSource = String(editorSource[updateStart..<dismantleStart])
+
+    try expect(
+        updateSource.contains("HandbookEditorContentPolicy.decision")
+            && updateSource.contains("editorSession.ownsActiveEditor")
+            && updateSource.contains("HandbookNativeTextViewReconciler.reconcile")
+            && !updateSource.contains("textView.string =")
+            && !updateSource.contains("textStorage?.setAttributes")
+            && !updateSource.contains("applyEditorAttributes"),
+        "活动 updateNSView 必须通过所有权策略，不能直接改写正文、全文属性或选区"
+    )
+    try expect(
+        editorSource.contains("representedItemID")
+            && editorSource.contains("HandbookNativeTextViewReconciler.initialize"),
+        "原生编辑器必须记录其手记身份并只在创建时无条件初始化"
+    )
 
     try expect(
         sessionSource.contains("NSEvent.addLocalMonitorForEvents")
@@ -1973,6 +2149,11 @@ func checkHandbookDetailReconcilesSameItemUpdates() throws {
     try expect(
         source.contains("preservesLocalTextEdits: HandbookEditorSyncPolicy.preservesLocalTextEditsForSameItemUpdate"),
         "同一手记回写时应通过同步策略保护本地输入和焦点"
+    )
+    try expect(
+        source.contains("ownsActiveEditor: editorSession.ownsActiveEditor(itemID: newValue.id)")
+            && !source.contains("isEditorFocused: canvasFocus != nil"),
+        "同一手记回写必须使用逻辑编辑会话所有权，不能把 SwiftUI 焦点当作所有权"
     )
     try expect(
         source.contains("if category != item.category { category = item.category }"),

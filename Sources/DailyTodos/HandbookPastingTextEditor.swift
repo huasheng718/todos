@@ -9,7 +9,7 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
     let onPasteImage: (NSImage) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
+        Coordinator(parent: self, representedItemID: itemID)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -41,9 +41,7 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
         scrollView.documentView = textView
 
         context.coordinator.textView = textView
-        configure(textView)
-        textView.string = text
-        applyEditorAttributes(to: textView)
+        HandbookNativeTextViewReconciler.initialize(textView, text: text)
         return scrollView
     }
 
@@ -55,15 +53,21 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
         textView.onPasteImage = { image in
             onPasteImage(image)
         }
-        configure(textView)
-        if textView.string != text {
-            let selectedRanges = clampedSelectionRanges(textView.selectedRanges, textLength: (text as NSString).length)
-            textView.string = text
-            if !selectedRanges.isEmpty {
-                textView.selectedRanges = selectedRanges
-            }
+        let decision = HandbookEditorContentPolicy.decision(
+            representedItemID: context.coordinator.representedItemID,
+            incomingItemID: itemID,
+            isSessionOwner: editorSession.ownsActiveEditor(itemID: itemID),
+            isFirstResponder: textView.window?.firstResponder === textView,
+            hasMarkedText: textView.hasMarkedText()
+        )
+        HandbookNativeTextViewReconciler.reconcile(
+            textView,
+            externalText: text,
+            decision: decision
+        )
+        if decision == .synchronizeExternalText {
+            context.coordinator.representedItemID = itemID
         }
-        applyEditorAttributes(to: textView)
 
         if focusedField.wrappedValue == .body,
            textView.window?.firstResponder !== textView {
@@ -76,50 +80,18 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
         (scrollView.documentView as? NSTextView)?.delegate = nil
     }
 
-    private func configure(_ textView: NSTextView) {
-        textView.font = NSFont.systemFont(ofSize: 15.5, weight: .regular)
-        textView.textColor = NSColor.labelColor
-        textView.insertionPointColor = NSColor.controlAccentColor
-    }
-
-    private func applyEditorAttributes(to textView: NSTextView) {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 6
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 15.5, weight: .regular),
-            .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: paragraphStyle
-        ]
-        textView.typingAttributes = attributes
-
-        let length = (textView.string as NSString).length
-        guard length > 0 else { return }
-        textView.textStorage?.setAttributes(attributes, range: NSRange(location: 0, length: length))
-    }
-
-    private func clampedSelectionRanges(_ ranges: [NSValue], textLength: Int) -> [NSValue] {
-        ranges.compactMap { value in
-            let range = value.rangeValue
-            guard range.location <= textLength else { return nil }
-            return NSValue(
-                range: NSRange(
-                    location: range.location,
-                    length: min(range.length, textLength - range.location)
-                )
-            )
-        }
-    }
-
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: HandbookPastingTextEditor
+        var representedItemID: UUID
         weak var textView: NSTextView?
         private var lastSelectionRanges: [NSValue] = []
         private var observedWindow: NSWindow?
         private var didBecomeKeyObserver: NSObjectProtocol?
 
-        init(parent: HandbookPastingTextEditor) {
+        init(parent: HandbookPastingTextEditor, representedItemID: UUID) {
             self.parent = parent
+            self.representedItemID = representedItemID
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -182,13 +154,26 @@ struct HandbookPastingTextEditor: NSViewRepresentable {
                 else { return }
                 self.parent.focusedField.wrappedValue = .body
                 window.makeFirstResponder(textView)
-                let ranges = self.parent.clampedSelectionRanges(
+                let ranges = self.clampedSelectionRanges(
                     self.lastSelectionRanges,
                     textLength: (textView.string as NSString).length
                 )
                 if !ranges.isEmpty {
                     textView.selectedRanges = ranges
                 }
+            }
+        }
+
+        private func clampedSelectionRanges(_ ranges: [NSValue], textLength: Int) -> [NSValue] {
+            ranges.compactMap { value in
+                let range = value.rangeValue
+                guard range.location <= textLength else { return nil }
+                return NSValue(
+                    range: NSRange(
+                        location: range.location,
+                        length: min(range.length, textLength - range.location)
+                    )
+                )
             }
         }
 

@@ -1,6 +1,6 @@
 {
-  "version": "1.2.41",
-  "build": 70,
-  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.41/AntOrder-1.2.41.pkg",
-  "releaseNotes": "修复手记自动保存和界面回写导致输入光标失焦的问题；仅在用户点击编辑区外时退出编辑并同步文字目录。"
+  "version": "1.2.42",
+  "build": 71,
+  "downloadURL": "https://github.com/huasheng718/todos/releases/download/v1.2.42/AntOrder-1.2.42.pkg",
+  "releaseNotes": "蚁序 1.2.42：修复手记自动保存回写活动编辑器导致中文输入中断的问题，编辑期间保持光标、选区与输入法组合态，离开编辑器后再同步文字目录。"
 }

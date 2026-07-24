@@ -65,6 +65,11 @@ final class HandbookEditorSessionController {
             && (window?.isKeyWindow ?? false)
     }
 
+    func ownsActiveEditor(itemID: UUID) -> Bool {
+        self.itemID == itemID
+            && !isExitPending
+    }
+
     fileprivate func register(
         id: UUID,
         role: HandbookEditorRegionRole,

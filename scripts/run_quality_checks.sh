@@ -23,6 +23,8 @@ swiftc -parse-as-library \
   Sources/DailyTodos/HandbookEditorPlaceholderPolicy.swift \
   Sources/DailyTodos/HandbookEditorSyncPolicy.swift \
   Sources/DailyTodos/HandbookEditorFocusPolicy.swift \
+  Sources/DailyTodos/HandbookEditorContentPolicy.swift \
+  Sources/DailyTodos/HandbookNativeTextViewReconciler.swift \
   Sources/DailyTodos/HandbookAttachmentStorage.swift \
   Sources/DailyTodos/HandbookPasteboardImageReader.swift \
   Sources/DailyTodos/CredentialModels.swift \
