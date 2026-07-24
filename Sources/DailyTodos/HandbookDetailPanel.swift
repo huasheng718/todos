@@ -135,7 +135,7 @@ struct HandbookDetailPanel: View {
                     },
                     onChange: { handleBodyTextChange($0, for: item) }
                 )
-                .id(bodyEditorResetID)
+                .id([item.id, bodyEditorResetID])
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(.bottom, 16)
 

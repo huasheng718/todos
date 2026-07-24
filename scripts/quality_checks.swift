@@ -34,6 +34,7 @@ struct DailyTodosChecks {
                 try checkHandbookEditorFocusPolicy()
                 try checkHandbookEditorContentPolicy()
                 try checkHandbookNativeTextViewReconciler()
+                try checkHandbookEditorIdentityAcrossNoteSwitches()
                 try checkHandbookEditorFocusIntegration()
                 try checkHandbookOutlineRefreshIsolation()
                 try checkLazyStartupLoading()
@@ -703,6 +704,56 @@ func checkHandbookNativeTextViewReconciler() throws {
     try expect(textView.string == "离开后同步", "退出编辑后应同步外部正文")
     let font = textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
     try expect(font?.pointSize == 15.5, "外部正文同步后应恢复正文样式")
+}
+
+@MainActor
+func checkHandbookEditorIdentityAcrossNoteSwitches() throws {
+    let detailSource = try sourceFile("Sources/DailyTodos/HandbookDetailPanel.swift")
+    try expect(
+        detailSource.contains(".id([item.id, bodyEditorResetID])"),
+        "正文编辑器身份必须同时包含手记 ID 和重置代次，不能只依赖正文内容变化"
+    )
+
+    let firstItemID = UUID()
+    let secondItemID = UUID()
+    let resetID = UUID()
+    let equalBody = "两条手记共享的正文"
+    let firstIdentity = [firstItemID, resetID]
+    let secondIdentity = [secondItemID, resetID]
+    let sameItemResetIdentity = [firstItemID, UUID()]
+
+    try expect(firstIdentity != secondIdentity, "相同正文的不同手记必须产生不同编辑器身份")
+    try expect(firstIdentity != sameItemResetIdentity, "同一手记显式退出后的重置仍必须产生新编辑器身份")
+
+    let oldEditor = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 180))
+    HandbookNativeTextViewReconciler.initialize(oldEditor, text: equalBody)
+    oldEditor.setSelectedRange(NSRange(location: 4, length: 0))
+    oldEditor.setMarkedText(
+        NSAttributedString(string: "zhong"),
+        selectedRange: NSRange(location: 5, length: 0),
+        replacementRange: NSRange(location: 4, length: 0)
+    )
+    try expect(oldEditor.markedRange().length > 0, "旧编辑器应具有可遗留的输入法 marked text")
+    oldEditor.unmarkText()
+    oldEditor.setSelectedRange(NSRange(location: 2, length: 1))
+    let oldSelection = oldEditor.selectedRange()
+    if let undoManager = oldEditor.undoManager {
+        undoManager.registerUndo(withTarget: NSObject()) { _ in }
+        try expect(undoManager.canUndo, "旧编辑器应具备可遗留的撤销状态")
+    }
+
+    let newEditor = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 180))
+    HandbookNativeTextViewReconciler.initialize(newEditor, text: equalBody)
+
+    try expect(ObjectIdentifier(oldEditor) != ObjectIdentifier(newEditor), "切换相同正文的手记必须创建新的 NSTextView")
+    try expect(newEditor.markedRange().length == 0, "新编辑器不能继承旧手记的输入法 marked text")
+    let newSelection = newEditor.selectedRange()
+    try expect(
+        newSelection != oldSelection
+            && newSelection == NSRange(location: (equalBody as NSString).length, length: 0),
+        "新编辑器选区必须恢复为新正文的初始插入点"
+    )
+    try expect(!(newEditor.undoManager?.canUndo ?? false), "新编辑器不能继承旧手记的撤销能力")
 }
 
 func checkHandbookEditorFocusIntegration() throws {
